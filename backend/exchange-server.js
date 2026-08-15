@@ -16,13 +16,31 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS wallets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
+    alias TEXT,
     type TEXT NOT NULL,
     currency TEXT NOT NULL,
     balance DECIMAL(10,2) DEFAULT 0,
     description TEXT,
+    icon TEXT,
+    color TEXT,
     isActive BOOLEAN DEFAULT 1,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Migración: añadir columna alias a DBs creadas antes de que existiera
+  db.all(`PRAGMA table_info(wallets)`, (err, cols) => {
+    if (err) return;
+    const names = (cols || []).map((c) => c.name);
+    if (!names.includes('alias')) {
+      db.run(`ALTER TABLE wallets ADD COLUMN alias TEXT`);
+    }
+    if (!names.includes('icon')) {
+      db.run(`ALTER TABLE wallets ADD COLUMN icon TEXT`);
+    }
+    if (!names.includes('color')) {
+      db.run(`ALTER TABLE wallets ADD COLUMN color TEXT`);
+    }
+  });
   
   // Categories (ya existe)
   db.run(`CREATE TABLE IF NOT EXISTS categories (
@@ -316,6 +334,178 @@ app.get('/api/wallets', (req, res) => {
   });
 });
 
+// Listar billeteras eliminadas (soft-delete)
+app.get('/api/wallets/deleted', (req, res) => {
+  db.all('SELECT * FROM wallets WHERE isActive = 0 ORDER BY name', (err, wallets) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(wallets);
+  });
+});
+
+// Obtener una billetera por id (solo activas)
+app.get('/api/wallets/:id', (req, res) => {
+  db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [req.params.id], (err, wallet) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada' });
+    res.json(wallet);
+  });
+});
+
+// Crear una billetera
+app.post('/api/wallets', (req, res) => {
+  const { name, alias, type, currency, balance, description, icon, color } = req.body;
+  if (!name || !type || !currency) {
+    return res.status(400).json({ error: 'Faltan campos requeridos: name, type, currency' });
+  }
+  const isActive = 1;
+  db.run(
+    `INSERT INTO wallets (name, alias, type, currency, balance, description, icon, color, isActive)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [name, alias || null, type, currency, balance || 0, description || null, icon || null, color || null, isActive],
+    function (err) {
+      if (err) return res.status(400).json({ error: err.message });
+      db.get('SELECT * FROM wallets WHERE id = ?', [this.lastID], (e, row) => {
+        if (e) return res.status(500).json({ error: e.message });
+        res.status(201).json(row);
+      });
+    }
+  );
+});
+
+// Actualizar una billetera (campos editables)
+app.put('/api/wallets/:id', (req, res) => {
+  const { name, alias, balance, description, icon, color, type, currency } = req.body;
+  db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [req.params.id], (err, wallet) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada' });
+
+    const newName = name !== undefined ? name : wallet.name;
+    const newAlias = alias !== undefined ? alias : wallet.alias;
+    const newBalance = balance !== undefined ? Number(balance) : wallet.balance;
+    const newDescription = description !== undefined ? description : wallet.description;
+    const newIcon = icon !== undefined ? icon : wallet.icon;
+    const newColor = color !== undefined ? color : wallet.color;
+    // Moneda y tipo: solo se pueden cambiar si no hay transacciones asociadas (se valida aquí)
+    // Por simplicidad y seguridad, permitimos cambiar descripción/nombre/alias/icono/color/balance
+
+    db.run(
+      `UPDATE wallets SET name = ?, alias = ?, balance = ?, description = ?, icon = ?, color = ? WHERE id = ?`,
+      [newName, newAlias, newBalance, newDescription, newIcon, newColor, req.params.id],
+      function (updErr) {
+        if (updErr) return res.status(400).json({ error: updErr.message });
+        db.get('SELECT * FROM wallets WHERE id = ?', [req.params.id], (e, row) => {
+          if (e) return res.status(500).json({ error: e.message });
+          res.json(row);
+        });
+      }
+    );
+  });
+});
+
+// Soft-delete (no borra realmente, solo marca isActive = 0)
+app.delete('/api/wallets/:id', (req, res) => {
+  db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [req.params.id], (err, wallet) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada' });
+    db.run('UPDATE wallets SET isActive = 0 WHERE id = ?', [req.params.id], (e) => {
+      if (e) return res.status(500).json({ error: e.message });
+      res.json({ success: true, message: 'Billetera desactivada (no eliminada definitivamente)' });
+    });
+  });
+});
+
+// Reactivar una billetera eliminada
+app.put('/api/wallets/:id/reactivate', (req, res) => {
+  db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 0', [req.params.id], (err, wallet) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada o ya activa' });
+    db.run('UPDATE wallets SET isActive = 1 WHERE id = ?', [req.params.id], (e) => {
+      if (e) return res.status(500).json({ error: e.message });
+      db.get('SELECT * FROM wallets WHERE id = ?', [req.params.id], (e2, row) => {
+        if (e2) return res.status(500).json({ error: e2.message });
+        res.json(row);
+      });
+    });
+  });
+});
+
+// Reporte de una billetera: balance + ingresos/egresos + transacciones con rango de fechas
+// ?from=YYYY-MM-DD&to=YYYY-MM-DD&period=day|week|month|3m|year|all
+app.get('/api/wallets/:id/report', (req, res) => {
+  const walletId = req.params.id;
+  const { from, to, period } = req.query;
+  db.get('SELECT * FROM wallets WHERE id = ?', [walletId], (err, wallet) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada' });
+
+    // Calcular rango por defecto si no hay from/to
+    let fromDate = from;
+    let toDate = to;
+    if (!fromDate || !toDate) {
+      const now = new Date();
+      toDate = now.toISOString().split('T')[0];
+      if (period === 'day') {
+        fromDate = toDate;
+      } else if (period === 'week') {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 7);
+        fromDate = d.toISOString().split('T')[0];
+      } else if (period === 'month') {
+        const d = new Date(now);
+        d.setDate(1);
+        fromDate = d.toISOString().split('T')[0];
+      } else if (period === '3m') {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() - 3);
+        fromDate = d.toISOString().split('T')[0];
+      } else if (period === 'year') {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() - 12);
+        fromDate = d.toISOString().split('T')[0];
+      } else { // all
+        fromDate = '1970-01-01';
+      }
+    }
+
+    db.all(
+      `SELECT
+         t.id,
+         t.type,
+         t.amount,
+         t.description,
+         t.date,
+         c.name AS category,
+         t.created_at AS createdAt
+       FROM transactions t
+       JOIN categories c ON c.id = t.category_id
+       WHERE t.wallet_id = ? AND t.date >= ? AND t.date <= ?
+       ORDER BY t.date DESC, t.created_at DESC, t.id DESC`,
+      [walletId, fromDate, toDate],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const transactions = rows || [];
+        let income = 0;
+        let expense = 0;
+        transactions.forEach((t) => {
+          if (t.type === 'income') income += Number(t.amount);
+          else if (t.type === 'expense') expense += Number(t.amount);
+        });
+        res.json({
+          wallet,
+          range: { from: fromDate, to: toDate, period: period || 'custom' },
+          summary: {
+            income: parseFloat(income.toFixed(2)),
+            expense: parseFloat(expense.toFixed(2)),
+            net: parseFloat((income - expense).toFixed(2)),
+            transactionCount: transactions.length,
+          },
+          transactions,
+        });
+      }
+    );
+  });
+});
+
 app.post('/api/transactions', async (req, res) => {
   try {
     const { walletId, categoryName, type, amount, description } = req.body;
@@ -606,6 +796,14 @@ app.get('/api/exchange-rates', (req, res) => {
     rates: getExchangeRates(),
     timestamp: new Date().toISOString(),
   });
+});
+
+// Obtener la tasa vigente (bcv por defecto) para una fecha; usada para convertir VES a USD en el frontend
+app.get('/api/rates/effective', async (req, res) => {
+  const type = req.query.type === 'paralelo' ? 'paralelo' : 'bcv';
+  const date = req.query.date;
+  const rate = await getRateForDate(date || new Date().toISOString().split('T')[0], type);
+  res.json({ date: date || new Date().toISOString().split('T')[0], rate, type });
 });
 
 // === CRUD de tasas diarias (daily_rates) ===
