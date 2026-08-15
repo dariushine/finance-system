@@ -153,6 +153,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   sx={{ width: '120px' }}
                   required
                   disabled={loading}
+                  onWheel={(e) => e.currentTarget.blur()}
                   InputProps={{
                     endAdornment: fromWalletId ? (
                       wallets.find(w => w.id === fromWalletId)?.currency || ''
@@ -191,6 +192,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   sx={{ width: '120px' }}
                   required
                   disabled={loading}
+                  onWheel={(e) => e.currentTarget.blur()}
                   InputProps={{
                     endAdornment: toWalletId ? (
                       wallets.find(w => w.id === toWalletId)?.currency || ''
@@ -208,6 +210,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               onChange={(e) => setMarketRate(e.target.value)}
               placeholder="Ej: 635 VES/USD"
               disabled={loading}
+              onWheel={(e) => e.currentTarget.blur()}
               helperText="Proporcionar tasa de mercado para calcular spread"
             />
 

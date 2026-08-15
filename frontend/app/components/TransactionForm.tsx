@@ -118,6 +118,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               placeholder="Ej: 1200"
               required
               disabled={loading}
+              onWheel={(e) => e.currentTarget.blur()}
               InputProps={{
                 endAdornment: wallet ? (
                   wallets.find((w) => w.name === wallet)?.currency || ''

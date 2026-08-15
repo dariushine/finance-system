@@ -219,6 +219,7 @@ export default function RatesPage() {
               value={form.bcv}
               onChange={(e) => setForm({ ...form, bcv: e.target.value })}
               fullWidth
+              onWheel={(e) => e.currentTarget.blur()}
             />
             <TextField
               label="Tasa paralelo (VES/USD)"
@@ -226,6 +227,7 @@ export default function RatesPage() {
               value={form.paralelo}
               onChange={(e) => setForm({ ...form, paralelo: e.target.value })}
               fullWidth
+              onWheel={(e) => e.currentTarget.blur()}
             />
           </Box>
         </DialogContent>
