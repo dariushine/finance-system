@@ -77,7 +77,6 @@ export default function WalletsPage() {
     alias: '',
     type: 'bank',
     currency: 'USD',
-    balance: '',
     description: '',
     icon: 'bank',
     color: '#0077b6',
@@ -103,7 +102,7 @@ export default function WalletsPage() {
   };
 
   const openCreate = () => {
-    setForm({ name: '', alias: '', type: 'bank', currency: 'USD', balance: '', description: '', icon: 'bank', color: '#0077b6' });
+    setForm({ name: '', alias: '', type: 'bank', currency: 'USD', description: '', icon: 'bank', color: '#0077b6' });
     setFormError(null);
     setCreateOpen(true);
   };
@@ -121,7 +120,6 @@ export default function WalletsPage() {
         alias: form.alias.trim() || undefined,
         type: form.type,
         currency: form.currency,
-        balance: form.balance ? Number(form.balance) : 0,
         description: form.description.trim() || undefined,
         icon: form.icon,
         color: form.color,
@@ -342,14 +340,6 @@ export default function WalletsPage() {
                 </Select>
               </FormControl>
             </Box>
-            <TextField
-              label="Balance inicial"
-              type="number"
-              value={form.balance}
-              onChange={(e) => setForm({ ...form, balance: e.target.value })}
-              fullWidth
-              helperText="Opcional, por defecto 0"
-            />
             <TextField
               label="Descripción (opcional)"
               value={form.description}
