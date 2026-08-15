@@ -2,10 +2,10 @@
   "name": "finance-backend",
   "version": "1.0.0",
   "description": "Backend API para sistema de finanzas personales",
-  "main": "exchange-server-correct.js",
+  "main": "exchange-server.js",
   "scripts": {
-    "start": "node exchange-server-correct.js",
-    "dev": "nodemon exchange-server-correct.js",
+    "start": "node exchange-server.js",
+    "dev": "nodemon exchange-server.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

@@ -59,7 +59,7 @@ docker-compose up -d
 # 1. Backend
 cd backend
 npm install
-node exchange-server-correct.js
+node exchange-server.js
 
 # 2. Frontend (otra terminal)
 cd frontend
@@ -211,7 +211,7 @@ POST /api/exchanges
 ```
 finance-system/
 ├── backend/                    # API Backend
-│   ├── exchange-server-correct.js  # Servidor principal
+│   ├── exchange-server.js  # Servidor principal
 │   ├── data/                  # SQLite database
 │   └── package.json
 ├── frontend/                  # Dashboard NextJS (Mobile-First)

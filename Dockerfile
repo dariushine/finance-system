@@ -22,7 +22,7 @@ RUN mkdir -p data && chmod 777 data
 EXPOSE 3002
 
 # Start the backend
-CMD ["node", "exchange-server-correct.js"]
+CMD ["node", "exchange-server.js"]
 
 # Frontend Dockerfile (separate stage)
 FROM node:18-alpine AS frontend

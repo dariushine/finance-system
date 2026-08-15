@@ -53,7 +53,7 @@ mkdir -p "$TEMP_DIR"
 # Copiar solo archivos necesarios (excluir desarrollo, tests, etc.)
 echo "Copiando backend..."
 mkdir -p "$TEMP_DIR/backend"
-cp backend/exchange-server-correct.js "$TEMP_DIR/backend/"
+cp backend/exchange-server.js "$TEMP_DIR/backend/"
 cp backend/package.json "$TEMP_DIR/backend/"
 cp backend/Dockerfile "$TEMP_DIR/backend/" 2>/dev/null || true
 

@@ -8,7 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const request = require('supertest');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { createServer } = require('../exchange-server-correct');
+const { createServer } = require('../exchange-server');
 
 // Mock de la base de datos para evitar dependencias reales
 jest.mock('sqlite3', () => ({
