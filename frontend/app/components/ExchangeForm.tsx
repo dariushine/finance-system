@@ -139,8 +139,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               <Typography variant="subtitle2" gutterBottom>
                 De (Origen)
               </Typography>
-              <Box display="flex" gap={1} flexWrap="wrap">
-                <FormControl fullWidth required>
+              <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '3fr 2fr' }} gap={1} alignItems="center">
+                <FormControl required>
                   <Select
                     value={fromWalletId}
                     onChange={(e) => setFromWalletId(Number(e.target.value) || '')}
@@ -160,7 +160,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   type="number"
                   value={fromAmount}
                   onChange={(e) => setFromAmount(e.target.value)}
-                  sx={{ width: { xs: '100%', sm: '180px' } }}
                   required
                   disabled={loading}
                   onWheel={(e) => e.currentTarget.blur()}
@@ -178,8 +177,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               <Typography variant="subtitle2" gutterBottom>
                 A (Destino)
               </Typography>
-              <Box display="flex" gap={1} flexWrap="wrap">
-                <FormControl fullWidth required>
+              <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '3fr 2fr' }} gap={1} alignItems="center">
+                <FormControl required>
                   <Select
                     value={toWalletId}
                     onChange={(e) => setToWalletId(Number(e.target.value) || '')}
@@ -199,7 +198,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   type="number"
                   value={toAmount}
                   onChange={(e) => setToAmount(e.target.value)}
-                  sx={{ width: { xs: '100%', sm: '180px' } }}
                   required
                   disabled={loading}
                   onWheel={(e) => e.currentTarget.blur()}
@@ -232,7 +230,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                 placeholder="Ej: 3.75"
                 disabled={loading}
                 onWheel={(e) => e.currentTarget.blur()}
-                helperText="Comisión pagada en la moneda de origen (ej: recarga Zinli)"
+                helperText="Comisión pagada en la moneda de origen"
                 InputProps={{
                   endAdornment: fromWalletId ? (
                     wallets.find(w => w.id === fromWalletId)?.currency || ''
@@ -295,45 +293,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   {rateData.commission > 0 && `Comisión excluida del spread (${rateData.commission.toFixed(2)} ${fromCur}). `}
                   {rateData.spread !== null
                     ? (rateData.spread > 0 ? '🎉 Spread positivo' : '⚠️ Spread negativo sobre tasa neta')
-                    : 'ℹ️ No se calculó spread (falta tasa de mercado)'}
-                </Typography>
-              </Box>
-              );
-            })()}
-
-            {rateData && (() => {
-              const fromCur = wallets.find(w => w.id === fromWalletId)?.currency || '';
-              const toCur = wallets.find(w => w.id === toWalletId)?.currency || '';
-              return (
-              <Box bgcolor="grey.50" p={2} borderRadius={1}>
-                <Typography variant="subtitle2" gutterBottom>
-                  📊 Cálculo del exchange
-                </Typography>
-                <Box display="flex" flexWrap="wrap" gap={1}>
-                  <Chip
-                    label={`Tasa usada: ${rateData.rate.toFixed(2)} ${toCur}/${fromCur}`}
-                    color="primary"
-                    size="small"
-                  />
-                  {rateData.market && (
-                    <Chip
-                      label={`Mercado: ${rateData.market} ${toCur}/${fromCur}`}
-                      color="secondary"
-                      size="small"
-                    />
-                  )}
-                  {rateData.spread !== null && (
-                    <Chip
-                      label={`Spread: ${rateData.spread.toFixed(2)}%`}
-                      color={rateData.spread > 0 ? 'success' : 'error'}
-                      size="small"
-                      icon={rateData.spread > 0 ? <TrendingUp /> : <TrendingDown />}
-                    />
-                  )}
-                </Box>
-                <Typography variant="caption" color="text.secondary">
-                  {rateData.spread !== null 
-                    ? (rateData.spread > 0 ? '🎉 Spread positivo' : '⚠️ Spread negativo')
                     : 'ℹ️ No se calculó spread (falta tasa de mercado)'}
                 </Typography>
               </Box>
