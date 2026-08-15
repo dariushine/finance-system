@@ -50,6 +50,7 @@ interface Exchange {
   rate: number;
   marketRate?: number;
   spread?: number;
+  fee?: number;
   description?: string;
   createdAt: string;
   fromWalletName?: string;
@@ -442,6 +443,7 @@ export default function ExchangesPage() {
                   <TableCell>To Amount</TableCell>
                   <TableCell>Tasa</TableCell>
                   <TableCell>Spread</TableCell>
+                  <TableCell>Comisión</TableCell>
                   <TableCell>Descripción</TableCell>
                   <TableCell align="right">Acciones</TableCell>
                 </TableRow>
@@ -502,6 +504,20 @@ export default function ExchangesPage() {
                         ) : (
                           <Typography variant="body2" color="text.secondary">
                             Sin spread
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {exchange.fee && exchange.fee > 0 ? (
+                          <Chip
+                            label={`${(exchange.fee || 0).toFixed(2)} ${exchange.fromCurrency || ''}`}
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            -
                           </Typography>
                         )}
                       </TableCell>

@@ -64,6 +64,7 @@ db.serialize(() => {
     date TEXT NOT NULL,
     exchange_rate DECIMAL(10,4) DEFAULT 1.0,
     converted_amount DECIMAL(10,2) NOT NULL,
+    fee DECIMAL(10,2) DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (wallet_id) REFERENCES wallets(id),
     FOREIGN KEY (category_id) REFERENCES categories(id)
@@ -81,6 +82,7 @@ db.serialize(() => {
     rate DECIMAL(10,4) NOT NULL,
     market_rate DECIMAL(10,4),
     spread DECIMAL(5,2),
+    fee DECIMAL(10,2) DEFAULT 0,
     description TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (debit_transaction_id) REFERENCES transactions(id),
@@ -98,6 +100,16 @@ db.serialize(() => {
     }
     if (!names.includes('spread')) {
       db.run(`ALTER TABLE exchanges ADD COLUMN spread DECIMAL(5,2)`);
+    }
+    if (!names.includes('fee')) {
+      db.run(`ALTER TABLE exchanges ADD COLUMN fee DECIMAL(10,2) DEFAULT 0`);
+    }
+  });
+  db.all(`PRAGMA table_info(transactions)`, (err, cols) => {
+    if (err) return;
+    const names = (cols || []).map((c) => c.name);
+    if (!names.includes('fee')) {
+      db.run(`ALTER TABLE transactions ADD COLUMN fee DECIMAL(10,2) DEFAULT 0`);
     }
   });
   
@@ -250,7 +262,7 @@ function getRateForDate(date, type) {
   });
 }
 
-function createTransaction(walletId, categoryName, type, amount, description) {
+function createTransaction(walletId, categoryName, type, amount, description, fee = 0) {
   return new Promise((resolve, reject) => {
     db.serialize(() => {
       // 1. Obtener wallet
@@ -276,10 +288,10 @@ function createTransaction(walletId, categoryName, type, amount, description) {
             db.run('BEGIN TRANSACTION');
             
             db.run(
-              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [walletId, category.id, type, amount, description || '', 
-               new Date().toISOString().split('T')[0], 1.0, amount],
+               new Date().toISOString().split('T')[0], 1.0, amount, fee || 0],
               function(err) {
                 if (err) {
                   db.run('ROLLBACK');
@@ -592,9 +604,9 @@ app.get('/api/transactions/:id', (req, res) => {
 // Exchanges con transacciones separadas
 app.post('/api/exchanges', async (req, res) => {
   try {
-    const { fromWalletId, toWalletId, fromAmount, toAmount, description, marketRate } = req.body;
+    const { fromWalletId, toWalletId, fromAmount, toAmount, description, marketRate, fee } = req.body;
     
-    console.log('💱 Procesando exchange:', { fromWalletId, toWalletId, fromAmount, toAmount });
+    console.log('💱 Procesando exchange:', { fromWalletId, toWalletId, fromAmount, toAmount, fee });
     
     // Validaciones básicas
     if (!fromWalletId || !toWalletId || !fromAmount || !toAmount) {
@@ -638,10 +650,21 @@ app.post('/api/exchanges', async (req, res) => {
     // Calcular tasa
     const rate = toAmount / fromAmount;
     
-    // Calcular spread solo si hay marketRate
+    // Comisión (fee) en la moneda de origen, por defecto 0
+    const commission = Number(fee) || 0;
+
+    // Monto neto recibido después de la comisión (lo que realmente ingresa al destino)
+    // La comisión se cobra en el origen: lo que sale realmente = fromAmount, 
+    // lo que llega neto de comisión = toAmount (el usuario ya ingresó lo que recibió).
+    // Para el spread usamos la tasa neta: toAmount / (fromAmount - commission)
+    // Si no hay comisión, la tasa neta = tasa bruta.
+    const netFromAmount = fromAmount - commission;
+    const netRate = netFromAmount > 0 ? toAmount / netFromAmount : rate;
+
+    // Calcular spread sobre la tasa neta (sin comisión)
     let spread = null;
     if (marketRate !== undefined && marketRate !== null) {
-      spread = ((marketRate - rate) / marketRate) * 100;
+      spread = ((marketRate - netRate) / marketRate) * 100;
     }
     
     // Crear transacción de débito (exchange_out)
@@ -650,7 +673,8 @@ app.post('/api/exchanges', async (req, res) => {
       'exchange_out',
       'expense',
       fromAmount,
-      `${description || 'Exchange'} → ${toWallet.name}`
+      `${description || 'Exchange'} → ${toWallet.name}`,
+      commission
     );
     
     // Crear transacción de crédito (exchange_in)
@@ -665,8 +689,8 @@ app.post('/api/exchanges', async (req, res) => {
     // Registrar metadata del exchange
     db.run(
       `INSERT INTO exchanges (debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, 
-       from_amount, to_amount, rate, market_rate, spread, description) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       from_amount, to_amount, rate, market_rate, spread, fee, description) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         debitTransaction.id,
         creditTransaction.id,
@@ -677,6 +701,7 @@ app.post('/api/exchanges', async (req, res) => {
         rate,
         marketRate || null,
         spread,
+        commission,
         description || ''
       ],
       function(err) {
@@ -695,10 +720,12 @@ app.post('/api/exchanges', async (req, res) => {
             rate,
             marketRate: marketRate || null,
             spread,
+            fee: commission,
             fromWallet: fromWallet.name,
             toWallet: toWallet.name,
             fromAmount,
             toAmount,
+            netRate,
             fromCurrency: fromWallet.currency,
             toCurrency: toWallet.currency,
             description: description || ''
@@ -731,6 +758,7 @@ app.get('/api/exchanges', (req, res) => {
       e.rate,
       e.market_rate AS marketRate,
       e.spread,
+      e.fee,
       e.description,
       e.created_at AS createdAt,
       from_wallet.name AS fromWalletName,

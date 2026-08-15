@@ -14,6 +14,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   const [toWalletId, setToWalletId] = useState<number | ''>('');
   const [fromAmount, setFromAmount] = useState('');
   const [toAmount, setToAmount] = useState('');
+  const [fee, setFee] = useState('');
   const [marketRate, setMarketRate] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,12 +31,19 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
     const from = parseFloat(fromAmount);
     const to = parseFloat(toAmount);
     if (from === 0) return null;
-    
+
+    // Tasa bruta
     const rate = to / from;
+    // Comisión en la moneda de origen
+    const commission = fee ? parseFloat(fee) : 0;
+    // Tasa neta: el intercambio real descontando la comisión cobrada en el origen
+    const netFrom = from - commission;
+    const netRate = netFrom > 0 ? to / netFrom : rate;
+    // Spread calculado sobre la tasa neta (sin incluir la comisión)
     const market = marketRate ? parseFloat(marketRate) : null;
-    const spread = market ? ((market - rate) / market) * 100 : null;
+    const spread = market ? ((market - netRate) / market) * 100 : null;
     
-    return { rate, market, spread };
+    return { rate, netRate, market, spread, commission };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,6 +73,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         fromAmount: parseFloat(fromAmount),
         toAmount: parseFloat(toAmount),
         marketRate: rateData.market || undefined,
+        fee: rateData.commission || undefined,
         description: description || undefined
       };
       
@@ -96,6 +105,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setFromAmount('');
       setToAmount('');
       setMarketRate('');
+      setFee('');
       setDescription('');
 
       // Notificar éxito al componente padre
@@ -129,7 +139,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               <Typography variant="subtitle2" gutterBottom>
                 De (Origen)
               </Typography>
-              <Box display="flex" gap={1}>
+              <Box display="flex" gap={1} flexWrap="wrap">
                 <FormControl fullWidth required>
                   <Select
                     value={fromWalletId}
@@ -150,7 +160,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   type="number"
                   value={fromAmount}
                   onChange={(e) => setFromAmount(e.target.value)}
-                  sx={{ width: '120px' }}
+                  sx={{ width: { xs: '100%', sm: '180px' } }}
                   required
                   disabled={loading}
                   onWheel={(e) => e.currentTarget.blur()}
@@ -168,7 +178,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               <Typography variant="subtitle2" gutterBottom>
                 A (Destino)
               </Typography>
-              <Box display="flex" gap={1}>
+              <Box display="flex" gap={1} flexWrap="wrap">
                 <FormControl fullWidth required>
                   <Select
                     value={toWalletId}
@@ -189,7 +199,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   type="number"
                   value={toAmount}
                   onChange={(e) => setToAmount(e.target.value)}
-                  sx={{ width: '120px' }}
+                  sx={{ width: { xs: '100%', sm: '180px' } }}
                   required
                   disabled={loading}
                   onWheel={(e) => e.currentTarget.blur()}
@@ -203,16 +213,93 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
             </Box>
 
             {/* Tasa de mercado (opcional) */}
-            <TextField
-              label="Tasa de mercado (opcional)"
-              type="number"
-              value={marketRate}
-              onChange={(e) => setMarketRate(e.target.value)}
-              placeholder="Ej: 635 VES/USD"
-              disabled={loading}
-              onWheel={(e) => e.currentTarget.blur()}
-              helperText="Proporcionar tasa de mercado para calcular spread"
-            />
+            <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr' }} gap={2}>
+              <TextField
+                label="Tasa de mercado (opcional)"
+                type="number"
+                value={marketRate}
+                onChange={(e) => setMarketRate(e.target.value)}
+                placeholder="Ej: 635 VES/USD"
+                disabled={loading}
+                onWheel={(e) => e.currentTarget.blur()}
+                helperText="Proporcionar tasa de mercado para calcular spread"
+              />
+              <TextField
+                label="Comisión (fee)"
+                type="number"
+                value={fee}
+                onChange={(e) => setFee(e.target.value)}
+                placeholder="Ej: 3.75"
+                disabled={loading}
+                onWheel={(e) => e.currentTarget.blur()}
+                helperText="Comisión pagada en la moneda de origen (ej: recarga Zinli)"
+                InputProps={{
+                  endAdornment: fromWalletId ? (
+                    wallets.find(w => w.id === fromWalletId)?.currency || ''
+                  ) : ''
+                }}
+              />
+            </Box>
+
+            <Box>
+              <TextField
+                label="Descripción"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ej: Cambio Binance"
+                multiline
+                rows={2}
+                fullWidth
+                disabled={loading}
+              />
+            </Box>
+
+            {rateData && (() => {
+              const fromCur = wallets.find(w => w.id === fromWalletId)?.currency || '';
+              const toCur = wallets.find(w => w.id === toWalletId)?.currency || '';
+              return (
+              <Box bgcolor="grey.50" p={2} borderRadius={1}>
+                <Typography variant="subtitle2" gutterBottom>
+                  📊 Cálculo del exchange
+                </Typography>
+                <Box display="flex" flexWrap="wrap" gap={1}>
+                  <Chip
+                    label={`Tasa usada: ${rateData.netRate.toFixed(2)} ${toCur}/${fromCur}`}
+                    color="primary"
+                    size="small"
+                  />
+                  {rateData.commission > 0 && (
+                    <Chip
+                      label={`Comisión: ${rateData.commission.toFixed(2)} ${fromCur}`}
+                      color="warning"
+                      size="small"
+                    />
+                  )}
+                  {rateData.market && (
+                    <Chip
+                      label={`Mercado: ${rateData.market} ${toCur}/${fromCur}`}
+                      color="secondary"
+                      size="small"
+                    />
+                  )}
+                  {rateData.spread !== null && (
+                    <Chip
+                      label={`Spread: ${rateData.spread.toFixed(2)}%`}
+                      color={rateData.spread > 0 ? 'success' : 'error'}
+                      size="small"
+                      icon={rateData.spread > 0 ? <TrendingUp /> : <TrendingDown />}
+                    />
+                  )}
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {rateData.commission > 0 && `Comisión excluida del spread (${rateData.commission.toFixed(2)} ${fromCur}). `}
+                  {rateData.spread !== null
+                    ? (rateData.spread > 0 ? '🎉 Spread positivo' : '⚠️ Spread negativo sobre tasa neta')
+                    : 'ℹ️ No se calculó spread (falta tasa de mercado)'}
+                </Typography>
+              </Box>
+              );
+            })()}
 
             {rateData && (() => {
               const fromCur = wallets.find(w => w.id === fromWalletId)?.currency || '';
@@ -252,16 +339,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               </Box>
               );
             })()}
-
-            <TextField
-              label="Descripción"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ej: Cambio Binance"
-              multiline
-              rows={2}
-              disabled={loading}
-            />
 
             <Button
               type="submit"
