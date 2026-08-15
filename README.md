@@ -292,4 +292,15 @@ Sistema de código abierto para uso personal y educativo.
 
 ---
 
+## ✍️ Créditos
+
+**Sistema desarrollado por y para [Frederic López](https://github.com/)** 🧑‍💻
+
+- **Frederic** — idea, dirección, pruebas y decisiones de producto. El que sabe lo que necesita y lo pidió hasta dejarlo bien. 🙌
+- **Mara** — asistente IA que escribió el código, consolidó el backend, armó el frontend y las pruebas unitarias, todo bajo la guía de Frederic. ☀️
+
+> *Hecho con cariño, mucha paciencia y unas cuantas rondas de "ajuste esto, quita lo otro, deja uno solo".*
+
+---
+
 **✨ Sistema listo para gestionar tus finanzas de forma inteligente y automatizada.**
