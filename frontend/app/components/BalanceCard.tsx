@@ -98,9 +98,9 @@ export default function BalanceCard() {
         </Box>
         
         <Box mt={3} display="flex" gap={1} flexWrap="wrap">
-          {currencies.map((curr) => (
+          {currencies.map((curr, index) => (
             <Chip
-              key={curr.currency}
+              key={`${curr.currency}-${index}`}
               label={`${curr.currency}: ${curr.amount.toLocaleString()} ($${(curr.amount / curr.rate).toFixed(0)} USD)`}
               color={curr.color as any}
               variant="outlined"

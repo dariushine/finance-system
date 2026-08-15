@@ -91,7 +91,14 @@ export default function Navigation() {
     <>
       {/* Desktop/Tablet AppBar */}
       {!isMobile && (
-        <AppBar position="sticky" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
+        <AppBar
+          position="fixed"
+          sx={{
+            zIndex: theme.zIndex.drawer + 1,
+            width: { md: 'calc(100% - 250px)' },
+            ml: { md: '250px' },
+          }}
+        >
           <Toolbar>
             <IconButton
               color="inherit"
@@ -154,6 +161,8 @@ export default function Navigation() {
           variant="permanent"
           sx={{
             display: { xs: 'none', md: 'block' },
+            width: { md: 250 },
+            flexShrink: { md: 0 },
             '& .MuiDrawer-paper': {
               width: 250,
               boxSizing: 'border-box',

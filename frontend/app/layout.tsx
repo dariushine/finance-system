@@ -40,10 +40,11 @@ export default function RootLayout({
                   flexGrow: 1,
                   minWidth: 0,
                   p: { xs: 2, sm: 3 },
+                  pt: { md: 8 }, // clears the fixed AppBar on desktop
                   pb: { xs: 8, md: 3 }, // Extra padding for mobile bottom nav
                 }}
               >
-                <Container maxWidth="xl" sx={{ mt: { xs: 2, md: 4 } }}>
+                <Container maxWidth="xl">
                   {children}
                 </Container>
               </Box>
