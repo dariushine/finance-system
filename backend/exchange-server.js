@@ -513,23 +513,75 @@ app.get('/api/exchange-rates', (req, res) => {
 
 // Estadísticas para el dashboard (forma esperada por el frontend)
 app.get('/api/stats', (req, res) => {
-  db.all('SELECT type, amount FROM transactions', (err, rows) => {
+  db.all("SELECT t.type, t.amount, t.date, c.name AS category FROM transactions t LEFT JOIN categories c ON c.id = t.category_id", (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
 
     let total_income = 0;
     let total_expense = 0;
     let transaction_count = rows?.length || 0;
 
+    // Datos para el resumen mensual y por categoría
+    const monthlyMap = new Map();
+    const categoryMap = new Map();
+
     (rows || []).forEach(row => {
-      if (row.type === 'income') total_income += Number(row.amount) || 0;
-      else if (row.type === 'expense') total_expense += Number(row.amount) || 0;
+      const amount = Number(row.amount) || 0;
+      if (row.type === 'income') total_income += amount;
+      else if (row.type === 'expense') total_expense += amount;
+
+      // Agrupar por mes (YYYY-MM)
+      let month = 'Desconocido';
+      if (row.date) {
+        const d = new Date(row.date);
+        if (!isNaN(d.getTime())) {
+          month = d.toISOString().slice(0, 7); // YYYY-MM
+        }
+      }
+      if (!monthlyMap.has(month)) {
+        monthlyMap.set(month, { month, income: 0, expense: 0, transactionCount: 0 });
+      }
+      const m = monthlyMap.get(month);
+      m.transactionCount++;
+      if (row.type === 'income') m.income += amount;
+      else if (row.type === 'expense') m.expense += amount;
+
+      // Agrupar por categoría
+      const cat = row.category || 'Sin categoría';
+      if (!categoryMap.has(cat)) {
+        categoryMap.set(cat, { category: cat, count: 0, total: 0 });
+      }
+      const c = categoryMap.get(cat);
+      c.count++;
+      if (row.type === 'expense') c.total += amount;
     });
+
+    // Ordenar mensual cronológicamente
+    const monthly = Array.from(monthlyMap.values()).sort((a, b) => a.month.localeCompare(b.month)).map((m) => ({
+      ...m,
+      income: parseFloat(m.income.toFixed(2)),
+      expense: parseFloat(m.expense.toFixed(2)),
+      net: parseFloat((m.income - m.expense).toFixed(2)),
+    }));
+
+    const byCategory = Array.from(categoryMap.values()).map((c) => ({
+      ...c,
+      total: parseFloat(c.total.toFixed(2)),
+    }));
 
     res.json({
       total_income: parseFloat(total_income.toFixed(2)),
       total_expense: parseFloat(total_expense.toFixed(2)),
       net_balance: parseFloat((total_income - total_expense).toFixed(2)),
       transaction_count,
+      // Datos extendidos para la página de reportes
+      summary: {
+        totalTransactions: transaction_count,
+        totalIncome: parseFloat(total_income.toFixed(2)),
+        totalExpenses: parseFloat(total_expense.toFixed(2)),
+        net: parseFloat((total_income - total_expense).toFixed(2)),
+      },
+      monthly,
+      byCategory,
       generatedAt: new Date().toISOString(),
     });
   });

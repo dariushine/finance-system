@@ -87,13 +87,6 @@ export default function WalletList() {
           <Typography variant="body2" color="text.secondary" gutterBottom>
             Total USD: ${totalUSD.toLocaleString()} | Total VES: {totalVES.toLocaleString()} VES
           </Typography>
-          <LinearProgress variant="determinate" value={70} sx={{ height: 8, borderRadius: 4 }} />
-        </Box>
-
-        <Box mb={3}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Total USD: ${totalUSD.toLocaleString()} | Total VES: {totalVES.toLocaleString()} VES
-          </Typography>
           <LinearProgress variant="determinate" value={progressValue} sx={{ height: 8, borderRadius: 4 }} />
         </Box>
 

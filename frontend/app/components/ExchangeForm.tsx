@@ -211,20 +211,23 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               helperText="Proporcionar tasa de mercado para calcular spread"
             />
 
-            {rateData && (
+            {rateData && (() => {
+              const fromCur = wallets.find(w => w.id === fromWalletId)?.currency || '';
+              const toCur = wallets.find(w => w.id === toWalletId)?.currency || '';
+              return (
               <Box bgcolor="grey.50" p={2} borderRadius={1}>
                 <Typography variant="subtitle2" gutterBottom>
                   📊 Cálculo del exchange
                 </Typography>
                 <Box display="flex" flexWrap="wrap" gap={1}>
                   <Chip
-                    label={`Tasa usada: ${rateData.rate.toFixed(2)} VES/USD`}
+                    label={`Tasa usada: ${rateData.rate.toFixed(2)} ${toCur}/${fromCur}`}
                     color="primary"
                     size="small"
                   />
                   {rateData.market && (
                     <Chip
-                      label={`Mercado: ${rateData.market} VES/USD`}
+                      label={`Mercado: ${rateData.market} ${toCur}/${fromCur}`}
                       color="secondary"
                       size="small"
                     />
@@ -244,7 +247,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     : 'ℹ️ No se calculó spread (falta tasa de mercado)'}
                 </Typography>
               </Box>
-            )}
+              );
+            })()}
 
             <TextField
               label="Descripción"
