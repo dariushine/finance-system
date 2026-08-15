@@ -1,0 +1,623 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import {
+  Box,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  Paper,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Alert,
+  CircularProgress,
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Button,
+  ToggleButton,
+  ToggleButtonGroup
+} from '@mui/material';
+import {
+  BarChart as BarChartIcon,
+  PieChart as PieChartIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  AttachMoney as MoneyIcon,
+  AccountBalance as BankIcon,
+  Download as DownloadIcon,
+  CalendarMonth as CalendarIcon
+} from '@mui/icons-material';
+import { API_URL } from '../lib/api';
+
+// Simularemos gráficos con componentes MUI por ahora
+// En producción, usaríamos Recharts o Chart.js
+
+interface ReportData {
+  monthlySummary: Array<{
+    month: string;
+    income: number;
+    expense: number;
+    transactionCount: number;
+    net: number;
+  }>;
+  byCategory: Array<{
+    category: string;
+    count: number;
+    total: number;
+  }>;
+  walletBalances: Array<{
+    name: string;
+    balance: number;
+    currency: string;
+  }>;
+  exchangeStats: {
+    totalExchanges: number;
+    averageSpread: number;
+    totalFromAmount: number;
+    totalToAmount: number;
+  };
+  summary: {
+    totalTransactions: number;
+    totalIncome: number;
+    totalExpenses: number;
+    net: number;
+  };
+}
+
+export default function ReportsPage() {
+  const [data, setData] = useState<ReportData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState('6m');
+  const [chartType, setChartType] = useState('bar');
+
+  useEffect(() => {
+    loadReportData();
+  }, [timeRange]);
+
+  const loadReportData = async () => {
+    try {
+      setLoading(true);
+      const [statsResponse, transactionsResponse, walletsResponse, exchangesResponse] = await Promise.all([
+        fetch(`${API_URL}/stats`),
+        fetch(`${API_URL}/transactions?limit=100`),
+        fetch(`${API_URL}/wallets`),
+        fetch(`${API_URL}/exchanges?limit=50`)
+      ]);
+
+      if (!statsResponse.ok || !transactionsResponse.ok) {
+        throw new Error('Error al cargar datos de reportes');
+      }
+
+      const stats = await statsResponse.json();
+      const transactions = await transactionsResponse.json();
+      const wallets = await walletsResponse.json();
+      const exchanges = exchangesResponse.ok ? await exchangesResponse.json() : [];
+
+      // Procesar datos para reportes
+      const reportData: ReportData = {
+        monthlySummary: stats.monthly || [],
+        byCategory: stats.byCategory || [],
+        walletBalances: Array.isArray(wallets) ? wallets.map((w: any) => ({
+          name: w.name,
+          balance: w.balance || 0,
+          currency: w.currency || 'USD'
+        })) : [],
+        exchangeStats: {
+          totalExchanges: Array.isArray(exchanges.data) ? exchanges.data.length : exchanges.length || 0,
+          averageSpread: Array.isArray(exchanges.data) 
+            ? exchanges.data.filter((e: any) => e.spread).reduce((sum: number, e: any) => sum + (e.spread || 0), 0) / (exchanges.data.filter((e: any) => e.spread).length || 1)
+            : 0,
+          totalFromAmount: Array.isArray(exchanges.data)
+            ? exchanges.data.reduce((sum: number, e: any) => sum + (e.fromAmount || 0), 0)
+            : 0,
+          totalToAmount: Array.isArray(exchanges.data)
+            ? exchanges.data.reduce((sum: number, e: any) => sum + (e.toAmount || 0), 0)
+            : 0
+        },
+        summary: stats.summary || {
+          totalTransactions: 0,
+          totalIncome: 0,
+          totalExpenses: 0,
+          net: 0
+        }
+      };
+
+      setData(reportData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-VE', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
+
+  const exportReport = () => {
+    if (!data) return;
+
+    const report = {
+      generado: new Date().toISOString(),
+      rango: timeRange,
+      resumen: data.summary,
+      categorias: data.byCategory,
+      mensual: data.monthlySummary,
+      billeteras: data.walletBalances,
+      exchanges: data.exchangeStats
+    };
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte_finanzas_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert severity="error" sx={{ mt: 2 }}>
+        {error}
+      </Alert>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Alert severity="info" sx={{ mt: 2 }}>
+        No hay datos disponibles para generar reportes
+      </Alert>
+    );
+  }
+
+  return (
+    <Box>
+      {/* Header */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Box>
+          <Typography variant="h4" gutterBottom fontWeight="bold">
+            Reportes
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Análisis y estadísticas de tus finanzas
+          </Typography>
+        </Box>
+        <Box display="flex" gap={2}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Rango</InputLabel>
+            <Select
+              value={timeRange}
+              label="Rango"
+              onChange={(e) => setTimeRange(e.target.value)}
+            >
+              <MenuItem value="1m">Último mes</MenuItem>
+              <MenuItem value="3m">Últimos 3 meses</MenuItem>
+              <MenuItem value="6m">Últimos 6 meses</MenuItem>
+              <MenuItem value="1y">Último año</MenuItem>
+              <MenuItem value="all">Todo</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={exportReport}
+          >
+            Exportar
+          </Button>
+        </Box>
+      </Box>
+
+      {/* Summary Stats */}
+      <Grid container spacing={3} mb={4}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <MoneyIcon color="primary" />
+                <Typography variant="body2" color="text.secondary">
+                  Ingresos Totales
+                </Typography>
+              </Box>
+              <Typography variant="h4" color="success.main" gutterBottom>
+                {formatCurrency(data.summary.totalIncome)}
+              </Typography>
+              <Chip
+                label={`${data.summary.totalTransactions} transacciones`}
+                size="small"
+                variant="outlined"
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <TrendingDownIcon color="error" />
+                <Typography variant="body2" color="text.secondary">
+                  Gastos Totales
+                </Typography>
+              </Box>
+              <Typography variant="h4" color="error.main" gutterBottom>
+                {formatCurrency(data.summary.totalExpenses)}
+              </Typography>
+              {data.summary.totalIncome > 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  {(data.summary.totalExpenses / data.summary.totalIncome * 100).toFixed(1)}% de ingresos
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <TrendingUpIcon color={data.summary.net >= 0 ? 'success' : 'error'} />
+                <Typography variant="body2" color="text.secondary">
+                  Balance Neto
+                </Typography>
+              </Box>
+              <Typography 
+                variant="h4" 
+                color={data.summary.net >= 0 ? 'success.main' : 'error.main'}
+                gutterBottom
+              >
+                {formatCurrency(data.summary.net)}
+              </Typography>
+              <Chip
+                icon={data.summary.net >= 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
+                label={data.summary.net >= 0 ? 'Positivo' : 'Negativo'}
+                color={data.summary.net >= 0 ? 'success' : 'error'}
+                size="small"
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <BankIcon color="secondary" />
+                <Typography variant="body2" color="text.secondary">
+                  Billeteras Activas
+                </Typography>
+              </Box>
+              <Typography variant="h4" gutterBottom>
+                {data.walletBalances.length}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {data.walletBalances.filter(w => w.balance > 0).length} con saldo
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Monthly Performance */}
+      <Grid container spacing={3} mb={4}>
+        <Grid item xs={12} lg={8}>
+          <Card>
+            <CardContent>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                <Typography variant="h6">
+                  Performance Mensual
+                </Typography>
+                <ToggleButtonGroup
+                  value={chartType}
+                  exclusive
+                  onChange={(e, newType) => newType && setChartType(newType)}
+                  size="small"
+                >
+                  <ToggleButton value="bar">
+                    <BarChartIcon />
+                  </ToggleButton>
+                  <ToggleButton value="pie">
+                    <PieChartIcon />
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
+              {data.monthlySummary.length > 0 ? (
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Mes</TableCell>
+                        <TableCell align="right">Ingresos</TableCell>
+                        <TableCell align="right">Gastos</TableCell>
+                        <TableCell align="right">Neto</TableCell>
+                        <TableCell align="right">Transacciones</TableCell>
+                        <TableCell align="center">Tendencia</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {data.monthlySummary.map((month, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {month.month}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" color="success.main">
+                              {formatCurrency(month.income)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" color="error.main">
+                              {formatCurrency(month.expense)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography 
+                              variant="body2" 
+                              fontWeight="bold"
+                              color={month.net >= 0 ? 'success.main' : 'error.main'}
+                            >
+                              {formatCurrency(month.net)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Chip
+                              label={month.transactionCount}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            {index > 0 && data.monthlySummary[index - 1] && (
+                              <Chip
+                                icon={month.net > data.monthlySummary[index - 1].net ? 
+                                  <TrendingUpIcon /> : <TrendingDownIcon />}
+                                label={`${((month.net - data.monthlySummary[index - 1].net) / Math.abs(data.monthlySummary[index - 1].net || 1) * 100).toFixed(1)}%`}
+                                size="small"
+                                color={month.net > data.monthlySummary[index - 1].net ? 'success' : 'error'}
+                              />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Box textAlign="center" py={4}>
+                  <Typography variant="body1" color="text.secondary">
+                    No hay datos mensuales disponibles
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Category Breakdown */}
+        <Grid item xs={12} lg={4}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Gastos por Categoría
+              </Typography>
+              
+              {data.byCategory.length > 0 ? (
+                <Box>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Categoría</TableCell>
+                          <TableCell align="right">Monto</TableCell>
+                          <TableCell align="right">%</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {data.byCategory.slice(0, 8).map((category, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <Typography variant="body2">
+                                {category.category}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Typography variant="body2">
+                                {formatCurrency(category.total)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Chip
+                                label={`${(category.total / data.summary.totalExpenses * 100).toFixed(1)}%`}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  
+                  <Box mt={2}>
+                    <Typography variant="caption" color="text.secondary">
+                      Total categorías: {data.byCategory.length}
+                    </Typography>
+                  </Box>
+                </Box>
+              ) : (
+                <Box textAlign="center" py={4}>
+                  <Typography variant="body1" color="text.secondary">
+                    No hay datos por categoría
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Wallet Balances & Exchange Stats */}
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Balances por Billetera
+              </Typography>
+              
+              {data.walletBalances.length > 0 ? (
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Billetera</TableCell>
+                        <TableCell>Moneda</TableCell>
+                        <TableCell align="right">Balance</TableCell>
+                        <TableCell align="center">Estado</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {data.walletBalances.map((wallet, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {wallet.name}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={wallet.currency}
+                              size="small"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography 
+                              variant="body2"
+                              fontWeight="medium"
+                              color={wallet.balance >= 0 ? 'success.main' : 'error.main'}
+                            >
+                              {formatCurrency(wallet.balance)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              label={wallet.balance >= 0 ? 'Activa' : 'Negativa'}
+                              size="small"
+                              color={wallet.balance >= 0 ? 'success' : 'error'}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Box textAlign="center" py={2}>
+                  <Typography variant="body1" color="text.secondary">
+                    No hay billeteras configuradas
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Estadísticas de Exchanges
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Card variant="outlined">
+                    <CardContent sx={{ textAlign: 'center' }}>
+                      <Typography variant="h4" color="primary" gutterBottom>
+                        {data.exchangeStats.totalExchanges}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Exchanges Totales
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <Card variant="outlined">
+                    <CardContent sx={{ textAlign: 'center' }}>
+                      <Typography variant="h4" color="primary" gutterBottom>
+                        {data.exchangeStats.averageSpread.toFixed(2)}%
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Spread Promedio
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <Card variant="outlined">
+                    <CardContent sx={{ textAlign: 'center' }}>
+                      <Typography variant="h4" color="error.main" gutterBottom>
+                        {formatCurrency(data.exchangeStats.totalFromAmount)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Total Enviado
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <Card variant="outlined">
+                    <CardContent sx={{ textAlign: 'center' }}>
+                      <Typography variant="h4" color="success.main" gutterBottom>
+                        {formatCurrency(data.exchangeStats.totalToAmount)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Total Recibido
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+              
+              <Box mt={3}>
+                <Typography variant="body2" color="text.secondary">
+                  Las tasas de exchange se calculan automáticamente en base a los montos enviados y recibidos.
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+}

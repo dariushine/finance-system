@@ -1,0 +1,47 @@
+# Etapa de construcción
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copiar package.json y package-lock.json
+COPY backend/package*.json ./
+
+# Instalar dependencias
+RUN npm ci --only=production
+
+# Copiar código fuente
+COPY backend/ .
+
+# Construir aplicación
+RUN npm run build
+
+# Etapa de producción
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Instalar dependencias necesarias para producción
+RUN apk add --no-cache sqlite
+
+# Copiar dependencias y código construido
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+
+# Crear directorio para base de datos
+RUN mkdir -p /data && chmod 777 /data
+
+# Variables de entorno
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV DB_PATH=/data/finance.db
+
+# Exponer puerto
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/health || exit 1
+
+# Comando de inicio
+CMD ["node", "dist/main.js"]

@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # Backend API service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./backend:/app/backend:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - finance-network
+
+  # Frontend dashboard
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app/frontend:ro
+      - /app/frontend/node_modules
+      - /app/frontend/.next
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://backend:3002/api
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - finance-network
+
+  # Database (SQLite - in volume for simplicity)
+  # Note: SQLite runs in backend container, no separate service needed
+  # Data persisted via volume mount
+
+networks:
+  finance-network:
+    driver: bridge
+
+volumes:
+  # Volume for SQLite database
+  finance-data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ./backend/data
+      o: bind
