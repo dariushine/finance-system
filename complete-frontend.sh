@@ -1147,6 +1147,6 @@ EOF
 
 echo "✅ Frontend multi-página creado!"
 echo "🎯 Para probar:"
-echo "1. Asegurar que el API enhanced esté corriendo: node backend/finance-api-enhanced.js"
+echo "1. Asegurar que el API enhanced esté corriendo: node backend/exchange-server-correct.js"
 echo "2. Instalar dependencias adicionales: npm install @mui/x-date-pickers date-fns"
 echo "3.

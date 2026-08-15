@@ -361,7 +361,7 @@ app.get('/api/balance', (req, res) => {
   db.all('SELECT * FROM wallets WHERE isActive = 1', (err, wallets) => {
     if (err) return res.status(500).json({ error: err.message });
     
-    const rates = { USD: 1, VES: 635, EUR: 1.07 };
+    const rates = getExchangeRates();
     const byCurrency = {};
     
     wallets.forEach(wallet => {
@@ -384,6 +384,44 @@ app.get('/api/balance', (req, res) => {
       totalUSD: parseFloat(totalUSD.toFixed(2)),
       byCurrency: byCurrencyArray,
       timestamp: new Date().toISOString(),
+    });
+  });
+});
+
+// Tasas de cambio centralizadas (única fuente de verdad)
+// TODO: cuando exista un proveedor real, reemplazar aquí sin tocar el resto
+function getExchangeRates() {
+  return { USD: 1, VES: 635, EUR: 1.07 };
+}
+
+// Endpoint para que el frontend obtenga las tasas en vez de hardcodearlas
+app.get('/api/exchange-rates', (req, res) => {
+  res.json({
+    rates: getExchangeRates(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Estadísticas para el dashboard (forma esperada por el frontend)
+app.get('/api/stats', (req, res) => {
+  db.all('SELECT type, amount FROM transactions', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    let total_income = 0;
+    let total_expense = 0;
+    let transaction_count = rows?.length || 0;
+
+    (rows || []).forEach(row => {
+      if (row.type === 'income') total_income += Number(row.amount) || 0;
+      else if (row.type === 'expense') total_expense += Number(row.amount) || 0;
+    });
+
+    res.json({
+      total_income: parseFloat(total_income.toFixed(2)),
+      total_expense: parseFloat(total_expense.toFixed(2)),
+      net_balance: parseFloat((total_income - total_expense).toFixed(2)),
+      transaction_count,
+      generatedAt: new Date().toISOString(),
     });
   });
 });

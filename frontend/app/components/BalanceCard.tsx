@@ -8,6 +8,7 @@ import { financeApi, Stats, Wallet } from '../services/financeApi';
 export default function BalanceCard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [rates, setRates] = useState<Record<string, number>>({ USD: 1, VES: 635, EUR: 1.07 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
@@ -16,12 +17,14 @@ export default function BalanceCard() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [statsData, walletsData] = await Promise.all([
+        const [statsData, walletsData, ratesData] = await Promise.all([
           financeApi.getStats(),
           financeApi.getWallets(),
+          financeApi.getExchangeRates(),
         ]);
         setStats(statsData);
         setWallets(walletsData);
+        if (ratesData?.rates) setRates(ratesData.rates);
         setLastUpdated(new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }));
         setError(null);
       } catch (err) {
@@ -59,11 +62,12 @@ export default function BalanceCard() {
   }
 
   const totalBalance = stats?.net_balance || 0;
-  // Convert wallets to currency display
+
+  // Convert wallets to currency display usando la tasa real del backend
   const currencies = wallets.map(wallet => ({
     currency: wallet.currency,
     amount: wallet.balance,
-    rate: wallet.currency === 'USD' ? 1 : wallet.currency === 'VES' ? 635 : 1.07, // TODO: Fetch real rates
+    rate: wallet.currency === 'USD' ? 1 : (rates[wallet.currency] ?? 1),
     color: wallet.color === 'green' ? 'success' : 
            wallet.color === 'blue' ? 'primary' : 
            wallet.color === 'orange' ? 'warning' : 'default' as any,

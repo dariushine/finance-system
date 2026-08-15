@@ -103,4 +103,6 @@ start-all.sh
 # --------------------------
 *.bak
 *.backup
-*.old
+*.old-e 
+# TypeScript build info
+*.tsbuildinfo
