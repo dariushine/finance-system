@@ -154,12 +154,22 @@ db.serialize(() => {
         ['other_income', 'income', '#34495e'],
         ['exchange_out', 'expense', '#9c27b0'],   // Categoría especial para exchanges
         ['exchange_in', 'income', '#673ab7'],     // Categoría especial para exchanges
+        ['fee', 'expense', '#e67e22'],            // Comisiones
       ];
       
       const stmt = db.prepare('INSERT INTO categories (name, type, color) VALUES (?, ?, ?)');
       categories.forEach(cat => stmt.run(cat));
       stmt.finalize();
-      console.log('✅ 17 categorías creadas (incluyendo exchange_out/in)');
+      console.log('✅ 18 categorías creadas (incluyendo exchange_out/in y fee)');
+    }
+  });
+
+  // Asegurar existencia de la categoría 'fee' (expense) incluso en DB ya inicializadas
+  db.get("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense'", (err, row) => {
+    if (!err && !row) {
+      db.run("INSERT INTO categories (name, type, color) VALUES ('fee', 'expense', '#e67e22')", (e) => {
+        if (!e) console.log('✅ Categoría fee (comisión) agregada');
+      });
     }
   });
 
@@ -264,6 +274,7 @@ function getRateForDate(date, type) {
 
 function createTransaction(walletId, categoryName, type, amount, description, fee = 0) {
   return new Promise((resolve, reject) => {
+    const commission = Number(fee) || 0;
     db.serialize(() => {
       // 1. Obtener wallet
       db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId], (err, wallet) => {
@@ -276,49 +287,78 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
             if (err) return reject(err);
             if (!category) return reject(new Error('Categoría no encontrada'));
             
-            // 3. Validar fondos para gastos
-            if (type === 'expense' && wallet.balance < amount) {
-              return reject(new Error(`Fondos insuficientes. Balance actual: ${wallet.balance} ${wallet.currency}`));
+            // 3. Validar fondos para gastos: monto + comisión (la comisión es EXTRA al monto)
+            const total = amount + commission;
+            if (type === 'expense' && wallet.balance < total) {
+              return reject(new Error(`Fondos insuficientes. Balance actual: ${wallet.balance} ${wallet.currency}, necesita ${total}`));
             }
             
-            // 4. Calcular nuevo balance
-            const newBalance = type === 'expense' ? wallet.balance - amount : wallet.balance + amount;
+            // 4. Calcular nuevo balance: se descuenta monto + comisión (gasto) o suma monto (ingreso)
+            const newBalance = type === 'expense' ? wallet.balance - total : wallet.balance + amount;
             
             // 5. Crear transacción y actualizar balance en transacción
             db.run('BEGIN TRANSACTION');
             
+            const date = new Date().toISOString().split('T')[0];
+
+            // 5a. Transacción principal con el monto original (sin comisión)
             db.run(
-              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee) 
+              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [walletId, category.id, type, amount, description || '', 
-               new Date().toISOString().split('T')[0], 1.0, amount, fee || 0],
+              [walletId, category.id, type, amount, description || '', date, 1.0, amount, 0],
               function(err) {
                 if (err) {
                   db.run('ROLLBACK');
                   return reject(err);
                 }
-                
                 const transactionId = this.lastID;
-                
-                // Actualizar balance
-                db.run('UPDATE wallets SET balance = ? WHERE id = ?', [newBalance, walletId], (err) => {
-                  if (err) {
-                    db.run('ROLLBACK');
-                    return reject(err);
-                  }
-                  
-                  db.run('COMMIT', () => {
-                    resolve({
-                      id: transactionId,
-                      wallet: wallet.name,
-                      currency: wallet.currency,
-                      amount,
-                      type,
-                      newBalance,
-                      category: category.name
+
+                const finish = (feeTransactionId) => {
+                  // Actualizar balance
+                  db.run('UPDATE wallets SET balance = ? WHERE id = ?', [newBalance, walletId], (upErr) => {
+                    if (upErr) {
+                      db.run('ROLLBACK');
+                      return reject(upErr);
+                    }
+                    db.run('COMMIT', () => {
+                      resolve({
+                        id: transactionId,
+                        feeTransactionId,
+                        wallet: wallet.name,
+                        currency: wallet.currency,
+                        amount,
+                        type,
+                        newBalance,
+                        category: category.name,
+                        fee: commission
+                      });
                     });
                   });
-                });
+                };
+
+                // 5b. Si hay comisión, crear una transacción SEPARADA tipo fee con ese monto
+                if (commission > 0) {
+                  db.get('SELECT * FROM categories WHERE name = ? AND type = ? AND isActive = 1',
+                    ['fee', type], (fErr, feeCategory) => {
+                      const fc = (!fErr && feeCategory) ? feeCategory : category;
+                      db.run(
+                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [walletId, fc.id, type, commission,
+                         `Comisión: ${description || category.name}`,
+                         date, 1.0, commission, 0],
+                        function(err2) {
+                          if (err2) {
+                            db.run('ROLLBACK');
+                            return reject(err2);
+                          }
+                          finish(this.lastID);
+                        }
+                      );
+                    });
+                } else {
+                  finish(null);
+                }
               }
             );
           });
@@ -520,7 +560,7 @@ app.get('/api/wallets/:id/report', (req, res) => {
 
 app.post('/api/transactions', async (req, res) => {
   try {
-    const { walletId, categoryName, type, amount, description } = req.body;
+    const { walletId, categoryName, type, amount, description, fee } = req.body;
     
     if (!walletId || !categoryName || !type || !amount) {
       return res.status(400).json({ 
@@ -528,7 +568,7 @@ app.post('/api/transactions', async (req, res) => {
       });
     }
     
-    const result = await createTransaction(walletId, categoryName, type, amount, description);
+    const result = await createTransaction(walletId, categoryName, type, amount, description, fee);
     
     res.json({
       success: true,
@@ -642,32 +682,28 @@ app.post('/api/exchanges', async (req, res) => {
     if (!fromWallet) throw new Error('Billetera origen no encontrada');
     if (!toWallet) throw new Error('Billetera destino no encontrada');
     
-    // Validar fondos en origen
-    if (fromWallet.balance < fromAmount) {
-      throw new Error(`Fondos insuficientes en ${fromWallet.name}. Balance actual: ${fromWallet.balance} ${fromWallet.currency}`);
+    // Validar fondos en origen: monto + comisión (la comisión es EXTRA)
+    const commission = Number(fee) || 0;
+    const fromTotal = fromAmount + commission;
+    if (fromWallet.balance < fromTotal) {
+      throw new Error(`Fondos insuficientes en ${fromWallet.name}. Balance actual: ${fromWallet.balance} ${fromWallet.currency}, necesita ${fromTotal}`);
     }
     
-    // Calcular tasa
+    // Calcular tasa: SOLO con el monto, la comisión NO afecta la tasa.
+    // Ej: 100 USD -> 87.000 VES = 870 bs/$, con comisión 3.75 aparte.
     const rate = toAmount / fromAmount;
-    
-    // Comisión (fee) en la moneda de origen, por defecto 0
-    const commission = Number(fee) || 0;
 
-    // Monto neto recibido después de la comisión (lo que realmente ingresa al destino)
-    // La comisión se cobra en el origen: lo que sale realmente = fromAmount, 
-    // lo que llega neto de comisión = toAmount (el usuario ya ingresó lo que recibió).
-    // Para el spread usamos la tasa neta: toAmount / (fromAmount - commission)
-    // Si no hay comisión, la tasa neta = tasa bruta.
-    const netFromAmount = fromAmount - commission;
-    const netRate = netFromAmount > 0 ? toAmount / netFromAmount : rate;
+    // La tasa usada para el spread también es la tasa real (monto, sin comisión)
+    const netRate = rate;
 
-    // Calcular spread sobre la tasa neta (sin comisión)
+    // Calcular spread sobre la tasa real (monto, sin comisión)
     let spread = null;
     if (marketRate !== undefined && marketRate !== null) {
       spread = ((marketRate - netRate) / marketRate) * 100;
     }
     
-    // Crear transacción de débito (exchange_out)
+    // Crear transacción de débito (exchange_out): descontará fromAmount + fee, creando
+    // además una transacción separada tipo fee con la comisión.
     const debitTransaction = await createTransaction(
       fromWalletId,
       'exchange_out',

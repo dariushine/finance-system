@@ -32,18 +32,17 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
     const to = parseFloat(toAmount);
     if (from === 0) return null;
 
-    // Tasa bruta
+    // Tasa real: solo con el monto, la comisión NO afecta la tasa.
+    // Ej: 100 USD -> 87.000 VES = 870 bs/$, con comisión 3.75 aparte.
     const rate = to / from;
     // Comisión en la moneda de origen
     const commission = fee ? parseFloat(fee) : 0;
-    // Tasa neta: el intercambio real descontando la comisión cobrada en el origen
-    const netFrom = from - commission;
-    const netRate = netFrom > 0 ? to / netFrom : rate;
-    // Spread calculado sobre la tasa neta (sin incluir la comisión)
+    // Total que se descuenta de la billetera origen (monto + comisión)
+    const fromTotal = from + commission;
     const market = marketRate ? parseFloat(marketRate) : null;
-    const spread = market ? ((market - netRate) / market) * 100 : null;
+    const spread = market ? ((market - rate) / market) * 100 : null;
     
-    return { rate, netRate, market, spread, commission };
+    return { rate, netRate: rate, market, spread, commission, fromTotal };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -262,7 +261,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                 </Typography>
                 <Box display="flex" flexWrap="wrap" gap={1}>
                   <Chip
-                    label={`Tasa usada: ${rateData.netRate.toFixed(2)} ${toCur}/${fromCur}`}
+                    label={`Tasa: ${rateData.netRate.toFixed(2)} ${toCur}/${fromCur}`}
                     color="primary"
                     size="small"
                   />
@@ -271,6 +270,14 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                       label={`Comisión: ${rateData.commission.toFixed(2)} ${fromCur}`}
                       color="warning"
                       size="small"
+                    />
+                  )}
+                  {rateData.commission > 0 && (
+                    <Chip
+                      label={`Se descuenta: ${rateData.fromTotal.toFixed(2)} ${fromCur}`}
+                      color="default"
+                      size="small"
+                      variant="outlined"
                     />
                   )}
                   {rateData.market && (
@@ -290,7 +297,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   )}
                 </Box>
                 <Typography variant="caption" color="text.secondary">
-                  {rateData.commission > 0 && `Comisión excluida del spread (${rateData.commission.toFixed(2)} ${fromCur}). `}
+                  {rateData.commission > 0 && `La comisión (${rateData.commission.toFixed(2)} ${fromCur}) es aparte del monto. `}
                   {rateData.spread !== null
                     ? (rateData.spread > 0 ? '🎉 Spread positivo' : '⚠️ Spread negativo sobre tasa neta')
                     : 'ℹ️ No se calculó spread (falta tasa de mercado)'}

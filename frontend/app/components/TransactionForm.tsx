@@ -15,6 +15,7 @@ interface TransactionFormProps {
 export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState('');
+  const [fee, setFee] = useState('');
   const [wallet, setWallet] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
@@ -38,6 +39,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
     e.preventDefault();
     const walletObj = wallets.find((w) => w.name === wallet);
     const parsedAmount = Number(amount);
+    const parsedFee = Number(fee) || 0;
 
     if (!walletObj || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setError('Selecciona una billetera e introduce un monto mayor que cero.');
@@ -57,6 +59,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           categoryName: category,
           type,
           amount: parsedAmount,
+          fee: parsedFee > 0 ? parsedFee : undefined,
           description: description || undefined,
         }),
       });
@@ -68,6 +71,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
 
       // Reset form
       setAmount('');
+      setFee('');
       setWallet('');
       setCategory('');
       setDescription('');
@@ -123,6 +127,22 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                 endAdornment: wallet ? (
                   wallets.find((w) => w.name === wallet)?.currency || ''
                 ) : 'USD/VES'
+              }}
+            />
+
+            <TextField
+              label="Comisión (opcional)"
+              type="number"
+              value={fee}
+              onChange={(e) => setFee(e.target.value)}
+              placeholder="Ej: 3.75"
+              disabled={loading}
+              onWheel={(e) => e.currentTarget.blur()}
+              helperText="Se descuenta aparte del monto"
+              InputProps={{
+                endAdornment: wallet ? (
+                  wallets.find((w) => w.name === wallet)?.currency || ''
+                ) : ''
               }}
             />
 
