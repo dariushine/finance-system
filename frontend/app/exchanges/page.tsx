@@ -6,7 +6,6 @@ import {
   Typography,
   Card,
   CardContent,
-  Grid,
   Chip,
   Paper,
   Table,
@@ -23,20 +22,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   Alert,
-  CircularProgress,
-  Divider,
-  LinearProgress
+  CircularProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
-  SwapHoriz as ExchangeIcon,
-  TrendingUp as ProfitIcon,
-  TrendingDown as LossIcon,
   Visibility as ViewIcon,
   Download as DownloadIcon,
-  Info as InfoIcon
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 import ExchangeForm from '../components/ExchangeForm';
@@ -59,18 +51,8 @@ interface Exchange {
   toCurrency?: string;
 }
 
-interface ExchangeStats {
-  totalExchanges: number;
-  totalFromAmount: number;
-  totalToAmount: number;
-  averageSpread: number;
-  profitLoss: number;
-  recentExchanges: Exchange[];
-}
-
 export default function ExchangesPage() {
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
-  const [stats, setStats] = useState<ExchangeStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -90,26 +72,6 @@ export default function ExchangesPage() {
       const data: { data: Exchange[] } | Exchange[] = await response.json();
       const list = Array.isArray(data) ? data : data.data;
       setExchanges(list);
-
-      // Calcular estadísticas
-      if (list.length > 0) {
-        const exchangesData: Exchange[] = list;
-        
-        const stats: ExchangeStats = {
-          totalExchanges: exchangesData.length,
-          totalFromAmount: exchangesData.reduce((sum, ex) => sum + ex.fromAmount, 0),
-          totalToAmount: exchangesData.reduce((sum, ex) => sum + ex.toAmount, 0),
-          averageSpread: exchangesData.filter(ex => ex.spread !== null)
-            .reduce((sum, ex) => sum + (ex.spread || 0), 0) / (exchangesData.filter(ex => ex.spread !== null).length || 1),
-          profitLoss: exchangesData.reduce((sum, ex) => {
-            const value = ex.marketRate ? (ex.fromAmount * ex.marketRate) - ex.toAmount : 0;
-            return sum + value;
-          }, 0),
-          recentExchanges: exchangesData.slice(0, 5)
-        };
-
-        setStats(stats);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -124,16 +86,6 @@ export default function ExchangesPage() {
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('es-VE', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
   };
 
   const formatCurrency = (amount: number, currency: string = 'USD') => {
@@ -216,88 +168,6 @@ export default function ExchangesPage() {
         </Alert>
       )}
 
-      {/* Stats Cards */}
-      {stats && (
-        <Grid container spacing={3} mb={4}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <ExchangeIcon color="primary" />
-                  <Typography variant="body2" color="text.secondary">
-                    Total Exchanges
-                  </Typography>
-                </Box>
-                <Typography variant="h4">{stats.totalExchanges}</Typography>
-                <LinearProgress variant="determinate" value={100} sx={{ mt: 1 }} />
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <Typography variant="body2" color="text.secondary">
-                    Monto Total Desde
-                  </Typography>
-                </Box>
-                <Typography variant="h4">
-                  {formatCurrency(stats.totalFromAmount)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Total enviado
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <Typography variant="body2" color="text.secondary">
-                    Monto Total Hacia
-                  </Typography>
-                </Box>
-                <Typography variant="h4">
-                  {formatCurrency(stats.totalToAmount)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Total recibido
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  {stats.profitLoss >= 0 ? (
-                    <ProfitIcon color="success" />
-                  ) : (
-                    <LossIcon color="error" />
-                  )}
-                  <Typography variant="body2" color="text.secondary">
-                    Ganancia/Pérdida
-                  </Typography>
-                </Box>
-                <Typography 
-                  variant="h4" 
-                  color={stats.profitLoss >= 0 ? 'success.main' : 'error.main'}
-                >
-                  {formatCurrency(Math.abs(stats.profitLoss))}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Spread promedio: {stats.averageSpread.toFixed(2)}%
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-
       {/* Exchange Form Dialog */}
       <Dialog 
         open={openNewExchange} 
@@ -322,103 +192,6 @@ export default function ExchangesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Recent Exchanges */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Exchanges Recientes
-          </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Fecha</TableCell>
-                  <TableCell>Desde</TableCell>
-                  <TableCell>Hacia</TableCell>
-                  <TableCell>Montos</TableCell>
-                  <TableCell>Tasa</TableCell>
-                  <TableCell>Spread</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {exchanges.slice(0, 5).map((exchange) => (
-                  <TableRow key={exchange.id} hover>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {formatDate(exchange.createdAt)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium">
-                          {exchange.fromWalletName || `Billetera ${exchange.fromWalletId}`}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatCurrency(exchange.fromAmount, exchange.fromCurrency)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium">
-                          {exchange.toWalletName || `Billetera ${exchange.toWalletId}`}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatCurrency(exchange.toAmount, exchange.toCurrency)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box display="flex" flexDirection="column" gap={0.5}>
-                        <Chip 
-                          label={`${exchange.fromAmount.toFixed(2)} ${exchange.fromCurrency || 'USD'}`}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                        <Chip 
-                          label={`${exchange.toAmount.toFixed(2)} ${exchange.toCurrency || 'USD'}`}
-                          size="small"
-                          color="secondary"
-                          variant="outlined"
-                        />
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight="bold">
-                        {exchange.rate.toFixed(4)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {exchange.toCurrency}/{exchange.fromCurrency}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {exchange.spread !== null && exchange.spread !== undefined ? (
-                        <Chip
-                          label={`${exchange.spread.toFixed(2)}%`}
-                          size="small"
-                          color={exchange.spread >= 0 ? 'success' : 'error'}
-                          icon={exchange.spread >= 0 ? <ProfitIcon /> : <LossIcon />}
-                        />
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          -
-                        </Typography>
-                      )}
-                      {exchange.marketRate && (
-                        <Typography variant="caption" display="block" color="text.secondary">
-                          Mercado: {exchange.marketRate}
-                        </Typography>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
 
       {/* All Exchanges Table */}
       <Card>
