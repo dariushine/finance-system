@@ -3,8 +3,8 @@ FROM node:18-alpine AS backend
 
 WORKDIR /app/backend
 
-# Instalar Python y build tools en Alpine
-RUN apk add --no-cache python3 py3-pip make g++ sqlite-dev
+# Instalar Python, build tools y curl (para el healthcheck) en Alpine
+RUN apk add --no-cache python3 py3-pip make g++ sqlite-dev curl
 
 # Copy package files
 COPY backend/package*.json ./

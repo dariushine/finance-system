@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Backend API service
   backend:
@@ -11,7 +9,6 @@ services:
       - "3002:3002"
     volumes:
       - ./backend/data:/app/backend/data
-      - ./backend:/app/backend:ro
     environment:
       - NODE_ENV=production
       - PORT=3002
@@ -25,7 +22,7 @@ services:
     networks:
       - finance-network
 
-  # Frontend dashboard
+  # Frontend dashboard (runs its own built image, no host bind mounts)
   frontend:
     build:
       context: .
@@ -33,10 +30,6 @@ services:
       target: frontend
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app/frontend:ro
-      - /app/frontend/node_modules
-      - /app/frontend/.next
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=http://backend:3002/api
@@ -47,19 +40,6 @@ services:
     networks:
       - finance-network
 
-  # Database (SQLite - in volume for simplicity)
-  # Note: SQLite runs in backend container, no separate service needed
-  # Data persisted via volume mount
-
 networks:
   finance-network:
     driver: bridge
-
-volumes:
-  # Volume for SQLite database
-  finance-data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ./backend/data
-      o: bind

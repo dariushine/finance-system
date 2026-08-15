@@ -86,12 +86,13 @@ export default function ExchangesPage() {
       const response = await fetch(`${API_URL}/exchanges?page=${page + 1}&limit=${rowsPerPage}`);
       if (!response.ok) throw new Error('Error al cargar exchanges');
       
-      const data = await response.json();
-      setExchanges(Array.isArray(data.data) ? data.data : data);
+      const data: { data: Exchange[] } | Exchange[] = await response.json();
+      const list = Array.isArray(data) ? data : data.data;
+      setExchanges(list);
 
       // Calcular estadísticas
-      if (data.length > 0 || (Array.isArray(data.data) && data.data.length > 0)) {
-        const exchangesData = Array.isArray(data.data) ? data.data : data;
+      if (list.length > 0) {
+        const exchangesData: Exchange[] = list;
         
         const stats: ExchangeStats = {
           totalExchanges: exchangesData.length,
@@ -492,7 +493,7 @@ export default function ExchangesPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        {exchange.spread !== null ? (
+                        {exchange.spread != null ? (
                           <Chip
                             label={`${exchange.spread.toFixed(2)}%`}
                             size="small"

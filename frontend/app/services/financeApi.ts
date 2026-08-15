@@ -1,4 +1,5 @@
-const API_BASE = 'http://localhost:3002/api';
+// Acceso a la API a través del reverse proxy de Next.js (/api → backend:3002/api en Docker)
+const API_BASE = '/api';
 
 export interface Transaction {
   id: number;
@@ -13,6 +14,7 @@ export interface Transaction {
 export interface Wallet {
   id: number;
   name: string;
+  type: string;
   currency: string;
   balance: number;
   color: string;

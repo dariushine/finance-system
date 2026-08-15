@@ -5,7 +5,11 @@ import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select
 import { SwapHoriz, TrendingUp, TrendingDown } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 
-export default function ExchangeForm() {
+interface ExchangeFormProps {
+  onSuccess?: () => void;
+}
+
+export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   const [fromWalletId, setFromWalletId] = useState<number | ''>('');
   const [toWalletId, setToWalletId] = useState<number | ''>('');
   const [fromAmount, setFromAmount] = useState('');
@@ -86,6 +90,9 @@ export default function ExchangeForm() {
       setToAmount('');
       setMarketRate('');
       setDescription('');
+
+      // Notificar éxito al componente padre
+      onSuccess?.();
       
     } catch (error) {
       console.error('Exchange error:', error);
