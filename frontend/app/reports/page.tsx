@@ -78,16 +78,17 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState('6m');
   const [chartType, setChartType] = useState('bar');
+  const [rateType, setRateType] = useState<'bcv' | 'paralelo'>('bcv');
 
   useEffect(() => {
     loadReportData();
-  }, [timeRange]);
+  }, [timeRange, rateType]);
 
   const loadReportData = async () => {
     try {
       setLoading(true);
       const [statsResponse, transactionsResponse, walletsResponse, exchangesResponse] = await Promise.all([
-        fetch(`${API_URL}/stats`),
+        fetch(`${API_URL}/stats?rate=${rateType}`),
         fetch(`${API_URL}/transactions?limit=100`),
         fetch(`${API_URL}/wallets`),
         fetch(`${API_URL}/exchanges?limit=50`)
@@ -205,7 +206,16 @@ export default function ReportsPage() {
             Análisis y estadísticas de tus finanzas
           </Typography>
         </Box>
-        <Box display="flex" gap={2}>
+        <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={rateType}
+            onChange={(e, val) => val && setRateType(val)}
+          >
+            <ToggleButton value="bcv">BCV</ToggleButton>
+            <ToggleButton value="paralelo">Paralelo</ToggleButton>
+          </ToggleButtonGroup>
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Rango</InputLabel>
             <Select

@@ -132,9 +132,76 @@ db.serialize(() => {
       console.log('✅ 17 categorías creadas (incluyendo exchange_out/in)');
     }
   });
+
+  // Tabla de tasas diarias (BCV oficial + paralelo) consumida por reportes
+  db.run(`CREATE TABLE IF NOT EXISTS daily_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL UNIQUE,
+    bcv REAL NOT NULL,
+    paralelo REAL NOT NULL,
+    source TEXT DEFAULT 'dolarapi',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 });
 
-// Helper para crear transacción
+// Obtener las tasas oficial (BCV) y paralelo de Dolarapi y guardarlas para el día de hoy
+async function syncDailyRates() {
+  const today = new Date().toISOString().split('T')[0];
+
+  const fetchRate = (path) => new Promise((resolve) => {
+    const lib = require('https');
+    lib.get({ host: 've.dolarapi.com', path: `/v1/${path}`, timeout: 5000 }, (res) => {
+      let data = '';
+      res.on('data', (c) => (data += c));
+      res.on('end', () => {
+        try {
+          const j = JSON.parse(data);
+          resolve(typeof j.promedio === 'number' ? j.promedio : null);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    }).on('error', () => resolve(null)).on('timeout', function () { this.destroy(); resolve(null); });
+  });
+
+  // Consultar en paralelo oficial y paralelo
+  const [bcv, paralelo] = await Promise.all([fetchRate('dolares/oficial'), fetchRate('dolares/paralelo')]);
+
+  if (bcv === null || paralelo === null) {
+    console.warn('⚠️ No se pudo obtener las tasas de Dolarapi.');
+    return;
+  }
+
+  db.run(
+    `INSERT INTO daily_rates (date, bcv, paralelo)
+     VALUES (?, ?, ?)
+     ON CONFLICT(date) DO UPDATE SET bcv = excluded.bcv, paralelo = excluded.paralelo`,
+    [today, bcv, paralelo],
+    (err) => {
+      if (err) {
+        console.warn('⚠️ No se pudo guardar la tasa diaria:', err.message);
+      } else {
+        console.log(`📅 Tasa diaria guardada (${today}): BCV=${bcv.toFixed(2)}, Paralelo=${paralelo.toFixed(2)}`);
+      }
+    }
+  );
+}
+
+// Obtener la tasa (bcv | paralelo) para una fecha dada; si no hay registro, usa la última disponible
+function getRateForDate(date, type) {
+  return new Promise((resolve) => {
+    const col = type === 'paralelo' ? 'paralelo' : 'bcv';
+    db.get('SELECT ' + col + ' AS rate FROM daily_rates WHERE date = ?', [date], (err, row) => {
+      if (err) return resolve(null);
+      if (row && row.rate != null) return resolve(row.rate);
+      db.get('SELECT ' + col + ' AS rate FROM daily_rates ORDER BY date DESC LIMIT 1', [], (err2, last) => {
+        if (err2) return resolve(null);
+        resolve(last && last.rate != null ? last.rate : null);
+      });
+    });
+  });
+}
+
 function createTransaction(walletId, categoryName, type, amount, description) {
   return new Promise((resolve, reject) => {
     db.serialize(() => {
@@ -512,56 +579,73 @@ app.get('/api/exchange-rates', (req, res) => {
 });
 
 // Estadísticas para el dashboard (forma esperada por el frontend)
-app.get('/api/stats', (req, res) => {
-  db.all("SELECT t.type, t.amount, t.date, c.name AS category FROM transactions t LEFT JOIN categories c ON c.id = t.category_id", (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+// ?rate=bcv (default) | paralelo — convierte VES a USD usando la tasa diaria registrada
+app.get('/api/stats', async (req, res) => {
+  const rateType = req.query.rate === 'paralelo' ? 'paralelo' : 'bcv';
+
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all("SELECT t.type, t.amount, t.date, c.name AS category, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id", (err, r) => err ? reject(err) : resolve(r));
+    });
 
     let total_income = 0;
     let total_expense = 0;
     let transaction_count = rows?.length || 0;
 
-    // Datos para el resumen mensual y por categoría
     const monthlyMap = new Map();
     const categoryMap = new Map();
+    // Cache de tasas por fecha (evita consultas repetidas)
+    const rateCache = new Map();
 
-    (rows || []).forEach(row => {
-      const amount = Number(row.amount) || 0;
-      if (row.type === 'income') total_income += amount;
-      else if (row.type === 'expense') total_expense += amount;
+    const getRate = async (date) => {
+      if (rateCache.has(date)) return rateCache.get(date);
+      const rate = await getRateForDate(date, rateType);
+      rateCache.set(date, rate);
+      return rate;
+    };
 
-      // Agrupar por mes (YYYY-MM)
+    for (const row of (rows || [])) {
+      const usdValue = await (async () => {
+        if (row.currency === 'VES') {
+          const rate = await getRate(row.date);
+          return rate ? Number(row.amount) / rate : 0;
+        }
+        return Number(row.amount) || 0;
+      })();
+
+      if (row.type === 'income') total_income += usdValue;
+      else if (row.type === 'expense') total_expense += usdValue;
+
       let month = 'Desconocido';
       if (row.date) {
         const d = new Date(row.date);
-        if (!isNaN(d.getTime())) {
-          month = d.toISOString().slice(0, 7); // YYYY-MM
-        }
+        if (!isNaN(d.getTime())) month = d.toISOString().slice(0, 7);
       }
       if (!monthlyMap.has(month)) {
         monthlyMap.set(month, { month, income: 0, expense: 0, transactionCount: 0 });
       }
       const m = monthlyMap.get(month);
       m.transactionCount++;
-      if (row.type === 'income') m.income += amount;
-      else if (row.type === 'expense') m.expense += amount;
+      if (row.type === 'income') m.income += usdValue;
+      else if (row.type === 'expense') m.expense += usdValue;
 
-      // Agrupar por categoría
       const cat = row.category || 'Sin categoría';
       if (!categoryMap.has(cat)) {
         categoryMap.set(cat, { category: cat, count: 0, total: 0 });
       }
       const c = categoryMap.get(cat);
       c.count++;
-      if (row.type === 'expense') c.total += amount;
-    });
+      if (row.type === 'expense') c.total += usdValue;
+    }
 
-    // Ordenar mensual cronológicamente
-    const monthly = Array.from(monthlyMap.values()).sort((a, b) => a.month.localeCompare(b.month)).map((m) => ({
-      ...m,
-      income: parseFloat(m.income.toFixed(2)),
-      expense: parseFloat(m.expense.toFixed(2)),
-      net: parseFloat((m.income - m.expense).toFixed(2)),
-    }));
+    const monthly = Array.from(monthlyMap.values())
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map((m) => ({
+        ...m,
+        income: parseFloat(m.income.toFixed(2)),
+        expense: parseFloat(m.expense.toFixed(2)),
+        net: parseFloat((m.income - m.expense).toFixed(2)),
+      }));
 
     const byCategory = Array.from(categoryMap.values()).map((c) => ({
       ...c,
@@ -573,7 +657,7 @@ app.get('/api/stats', (req, res) => {
       total_expense: parseFloat(total_expense.toFixed(2)),
       net_balance: parseFloat((total_income - total_expense).toFixed(2)),
       transaction_count,
-      // Datos extendidos para la página de reportes
+      rateType,
       summary: {
         totalTransactions: transaction_count,
         totalIncome: parseFloat(total_income.toFixed(2)),
@@ -584,7 +668,9 @@ app.get('/api/stats', (req, res) => {
       byCategory,
       generatedAt: new Date().toISOString(),
     });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Exportar la aplicación Express para testing (supertest)
@@ -609,6 +695,9 @@ if (require.main === module) {
     console.log('   • Spread calculado solo si se provee marketRate');
     console.log('   • Validación de fondos antes del exchange');
   });
+
+  // Guardar la tasa del día (BCV y paralelo) al iniciar la app
+  syncDailyRates();
 
   // Manejar cierre
   process.on('SIGINT', () => {
