@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v14-appRouter';
 import { Box, Container } from '@mui/material';
 import Navigation from './components/layout/Navigation';
+import RateFetcher from './components/RateFetcher';
 import theme from './theme';
 import './globals.css';
 
@@ -32,6 +33,7 @@ export default function RootLayout({
         <AppRouterCacheProvider>
           <ThemeProvider theme={theme}>
             <CssBaseline />
+            <RateFetcher />
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>
               <Navigation />
               <Box

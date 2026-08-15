@@ -144,47 +144,77 @@ db.serialize(() => {
   )`);
 });
 
-// Obtener las tasas oficial (BCV) y paralelo de Dolarapi y guardarlas para el día de hoy
-async function syncDailyRates() {
+// Consultar las tasas oficial (BCV) y paralelo de Dolarapi
+function fetchRatesFromApi() {
+  return new Promise((resolve) => {
+    const fetchRate = (path) => new Promise((res) => {
+      const lib = require('https');
+      lib.get({ host: 've.dolarapi.com', path: `/v1/${path}`, timeout: 5000 }, (resp) => {
+        let data = '';
+        resp.on('data', (c) => (data += c));
+        resp.on('end', () => {
+          try {
+            const j = JSON.parse(data);
+            res(typeof j.promedio === 'number' ? j.promedio : null);
+          } catch (e) {
+            res(null);
+          }
+        });
+      }).on('error', () => res(null)).on('timeout', function () { this.destroy(); res(null); });
+    });
+
+    Promise.all([fetchRate('dolares/oficial'), fetchRate('dolares/paralelo')]).then(([bcv, paralelo]) => {
+      if (bcv === null || paralelo === null) {
+        resolve(null);
+      } else {
+        resolve({ bcv, paralelo });
+      }
+    });
+  });
+}
+
+// Guardar (o actualizar) la tasa para una fecha
+function upsertRate(date, bcv, paralelo, source) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO daily_rates (date, bcv, paralelo, source)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(date) DO UPDATE SET bcv = excluded.bcv, paralelo = excluded.paralelo, source = excluded.source`,
+      [date, bcv, paralelo, source || 'dolarapi'],
+      (err) => err ? reject(err) : resolve()
+    );
+  });
+}
+
+// Obtener la tasa del día: la busca en BD; si no existe, la consulta a la API y la guarda.
+// Devuelve { date, bcv, paralelo, fromDb } o { error: 'mensaje' } si no se pudo obtener.
+async function getTodayRate() {
   const today = new Date().toISOString().split('T')[0];
 
-  const fetchRate = (path) => new Promise((resolve) => {
-    const lib = require('https');
-    lib.get({ host: 've.dolarapi.com', path: `/v1/${path}`, timeout: 5000 }, (res) => {
-      let data = '';
-      res.on('data', (c) => (data += c));
-      res.on('end', () => {
-        try {
-          const j = JSON.parse(data);
-          resolve(typeof j.promedio === 'number' ? j.promedio : null);
-        } catch (e) {
-          resolve(null);
-        }
-      });
-    }).on('error', () => resolve(null)).on('timeout', function () { this.destroy(); resolve(null); });
+  // 1. Intentar desde la BD
+  const fromDb = await new Promise((resolve) => {
+    db.get('SELECT date, bcv, paralelo FROM daily_rates WHERE date = ?', [today], (err, row) => {
+      if (err || !row) return resolve(null);
+      resolve({ date: row.date, bcv: row.bcv, paralelo: row.paralelo });
+    });
   });
 
-  // Consultar en paralelo oficial y paralelo
-  const [bcv, paralelo] = await Promise.all([fetchRate('dolares/oficial'), fetchRate('dolares/paralelo')]);
-
-  if (bcv === null || paralelo === null) {
-    console.warn('⚠️ No se pudo obtener las tasas de Dolarapi.');
-    return;
+  if (fromDb) {
+    return { ...fromDb, fromDb: true };
   }
 
-  db.run(
-    `INSERT INTO daily_rates (date, bcv, paralelo)
-     VALUES (?, ?, ?)
-     ON CONFLICT(date) DO UPDATE SET bcv = excluded.bcv, paralelo = excluded.paralelo`,
-    [today, bcv, paralelo],
-    (err) => {
-      if (err) {
-        console.warn('⚠️ No se pudo guardar la tasa diaria:', err.message);
-      } else {
-        console.log(`📅 Tasa diaria guardada (${today}): BCV=${bcv.toFixed(2)}, Paralelo=${paralelo.toFixed(2)}`);
-      }
-    }
-  );
+  // 2. No está en BD: pedir a la API
+  const api = await fetchRatesFromApi();
+  if (!api) {
+    return { error: 'No se pudieron obtener las tasas del día desde la API.' };
+  }
+
+  try {
+    await upsertRate(today, api.bcv, api.paralelo, 'dolarapi');
+    return { date: today, bcv: api.bcv, paralelo: api.paralelo, fromDb: false };
+  } catch (err) {
+    return { error: 'No se pudo guardar la tasa en la base de datos.' };
+  }
 }
 
 // Obtener la tasa (bcv | paralelo) para una fecha dada; si no hay registro, usa la última disponible
@@ -578,6 +608,63 @@ app.get('/api/exchange-rates', (req, res) => {
   });
 });
 
+// === CRUD de tasas diarias (daily_rates) ===
+
+// Listar todas las tasas diarias (descendente por fecha)
+app.get('/api/daily-rates', (req, res) => {
+  db.all('SELECT * FROM daily_rates ORDER BY date DESC', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ data: rows || [] });
+  });
+});
+
+// Obtener/crear la tasa de hoy (usada al cargar la página)
+// 1) busca en BD, 2) si no existe consulta API y guarda, 3) si falla error
+app.get('/api/daily-rates/today', async (req, res) => {
+  const result = await getTodayRate();
+  if (result.error) return res.status(503).json({ error: result.error });
+  res.json({ data: result });
+});
+
+// Crear una tasa manual para una fecha
+app.post('/api/daily-rates', async (req, res) => {
+  try {
+    const { date, bcv, paralelo } = req.body;
+    if (!date || bcv == null || paralelo == null) {
+      return res.status(400).json({ error: 'Faltan campos: date, bcv, paralelo' });
+    }
+    await upsertRate(date, Number(bcv), Number(paralelo), 'manual');
+    res.json({ success: true, message: `Tasa creada para ${date}` });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Actualizar una tasa existente
+app.put('/api/daily-rates/:id', (req, res) => {
+  const { bcv, paralelo } = req.body;
+  if (bcv == null || paralelo == null) {
+    return res.status(400).json({ error: 'Faltan campos: bcv, paralelo' });
+  }
+  db.run('UPDATE daily_rates SET bcv = ?, paralelo = ? WHERE id = ?',
+    [Number(bcv), Number(paralelo), req.params.id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Tasa no encontrada' });
+      res.json({ success: true, message: 'Tasa actualizada' });
+    }
+  );
+});
+
+// Eliminar una tasa
+app.delete('/api/daily-rates/:id', (req, res) => {
+  db.run('DELETE FROM daily_rates WHERE id = ?', [req.params.id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Tasa no encontrada' });
+    res.json({ success: true, message: 'Tasa eliminada' });
+  });
+});
+
 // Estadísticas para el dashboard (forma esperada por el frontend)
 // ?rate=bcv (default) | paralelo — convierte VES a USD usando la tasa diaria registrada
 app.get('/api/stats', async (req, res) => {
@@ -695,9 +782,6 @@ if (require.main === module) {
     console.log('   • Spread calculado solo si se provee marketRate');
     console.log('   • Validación de fondos antes del exchange');
   });
-
-  // Guardar la tasa del día (BCV y paralelo) al iniciar la app
-  syncDailyRates();
 
   // Manejar cierre
   process.on('SIGINT', () => {

@@ -25,7 +25,8 @@ import {
   Receipt as TransactionIcon,
   SwapHoriz as ExchangeIcon,
   BarChart as ReportIcon,
-  Dashboard as DashboardIcon
+  Dashboard as DashboardIcon,
+  CalendarMonth as RatesIcon
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -36,6 +37,7 @@ const navItems = [
   { label: 'Transacciones', icon: <TransactionIcon />, path: '/transactions' },
   { label: 'Exchanges', icon: <ExchangeIcon />, path: '/exchanges' },
   { label: 'Reportes', icon: <ReportIcon />, path: '/reports' },
+  { label: 'Tasas', icon: <RatesIcon />, path: '/rates' },
 ];
 
 export default function Navigation() {
