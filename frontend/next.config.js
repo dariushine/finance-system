@@ -4,10 +4,12 @@ const nextConfig = {
   
   async rewrites() {
     const isProduction = process.env.NODE_ENV === 'production';
-    const backendUrl = isProduction 
-      ? 'http://backend:3002'  // Docker network
-      : 'http://localhost:3002'; // Desarrollo local
-    
+    const backendUrl = process.env.API_UPSTREAM
+      ? process.env.API_UPSTREAM                    // override explícito (dev en Docker)
+      : isProduction
+        ? 'http://backend:3002'                       // Docker network (prod)
+        : 'http://localhost:3002';                    // Desarrollo local
+
     return [
       {
         source: '/api/:path*',

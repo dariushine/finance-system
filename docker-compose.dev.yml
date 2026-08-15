@@ -1,0 +1,30 @@
+# Override de DESARROLLO — hot reload en ambos servicios.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# (NO usar en producción; solo para iterar sin rebuildear.)
+services:
+  backend:
+    # Bind del código fuente para reflejar cambios al instante
+    volumes:
+      - ./backend:/app/backend
+      # Conservar node_modules del contenedor (instalado para Linux) sobre el bind,
+      # para no usar el del host (sqlite3 es nativo y no portable)
+      - /app/backend/node_modules
+    # node --watch recarga la API al editar (sin necesidad de nodemon)
+    command: ["node", "--watch", "exchange-server.js"]
+
+  frontend:
+    # Bind del código fuente + next dev (hot reload real)
+    volumes:
+      - ./frontend:/app/frontend
+      # Volúmenes anónimos: conservan node_modules/.next del contenedor
+      # por encima del bind, para no usar los del host
+      - /app/frontend/node_modules
+      - /app/frontend/.next
+    environment:
+      # next dev con rewrite apuntando al backend por nombre de red
+      - NODE_ENV=development
+      - API_UPSTREAM=http://backend:3002
+    command: ["npm", "run", "dev"]
+    # En dev, el frontend no debe esperar al healthcheck del backend
+    depends_on:
+      - backend

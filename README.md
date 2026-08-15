@@ -37,39 +37,91 @@ Sistema de Finanzas
     └── frontend (3000)
 ```
 
-## 🚀 Despliegue Rápido
+## 🚀 Despliegue
 
-### Opción 1: Docker Compose (Recomendado)
+### Opción 1: Producción (Docker Compose — recomendado)
+
+Levanta los servicios desde imágenes autónomas (sin montar el código fuente del host).
 
 ```bash
-# 1. Clonar o copiar el sistema
+# 1. Clonar
 cd /tu/directorio
+git clone <tu-repo> finance-system
+cd finance-system
 
-# 2. Iniciar todo con Docker Compose
-docker-compose up -d
+# 2. Construir y levantar
+#    (usa Docker Compose v2, con espacio: 'docker compose')
+docker compose up --build -d
 
-# 3. Acceder al dashboard
-#    Backend API: http://localhost:3002/api
+# 3. Verificar estado
+#    backend debe estar 'healthy' (el frontend espera a que lo esté)
+docker compose ps
+
+# 4. Acceder
 #    Dashboard:   http://localhost:3000
+#    API (proxy): http://localhost:3000/api   ← la API se expone por el frontend
+#    API directa: http://localhost:3002/api
 ```
 
-### Opción 2: Desarrollo Local
+**Detener / limpiar:**
 
 ```bash
-# 1. Backend
+docker compose down            # detiene (conserva la DB en backend/data)
+docker compose down -v         # detiene (borra volúmenes anónimos; el bind backend/data queda)
+```
+
+> ℹ️ La base SQLite vive en `backend/data/finance.db` (bind mount). Haz **backup** de esa carpeta.
+> ℹ️ **No** necesitas crear `.env` ni `chmod` de data: el backend crea el esquema al arrancar.
+
+---
+
+### Opción 2: Desarrollo (hot reload — probar cambios sin rebuildear)
+
+Tu flujo para iterar: editas el código en el host y el contenedor lo refleja al instante, sin
+`docker compose build` a cada rato. Usa el override `docker-compose.dev.yml`. **NO** es para producción.
+
+```bash
+# Levantar con override de dev (backend --watch + frontend next dev)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# Detener (Ctrl+C) / limpiar contenedores dev:
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+```
+
+**Qué hace el override:**
+
+| Servicio | Como corre | Efecto |
+|---|---|---|
+| `backend` | `node --watch` + bind `./backend` | recarga la API al editar `backend/` |
+| `frontend` | `next dev` + bind `./frontend` | hot reload del dashboard al editar `frontend/` |
+
+> ⚠️ Los `node_modules` y `.next` se conservan **del contenedor** (volúmenes anónimos), no del
+> host — importante porque `sqlite3` es nativo y no portable entre plataformas.
+> ℹ️ En dev, el rewrite de Next apunta al backend por `API_UPSTREAM=http://backend:3002`
+> (el proxy sigue funcionando dentro de la red Docker).
+
+---
+
+### Opción 3: Desarrollo local (sin Docker)
+
+```bash
+# 1. Backend (terminal 1)
 cd backend
 npm install
 node exchange-server.js
 
-# 2. Frontend (otra terminal)
+# 2. Frontend (terminal 2)
 cd frontend
 npm install
 npm run dev
 
 # 3. Acceder
-#    Backend: http://localhost:3002/api
+#    Backend:  http://localhost:3002/api
 #    Frontend: http://localhost:3000
 ```
+
+> ℹ️ En local, el rewrite de Next apunta a `http://localhost:3002` (default cuando NO hay
+> `API_UPSTREAM` y `NODE_ENV=development`).
 
 ## 📱 Mobile-First Design
 
@@ -229,45 +281,64 @@ finance-system/
 
 ### Variables de entorno:
 
+El backend **no necesita `.env`**: usa defaults en `exchange-server.js` (puerto 3002, DB en `backend/data/finance.db`) y crea el esquema al arrancar.
+
 ```bash
-# Backend
+# Backend (opcional, solo si algún día se lee process.env)
 PORT=3002
 NODE_ENV=production
 
 # Frontend
-NEXT_PUBLIC_API_URL=http://localhost:3002/api
+# API_UPSTREAM: override del rewrite de Next (solo necesario en dev-Docker para
+# apuntar al backend por nombre de red; en prod ya resuelve a backend:3002)
+API_UPSTREAM=http://backend:3002
 ```
 
 ## 🐳 Docker Compose Detalles
+
+### Archivos:
+
+- **`docker-compose.yml`** — producción: servicios desde imágenes autónomas (build multi-stage, sin binds del código fuente)
+- **`docker-compose.dev.yml`** — override de desarrollo: añade hot reload (binds + `node --watch` / `next dev`)
 
 ### Servicios:
 
 1. **backend**: API REST en Node.js (puerto 3002)
 2. **frontend**: Dashboard NextJS (puerto 3000)
 
-### Comandos útiles:
+### Comandos útiles (producción):
 
 ```bash
-# Iniciar todo
-docker-compose up -d
+# Iniciar todo (usa Compose v2, con espacio: 'docker compose')
+docker compose up --build -d
 
 # Ver logs
-docker-compose logs -f
+docker compose logs -f
 
 # Detener todo
-docker-compose down
+docker compose down
 
 # Reconstruir imágenes
-docker-compose build
+docker compose build
 
 # Limpiar todo (incluyendo datos)
-docker-compose down -v
+docker compose down -v
 ```
 
-### Volúmenes:
+### Comandos útiles (desarrollo):
 
-- `backend/data`: Base de datos SQLite persistente
-- `frontend/.next`: Cache de build de NextJS
+```bash
+# Iniciar con hot reload
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# Detener
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+```
+
+### Volúmenes / persistencia:
+
+- `backend/data` (bind): base de datos SQLite persistente — **haz backup aquí**
+- `node_modules` / `.next` (anónimos, solo dev): conservan build del contenedor sobre el bind
 
 ## 🚨 Notas Importantes
 
