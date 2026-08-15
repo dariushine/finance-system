@@ -38,9 +38,8 @@ export default function RootLayout({
                 component="main"
                 sx={{
                   flexGrow: 1,
+                  minWidth: 0,
                   p: { xs: 2, sm: 3 },
-                  width: { md: 'calc(100% - 250px)' },
-                  ml: { md: '250px' },
                   pb: { xs: 8, md: 3 }, // Extra padding for mobile bottom nav
                 }}
               >

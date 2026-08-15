@@ -50,7 +50,9 @@ export default function Navigation() {
   };
 
   // Bottom navigation value
-  const bottomNavValue = navItems.findIndex(item => item.path === pathname);
+  const bottomNavValue = navItems.findIndex(item =>
+    item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
+  );
 
   const drawer = (
     <Box sx={{ width: 250 }}>
@@ -68,14 +70,14 @@ export default function Navigation() {
             href={item.path}
             onClick={() => setMobileOpen(false)}
             sx={{
-              color: pathname === item.path ? theme.palette.primary.main : 'inherit',
-              bgcolor: pathname === item.path ? 'action.selected' : 'transparent',
+              color: (item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)) ? theme.palette.primary.main : 'inherit',
+              bgcolor: (item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)) ? 'action.selected' : 'transparent',
               '&:hover': {
                 bgcolor: 'action.hover',
               },
             }}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: pathname === item.path ? theme.palette.primary.main : 'inherit' }}>
+            <ListItemIcon sx={{ minWidth: 40, color: (item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)) ? theme.palette.primary.main : 'inherit' }}>
               {item.icon}
             </ListItemIcon>
             <ListItemText primary={item.label} />
@@ -112,11 +114,11 @@ export default function Navigation() {
                   key={item.path}
                   component={Link}
                   href={item.path}
-                  color={pathname === item.path ? 'secondary' : 'inherit'}
+                  color={(item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)) ? 'secondary' : 'inherit'}
                   sx={{
                     borderRadius: 2,
                     px: 2,
-                    bgcolor: pathname === item.path ? 'action.selected' : 'transparent',
+                    bgcolor: (item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)) ? 'action.selected' : 'transparent',
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -192,7 +194,7 @@ export default function Navigation() {
                 label={item.label}
                 icon={item.icon}
                 sx={{
-                  color: pathname === item.path ? theme.palette.primary.main : 'text.secondary',
+                  color: (item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)) ? theme.palette.primary.main : 'text.secondary',
                   '& .MuiBottomNavigationAction-label': {
                     fontSize: '0.75rem',
                     mt: 0.5,

@@ -70,6 +70,18 @@ db.serialize(() => {
     FOREIGN KEY (from_wallet_id) REFERENCES wallets(id),
     FOREIGN KEY (to_wallet_id) REFERENCES wallets(id)
   )`);
+
+  // Migración: asegurar columnas opcionales de exchanges en DBs creadas antes de que existieran
+  db.all(`PRAGMA table_info(exchanges)`, (err, cols) => {
+    if (err) return;
+    const names = (cols || []).map((c) => c.name);
+    if (!names.includes('market_rate')) {
+      db.run(`ALTER TABLE exchanges ADD COLUMN market_rate DECIMAL(10,4)`);
+    }
+    if (!names.includes('spread')) {
+      db.run(`ALTER TABLE exchanges ADD COLUMN spread DECIMAL(5,2)`);
+    }
+  });
   
   // Insertar datos iniciales
   db.get('SELECT COUNT(*) as count FROM wallets', (err, result) => {
@@ -230,6 +242,66 @@ app.post('/api/transactions', async (req, res) => {
   }
 });
 
+// Listar transacciones con los nombres que consume el frontend.
+app.get('/api/transactions', (req, res) => {
+  const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100);
+  const offset = (page - 1) * limit;
+
+  const query = `
+    SELECT
+      t.id,
+      t.wallet_id AS walletId,
+      w.name AS walletName,
+      w.currency AS walletCurrency,
+      c.name AS category,
+      t.type,
+      t.amount,
+      t.description,
+      t.date,
+      t.created_at AS createdAt
+    FROM transactions t
+    JOIN wallets w ON w.id = t.wallet_id
+    JOIN categories c ON c.id = t.category_id
+    ORDER BY t.created_at DESC, t.id DESC
+    LIMIT ? OFFSET ?`;
+
+  db.all(query, [limit, offset], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    db.get('SELECT COUNT(*) AS total FROM transactions', (countErr, result) => {
+      if (countErr) return res.status(500).json({ error: countErr.message });
+      res.json({ data: rows, total: result?.total || 0, page, limit });
+    });
+  });
+});
+
+app.get('/api/transactions/:id', (req, res) => {
+  db.get(`
+    SELECT
+      t.id,
+      t.wallet_id AS walletId,
+      w.name AS walletName,
+      w.currency AS walletCurrency,
+      c.name AS category,
+      t.type,
+      t.amount,
+      t.description,
+      t.date,
+      t.created_at AS createdAt
+    FROM transactions t
+    JOIN wallets w ON w.id = t.wallet_id
+    JOIN categories c ON c.id = t.category_id
+    WHERE t.id = ?`,
+    [req.params.id],
+    (err, transaction) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!transaction) return res.status(404).json({ error: 'Transacción no encontrada' });
+      res.json(transaction);
+    }
+  );
+});
+
 // Exchanges con transacciones separadas
 app.post('/api/exchanges', async (req, res) => {
   try {
@@ -355,6 +427,43 @@ app.post('/api/exchanges', async (req, res) => {
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
+});
+
+app.get('/api/exchanges', (req, res) => {
+  const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100);
+  const offset = (page - 1) * limit;
+
+  const query = `
+    SELECT
+      e.id,
+      e.from_wallet_id AS fromWalletId,
+      e.to_wallet_id AS toWalletId,
+      e.from_amount AS fromAmount,
+      e.to_amount AS toAmount,
+      e.rate,
+      e.market_rate AS marketRate,
+      e.spread,
+      e.description,
+      e.created_at AS createdAt,
+      from_wallet.name AS fromWalletName,
+      to_wallet.name AS toWalletName,
+      from_wallet.currency AS fromCurrency,
+      to_wallet.currency AS toCurrency
+    FROM exchanges e
+    JOIN wallets from_wallet ON from_wallet.id = e.from_wallet_id
+    JOIN wallets to_wallet ON to_wallet.id = e.to_wallet_id
+    ORDER BY e.created_at DESC, e.id DESC
+    LIMIT ? OFFSET ?`;
+
+  db.all(query, [limit, offset], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    db.get('SELECT COUNT(*) AS total FROM exchanges', (countErr, result) => {
+      if (countErr) return res.status(500).json({ error: countErr.message });
+      res.json({ data: rows, total: result?.total || 0, page, limit });
+    });
+  });
 });
 
 app.get('/api/balance', (req, res) => {

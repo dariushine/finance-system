@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select, FormControl, InputLabel, Chip } from '@mui/material';
+import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select, FormControl, InputLabel, Chip, Alert, Snackbar, CircularProgress } from '@mui/material';
 import { SwapHoriz, TrendingUp, TrendingDown } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 
@@ -17,6 +17,11 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   const [marketRate, setMarketRate] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
+    open: false,
+    severity: 'success',
+    message: '',
+  });
   
   const { wallets, error } = useWallets();
 
@@ -39,7 +44,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
     
     const rateData = calculateRate();
     if (!rateData) {
-      alert('Debe ingresar montos válidos');
+      setSnackbar({ open: true, severity: 'warning', message: 'Debe ingresar montos válidos' });
       setLoading(false);
       return;
     }
@@ -78,12 +83,14 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       const result = await response.json();
       
       // Mostrar resultado
-      const fromWalletName = wallets.find(w => w.id === fromWalletId)?.name || 'Desconocida';
-      const toWalletName = wallets.find(w => w.id === toWalletId)?.name || 'Desconocida';
       const fromCurrency = wallets.find(w => w.id === fromWalletId)?.currency || '';
       const toCurrency = wallets.find(w => w.id === toWalletId)?.currency || '';
       
-      alert(`✅ Exchange registrado exitosamente\nDe: ${fromAmount} ${fromCurrency} (${fromWalletName})\nA: ${toAmount} ${toCurrency} (${toWalletName})\nTasa: ${rateData.rate.toFixed(2)} ${toCurrency}/${fromCurrency}\n${rateData.spread ? `Spread: ${rateData.spread.toFixed(2)}%` : ''}`);
+      setSnackbar({
+        open: true,
+        severity: 'success',
+        message: `Exchange registrado: ${fromAmount} ${fromCurrency} → ${toAmount} ${toCurrency} (tasa ${rateData.rate.toFixed(2)}${rateData.spread ? `, spread ${rateData.spread.toFixed(2)}%` : ''})`,
+      });
       
       // Reset form
       setFromAmount('');
@@ -96,7 +103,11 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       
     } catch (error) {
       console.error('Exchange error:', error);
-      alert(`❌ Error: ${error instanceof Error ? error.message : String(error)}`);
+      setSnackbar({
+        open: true,
+        severity: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setLoading(false);
     }
@@ -251,7 +262,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               color="primary"
               size="large"
               fullWidth
-              startIcon={<SwapHoriz />}
+              startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <SwapHoriz />}
               disabled={loading || !fromWalletId || !toWalletId || fromWalletId === toWalletId || !fromAmount || !toAmount}
             >
               {loading ? 'Procesando...' : 'Realizar Exchange'}
@@ -264,6 +275,16 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
           {marketRate && ` vs mercado ${marketRate} VES/USD`}
         </Typography>
       </CardContent>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Card>
   );
 }

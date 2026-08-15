@@ -1,41 +1,83 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import {
+  Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select,
+  FormControl, InputLabel, Alert, Snackbar, CircularProgress
+} from '@mui/material';
 import { Add, Remove } from '@mui/icons-material';
+import { useWallets } from '../lib/hooks';
 
-export default function TransactionForm() {
+interface TransactionFormProps {
+  onSuccess?: () => void;
+}
+
+export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState('');
   const [wallet, setWallet] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  const wallets = [
-    { id: 1, name: 'Cuenta Bancaria USD', currency: 'USD' },
-    { id: 2, name: 'Cuenta Bancaria VES', currency: 'VES' },
-    { id: 3, name: 'Efectivo USD', currency: 'USD' },
-    { id: 4, name: 'Efectivo VES', currency: 'VES' },
-    { id: 5, name: 'Crypto Wallet', currency: 'USD' },
-    { id: 6, name: 'Tarjeta Prepagada', currency: 'USD' },
-  ];
+  const { wallets, loading: walletsLoading, error: walletsError } = useWallets();
 
   const categories = {
-    expense: ['food', 'transport', 'housing', 'utilities', 'entertainment', 'health', 'shopping'],
-    income: ['salary', 'freelance', 'investment', 'gift', 'other'],
+    expense: ['food', 'transport', 'housing', 'utilities', 'entertainment', 'health', 'shopping', 'other_expense'],
+    income: ['salary', 'freelance', 'investment', 'gift', 'other_income'],
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const categoryLabel = (category: string) => category
+    .replace('_expense', '')
+    .replace('_income', '')
+    .replace(/^./, (letter) => letter.toUpperCase());
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Transacción:', { type, amount, wallet, category, description });
-    
-    // Reset form
-    setAmount('');
-    setWallet('');
-    setCategory('');
-    setDescription('');
-    
-    alert('Transacción registrada exitosamente');
+    const walletObj = wallets.find((w) => w.name === wallet);
+    const parsedAmount = Number(amount);
+
+    if (!walletObj || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError('Selecciona una billetera e introduce un monto mayor que cero.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletId: walletObj?.id,
+          categoryName: category,
+          type,
+          amount: parsedAmount,
+          description: description || undefined,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al registrar la transacción');
+      }
+
+      // Reset form
+      setAmount('');
+      setWallet('');
+      setCategory('');
+      setDescription('');
+      setSuccess(true);
+      onSuccess?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -44,7 +86,7 @@ export default function TransactionForm() {
         <Typography variant="h6" gutterBottom>
           {type === 'expense' ? '📤 Registrar Gasto' : '📥 Registrar Ingreso'}
         </Typography>
-        
+
         <Box display="flex" gap={1} mb={2}>
           <Button
             variant={type === 'expense' ? 'contained' : 'outlined'}
@@ -75,9 +117,10 @@ export default function TransactionForm() {
               onChange={(e) => setAmount(e.target.value)}
               placeholder="Ej: 1200"
               required
+              disabled={loading}
               InputProps={{
                 endAdornment: wallet ? (
-                  wallets.find(w => w.name === wallet)?.currency || ''
+                  wallets.find((w) => w.name === wallet)?.currency || ''
                 ) : 'USD/VES'
               }}
             />
@@ -88,6 +131,7 @@ export default function TransactionForm() {
                 value={wallet}
                 label="Billetera"
                 onChange={(e) => setWallet(e.target.value)}
+                disabled={loading || walletsLoading}
               >
                 {wallets.map((w) => (
                   <MenuItem key={w.id} value={w.name}>
@@ -103,6 +147,7 @@ export default function TransactionForm() {
                 value={category}
                 label="Categoría"
                 onChange={(e) => setCategory(e.target.value)}
+                disabled={loading || walletsLoading}
               >
                 {categories[type].map((cat) => (
                   <MenuItem key={cat} value={cat}>
@@ -119,6 +164,7 @@ export default function TransactionForm() {
               placeholder="Ej: Perro caliente"
               multiline
               rows={2}
+              disabled={loading}
             />
 
             <Button
@@ -127,17 +173,36 @@ export default function TransactionForm() {
               color={type === 'expense' ? 'error' : 'success'}
               size="large"
               fullWidth
-              startIcon={type === 'expense' ? <Remove /> : <Add />}
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={18} color="inherit" /> : (type === 'expense' ? <Remove /> : <Add />)}
             >
-              {type === 'expense' ? 'Registrar Gasto' : 'Registrar Ingreso'}
+              {loading ? 'Registrando...' : (type === 'expense' ? 'Registrar Gasto' : 'Registrar Ingreso')}
             </Button>
           </Box>
         </form>
+
+        {(error || walletsError) && (
+          <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+            {error || walletsError}
+          </Alert>
+        )}
 
         <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
           💡 El currency se obtiene automáticamente de la billetera seleccionada
         </Typography>
       </CardContent>
+
+      {/* Feedback visual en vez de alert() */}
+      <Snackbar
+        open={success}
+        autoHideDuration={3000}
+        onClose={() => setSuccess(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" onClose={() => setSuccess(false)}>
+          {type === 'expense' ? 'Gasto' : 'Ingreso'} registrado correctamente ✨
+        </Alert>
+      </Snackbar>
     </Card>
   );
 }
