@@ -10,10 +10,11 @@ import {
   Tabs,
   Tab,
   Box,
-  Typography,
 } from '@mui/material';
 import { Close, Add, SwapHoriz } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import TransactionForm from './TransactionForm';
 import ExchangeForm from './ExchangeForm';
 
@@ -21,6 +22,9 @@ export default function AddFab() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState(0);
   const router = useRouter();
+  const theme = useTheme();
+  // Pantallas pequeñas: a pantalla completa. Grandes: modal centrado.
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
@@ -49,9 +53,12 @@ export default function AddFab() {
       <Dialog
         open={open}
         onClose={handleClose}
+        fullScreen={isMobile}
         maxWidth="sm"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
+        fullWidth={!isMobile}
+        PaperProps={{
+          sx: isMobile ? {} : { borderRadius: 3, overflow: 'hidden' },
+        }}
       >
         {/* Barra superior con título, cerrar y pestañas */}
         <DialogTitle
@@ -60,10 +67,17 @@ export default function AddFab() {
             alignItems: 'center',
             justifyContent: 'space-between',
             pb: 0,
+            pr: 1,
+            ...(isMobile && { bgcolor: '#1976d2', color: '#fff' }),
           }}
         >
-          <Typography variant="h6">Nueva operación</Typography>
-          <IconButton onClick={handleClose} aria-label="Cerrar" size="small">
+          Nueva operación
+          <IconButton
+            onClick={handleClose}
+            aria-label="Cerrar"
+            size="small"
+            sx={{ color: isMobile ? '#fff' : undefined }}
+          >
             <Close />
           </IconButton>
         </DialogTitle>
