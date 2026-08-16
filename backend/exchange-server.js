@@ -150,6 +150,10 @@ db.serialize(() => {
       db.run(`ALTER TABLE transactions ADD COLUMN parent_transaction_id INTEGER`);
       console.log('✅ transactions: agregada columna parent_transaction_id');
     }
+    if (!names.includes('time')) {
+      db.run(`ALTER TABLE transactions ADD COLUMN time TEXT`);
+      console.log('✅ transactions: agregada columna time (HH:MM:SS)');
+    }
     // Sincronizar exchanges.fee con las transacciones fee (crea triggers + backfill)
     ensureExchangesFeeSync();
   });
@@ -335,6 +339,18 @@ function ensureExchangesFeeSync() {
 }
 
 // Obtener la tasa (bcv | paralelo) para una fecha dada; si no hay registro, usa la última disponible
+// Valida una hora en formato HH:MM o HH:MM:SS y comprueba rangos reales (0-23h, 0-59min, 0-59s).
+// Devuelve true si es válida, false si no.
+function isValidTime(value) {
+  if (typeof value !== 'string' || value === '') return true; // opcional
+  const m = value.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return false;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  const s = m[3] == null ? 0 : Number(m[3]);
+  return h >= 0 && h <= 23 && min >= 0 && min <= 59 && s >= 0 && s <= 59;
+}
+
 function getRateForDate(date, type) {
   return new Promise((resolve) => {
     const col = type === 'paralelo' ? 'paralelo' : 'bcv';
@@ -349,12 +365,21 @@ function getRateForDate(date, type) {
   });
 }
 
-function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date) {
+function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date, time) {
   return new Promise((resolve, reject) => {
     const commission = Number(fee) || 0;
-    // Fecha de la transacción: opcional. Si no se provee, se usa hoy (UTC).
-    // El endpoint valida el formato antes de llamar; aquí solo se aplica.
-    const txDate = typeof date === 'string' && date !== '' ? date : new Date().toISOString().split('T')[0];
+    // Fecha + hora de la transacción. El frontend manda `date` como
+    // YYYY-MM-DD y `time` como HH:MM[:SS]. Si no se proveen, se usa hoy local.
+    const now = new Date();
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const defaultDate = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    const defaultTime = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+    const txDate = typeof date === 'string' && date !== '' ? date : defaultDate;
+    let txTime = defaultTime;
+    if (typeof time === 'string' && time !== '') {
+      // Aceptar HH:MM o HH:MM:SS
+      txTime = /^\d{2}:\d{2}:\d{2}$/.test(time) ? time : `${time}:00`;
+    }
     db.serialize(() => {
       // 1. Obtener wallet
       db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId], (err, wallet) => {
@@ -385,9 +410,9 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
 
             // 5a. Transacción principal con el monto original (sin comisión)
             db.run(
-              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [walletId, category.id, type, amount, description || '', txDate, 1.0, amount, 0, null],
+              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [walletId, category.id, type, amount, description || '', txDate, txTime, 1.0, amount, 0, null],
               function(err) {
                 if (err) {
                   db.run('ROLLBACK');
@@ -425,11 +450,11 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                     ['fee', 'expense'], (fErr, feeCategory) => {
                       const fc = (!fErr && feeCategory) ? feeCategory : category;
                       db.run(
-                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [walletId, fc.id, 'expense', commission,
                          `Comisión: ${description || category.name}`,
-                         txDate, 1.0, commission, 0, transactionId],
+                         txDate, txTime, 1.0, commission, 0, transactionId],
                         function(err2) {
                           if (err2) {
                             db.run('ROLLBACK');
@@ -678,7 +703,7 @@ app.get('/api/wallets/:id/report', (req, res) => {
 
 app.post('/api/transactions', async (req, res) => {
   try {
-    const { walletId, categoryName, type, amount, description, fee, date } = req.body;
+    const { walletId, categoryName, type, amount, description, fee, date, time } = req.body;
     
     if (!walletId || !categoryName || !type || !amount) {
       return res.status(400).json({ 
@@ -690,8 +715,12 @@ app.post('/api/transactions', async (req, res) => {
     if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
     }
+    // Hora opcional: aceptar HH:MM o HH:MM:SS con rango válido
+    if (!isValidTime(time)) {
+      return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+    }
     
-    const result = await createTransaction(walletId, categoryName, type, amount, description, fee, date);
+    const result = await createTransaction(walletId, categoryName, type, amount, description, fee, date, time);
     
     res.json({
       success: true,
@@ -745,6 +774,7 @@ app.get('/api/transactions', (req, res) => {
       t.amount,
       t.description,
       t.date,
+      t.time,
       t.fee,
       t.parent_transaction_id AS parentTransactionId,
       t.created_at AS createdAt
@@ -778,6 +808,7 @@ app.get('/api/transactions/:id', (req, res) => {
       t.amount,
       t.description,
       t.date,
+      t.time,
       t.fee,
       t.parent_transaction_id AS parentTransactionId,
       t.created_at AS createdAt
@@ -808,7 +839,7 @@ app.get('/api/transactions/:id', (req, res) => {
                  WHEN t.type = 'expense' THEN -COALESCE(t.amount, 0)
                  ELSE 0
                END
-             ) OVER (ORDER BY t.date, t.created_at, t.id) AS running,
+             ) OVER (ORDER BY t.date, t.time, t.created_at, t.id) AS running,
              (SELECT SUM(
                 CASE
                   WHEN type = 'income'  THEN COALESCE(amount, 0)
@@ -833,6 +864,7 @@ app.get('/api/transactions/:id', (req, res) => {
                t.amount,
                t.description,
                t.date,
+               t.time,
                t.fee,
                t.parent_transaction_id AS parentTransactionId,
                t.created_at AS createdAt
@@ -868,7 +900,7 @@ app.get('/api/transactions/:id', (req, res) => {
 // Exchanges con transacciones separadas
 app.post('/api/exchanges', async (req, res) => {
   try {
-    const { fromWalletId, toWalletId, fromAmount, toAmount, description, fee, date } = req.body;
+    const { fromWalletId, toWalletId, fromAmount, toAmount, description, fee, date, time } = req.body;
     
     console.log('💱 Procesando exchange:', { fromWalletId, toWalletId, fromAmount, toAmount, fee, date });
     
@@ -891,7 +923,11 @@ app.post('/api/exchanges', async (req, res) => {
     if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
     }
+    if (!isValidTime(time)) {
+      return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+    }
     const txDate = typeof date === 'string' && date !== '' ? date : undefined;
+    const txTime = typeof time === 'string' && time !== '' ? (time.length === 5 ? `${time}:00` : time) : undefined;
     
     // Obtener información de wallets
     const [fromWallet, toWallet] = await Promise.all([
@@ -932,7 +968,8 @@ app.post('/api/exchanges', async (req, res) => {
       fromAmount,
       `${description || 'Exchange'} → ${toWallet.name}`,
       commission,
-      txDate
+      txDate,
+      txTime
     );
     
     // Crear transacción de crédito (exchange_in)
@@ -943,7 +980,8 @@ app.post('/api/exchanges', async (req, res) => {
       toAmount,
       `${description || 'Exchange'} ← ${fromWallet.name}`,
       0,
-      txDate
+      txDate,
+      txTime
     );
     
     // Registrar metadata del exchange

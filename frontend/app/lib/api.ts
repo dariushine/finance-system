@@ -39,6 +39,8 @@ export interface TransactionDetail {
   amount: number;
   description?: string;
   date: string;
+  /** Hora guardada por el usuario (HH:MM:SS) si la proporcionó */
+  time?: string | null;
   fee?: number;
   parentTransactionId?: number | null;
   createdAt?: string;

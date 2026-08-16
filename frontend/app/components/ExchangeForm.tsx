@@ -19,6 +19,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   // Fecha del exchange (débito/crédito): por defecto hoy.
   const todayISODate = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(todayISODate);
+  // Hora opcional (HH:MM). Vacía => backend usa hora local actual.
+  const [time, setTime] = useState('');
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
     open: false,
@@ -74,6 +76,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         fee: rateData.commission || undefined,
         description: description || undefined,
         date: date || undefined,
+        time: time || undefined,
       };
       
       // Hacer la llamada al endpoint de exchanges
@@ -106,6 +109,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setFee('');
       setDescription('');
       setDate(todayISODate);
+      setTime('');
 
       // Notificar éxito al componente padre
       onSuccess?.();
@@ -240,6 +244,17 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               helperText={date > todayISODate
                 ? '⚠️ Es una fecha futura. Verifica que sea correcta.'
                 : 'Registra exchanges de hoy o de días anteriores'}
+            />
+
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              disabled={loading}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Si la dejas vacía se usa la hora actual"
             />
 
             <Box>

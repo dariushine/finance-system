@@ -49,6 +49,12 @@ const formatTime = (dateString?: string) => {
   return d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
 };
 
+// Muestra una hora cruda HH:MM o HH:MM:SS sin pasar por parseLocalDate.
+const formatTimeOnly = (time?: string | null) => {
+  if (!time) return '';
+  return time.slice(0, 5); // HH:MM
+};
+
 const formatCurrency = (n: number, currency = 'USD') => {
   try {
     return new Intl.NumberFormat('es-VE', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n);
@@ -222,7 +228,7 @@ export default function TransactionDetailPage() {
                       <CalendarMonth fontSize="small" color="action" />
                       <Typography variant="body2">{formatDate(tx.date)}</Typography>
                     </Box>
-                    <Typography variant="caption" color="text.secondary">{formatTime(tx.createdAt || tx.date)}</Typography>
+                    <Typography variant="caption" color="text.secondary">{tx.time ? formatTimeOnly(tx.time) : formatTime(tx.createdAt || tx.date)}</Typography>
                   </Box>
                 </Box>
               )}

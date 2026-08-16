@@ -22,6 +22,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   // Fecha de la transacción: por defecto hoy (UTC, formato YYYY-MM-DD).
   const todayISODate = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(todayISODate);
+  // Hora opcional (HH:MM). Por defecto vacía => backend usa hora local actual.
+  const [time, setTime] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -67,6 +69,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           // Fecha opcional: solo se envía si es distinta de hoy, para no romper
           // llamadas que dependen del default backend.
           date: date || undefined,
+          // Hora opcional (HH:MM). Backend la acepta o usa la hora local.
+          time: time || undefined,
         }),
       });
 
@@ -82,6 +86,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       setCategory('');
       setDescription('');
       setDate(todayISODate);
+      setTime('');
       setSuccess(true);
       onSuccess?.();
     } catch (err) {
@@ -148,6 +153,16 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               helperText={date > todayISODate
                 ? '⚠️ Es una fecha futura. Verifica que sea correcta.'
                 : 'Registra gastos de hoy o de días anteriores'}
+            />
+
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              disabled={loading}
+              InputLabelProps={{ shrink: true }}
+              helperText="Si la dejas vacía se usa la hora actual"
             />
 
             <TextField
