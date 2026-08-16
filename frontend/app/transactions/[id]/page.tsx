@@ -134,6 +134,12 @@ export default function TransactionDetailPage() {
               >
                 {isIncome ? '+' : '-'}{formatCurrency(tx.amount, currency)}
               </Typography>
+              {tx.walletName && (
+                <Box display="flex" alignItems="center" justifyContent="center" gap={0.75}>
+                  <AccountBalanceWallet fontSize="small" color="action" />
+                  <Typography variant="body1" fontWeight="medium">{tx.walletName}</Typography>
+                </Box>
+              )}
             </Box>
             {(tx.fee ?? 0) > 0 && (
               <Chip
@@ -205,6 +211,32 @@ export default function TransactionDetailPage() {
                     </Typography>
                   }
                 />
+              )}
+              {tx.parentTransactionId != null && (
+                <Box display="flex" justifyContent="space-between" gap={2}>
+                  <Typography variant="body2" color="text.secondary">Transacción asociada</Typography>
+                  <Box
+                    component="button"
+                    onClick={() => router.push(`/transactions/${tx.parentTransactionId!}`)}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      color: 'primary.main',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      '&:hover': { textDecoration: 'underline' },
+                    }}
+                  >
+                    <ReceiptLong fontSize="small" />
+                    #{tx.parentTransactionId}
+                    <ChevronRight fontSize="small" />
+                  </Box>
+                </Box>
               )}
             </Stack>
           </CardContent>

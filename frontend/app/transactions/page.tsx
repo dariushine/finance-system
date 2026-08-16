@@ -34,15 +34,37 @@ export default function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
 
-  // Paginación
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // Paginación (se restaura desde sessionStorage si se vino del detalle)
+  const listState = (() => {
+    try {
+      const raw = sessionStorage.getItem('transactions-list-state');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  })();
+  const [page, setPage] = useState<number>(listState && typeof listState.page === 'number' ? listState.page : 0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(listState && typeof listState.rowsPerPage === 'number' ? listState.rowsPerPage : 10);
 
   // Filtro por período / rango de fechas
-  const [period, setPeriod] = useState<string>('all');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [applied, setApplied] = useState<{ period: string; from: string; to: string }>({ period: 'all', from: '', to: '' });
+  const [period, setPeriod] = useState<string>(listState?.period || 'all');
+  const [from, setFrom] = useState<string>(listState?.from || '');
+  const [to, setTo] = useState<string>(listState?.to || '');
+  const [applied, setApplied] = useState<{ period: string; from: string; to: string }>(
+    listState?.applied || { period: 'all', from: '', to: '' }
+  );
+
+  // Persistir el estado actual (filtros + paginación) siempre que cambie,
+  // para que al volver a esta página (desde el detalle o con el botón atrás)
+  // se restaure exactamente donde estaba el usuario.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('transactions-list-state', JSON.stringify({ period, applied, page, rowsPerPage, from, to }));
+    } catch { /* ignorar */ }
+  }, [period, applied, page, rowsPerPage, from, to]);
+
+  // Ir al detalle (el estado ya queda persistido por el efecto anterior).
+  const goToDetail = (txId: number) => {
+    router.push(`/transactions/${txId}`);
+  };
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -185,7 +207,7 @@ export default function TransactionsPage() {
                           size="small"
                           variant="text"
                           startIcon={<Visibility />}
-                          onClick={() => router.push(`/transactions/${transaction.id}`)}
+                          onClick={() => goToDetail(transaction.id)}
                         >
                           Ver
                         </Button>
