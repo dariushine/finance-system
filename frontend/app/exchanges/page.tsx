@@ -111,27 +111,29 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
       sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
     >
       <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
-        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
-          <Stack spacing={0.25}>
-            <Typography variant="body2" color="text.secondary">{formatExchangeDate(exchange)}</Typography>
-            <Typography variant="body2">{exchange.fromWalletName || `Wallet ${exchange.fromWalletId}`}</Typography>
-          </Stack>
-          <Typography variant="body2" fontWeight="bold" color="success.main">
-            +{formatCurrency(exchange.toAmount, exchange.toCurrency)}
-          </Typography>
+        <Box width="100%" pr={1}>
+          {/* Fila superior: fecha a la izquierda, residbetter resumen a la derecha */}
+          <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+            <Typography variant="caption" color="text.secondary">{formatExchangeDate(exchange)}</Typography>
+            <Typography variant="caption" fontStyle="italic" noWrap>
+              {exchange.fromWalletName || `Wallet ${exchange.fromWalletId}`} → {exchange.toWalletName || `Wallet ${exchange.toWalletId}`}
+            </Typography>
+          </Box>
+          {/* Fila principal: la transición de montos */}
+          <Box display="flex" alignItems="center" justifyContent="space-between" gap={1} mt={0.5}>
+            <Typography variant="body2" color="error.main" fontWeight="bold" noWrap>
+              -{formatCurrency(exchange.fromAmount, exchange.fromCurrency)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">→</Typography>
+            <Typography variant="body2" color="success.main" fontWeight="bold" noWrap>
+              +{formatCurrency(exchange.toAmount, exchange.toCurrency)}
+            </Typography>
+          </Box>
         </Box>
       </AccordionSummary>
       <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
         <Divider sx={{ mb: 1.5 }} />
         <Stack spacing={1}>
-          <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Hacia</Typography>
-            <Typography variant="body2">{exchange.toWalletName || `Wallet ${exchange.toWalletId}`}</Typography>
-          </Box>
-          <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Enviado</Typography>
-            <Typography variant="body2" color="error.main">-{formatCurrency(exchange.fromAmount, exchange.fromCurrency)}</Typography>
-          </Box>
           <Box display="flex" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Tasa</Typography>
             <Chip label={exchange.rate.toFixed(4)} size="small" color="primary" />
