@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -80,6 +80,167 @@ interface ReportData {
   };
 }
 
+// --- Formateador a nivel de módulo (referencia estable) ---
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('es-VE', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2
+  }).format(amount);
+};
+
+// --- Tarjetas móviles memorizadas: solo se re-renderizan si SUS props cambian ---
+const MonthlyAccordionItem = memo(function MonthlyAccordionItem({
+  month,
+  prevNet,
+  isOpen,
+  index,
+  onToggle,
+}: {
+  month: ReportData['monthlySummary'][number];
+  prevNet?: number;
+  isOpen: boolean;
+  index: number;
+  onToggle: (index: number) => void;
+}) {
+  return (
+    <Accordion
+      expanded={isOpen}
+      onChange={() => onToggle(index)}
+      disableGutters
+      sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+          <Typography variant="body1" fontWeight="bold">{month.month}</Typography>
+          <Typography variant="body2" fontWeight="bold" color={month.net >= 0 ? 'success.main' : 'error.main'}>
+            {formatCurrency(month.net)}
+          </Typography>
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+        <Divider sx={{ mb: 1.5 }} />
+        <Stack spacing={1}>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Ingresos</Typography>
+            <Typography variant="body2" color="success.main">{formatCurrency(month.income)}</Typography>
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Gastos</Typography>
+            <Typography variant="body2" color="error.main">{formatCurrency(month.expense)}</Typography>
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Transacciones</Typography>
+            <Chip label={month.transactionCount} size="small" />
+          </Box>
+          {prevNet != null && (
+            <Box display="flex" justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">Tendencia</Typography>
+              <Chip
+                icon={month.net > prevNet ? <TrendingUpIcon /> : <TrendingDownIcon />}
+                label={`${((month.net - prevNet) / Math.abs(prevNet || 1) * 100).toFixed(1)}%`}
+                size="small"
+                color={month.net > prevNet ? 'success' : 'error'}
+              />
+            </Box>
+          )}
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+});
+
+const CategoryAccordionItem = memo(function CategoryAccordionItem({
+  category,
+  totalExpenses,
+  isOpen,
+  index,
+  onToggle,
+}: {
+  category: ReportData['byCategory'][number];
+  totalExpenses: number;
+  isOpen: boolean;
+  index: number;
+  onToggle: (index: number) => void;
+}) {
+  return (
+    <Accordion
+      expanded={isOpen}
+      onChange={() => onToggle(index)}
+      disableGutters
+      sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+          <Typography variant="body1">{category.category}</Typography>
+          <Chip
+            label={`${(category.total / totalExpenses * 100).toFixed(1)}%`}
+            size="small"
+            color="primary"
+            variant="outlined"
+          />
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+        <Divider sx={{ mb: 1.5 }} />
+        <Stack spacing={1}>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Monto</Typography>
+            <Typography variant="body2">{formatCurrency(category.total)}</Typography>
+          </Box>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+});
+
+const WalletAccordionItem = memo(function WalletAccordionItem({
+  wallet,
+  isOpen,
+  index,
+  onToggle,
+}: {
+  wallet: ReportData['walletBalances'][number];
+  isOpen: boolean;
+  index: number;
+  onToggle: (index: number) => void;
+}) {
+  return (
+    <Accordion
+      expanded={isOpen}
+      onChange={() => onToggle(index)}
+      disableGutters
+      sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+          <Typography variant="body1">{wallet.name}</Typography>
+          <Typography variant="body2" fontWeight="bold" color={wallet.balance >= 0 ? 'success.main' : 'error.main'}>
+            {formatCurrency(wallet.balance)}
+          </Typography>
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+        <Divider sx={{ mb: 1.5 }} />
+        <Stack spacing={1}>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Moneda</Typography>
+            <Chip label={wallet.currency} size="small" variant="outlined" />
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Estado</Typography>
+            <Chip
+              label={wallet.balance >= 0 ? 'Activa' : 'Negativa'}
+              size="small"
+              color={wallet.balance >= 0 ? 'success' : 'error'}
+            />
+          </Box>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+});
+
 export default function ReportsPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -92,6 +253,17 @@ export default function ReportsPage() {
   const [timeRange, setTimeRange] = useState('6m');
   const [chartType, setChartType] = useState('bar');
   const [rateType, setRateType] = useState<'bcv' | 'paralelo'>('bcv');
+
+  // Handlers ESTABLES: cada uno solo re-renderiza la tarjeta que se abre/cierra.
+  const handleMonthlyToggle = useCallback((index: number) => {
+    setMonthlyExpanded((prev) => (prev === index ? false : index));
+  }, []);
+  const handleCategoryToggle = useCallback((index: number) => {
+    setCategoryExpanded((prev) => (prev === index ? false : index));
+  }, []);
+  const handleWalletToggle = useCallback((index: number) => {
+    setWalletExpanded((prev) => (prev === index ? false : index));
+  }, []);
 
   useEffect(() => {
     loadReportData();
@@ -151,14 +323,6 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-VE', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(amount);
   };
 
   const exportReport = () => {
@@ -371,55 +535,16 @@ export default function ReportsPage() {
                 isMobile ? (
                   // MOBILE: acordeón por mes
                   <Box>
-                    {data.monthlySummary.map((month, index) => {
-                      const isOpen = monthlyExpanded === index;
-                      return (
-                        <Accordion
-                          key={index}
-                          expanded={isOpen}
-                          onChange={() => setMonthlyExpanded(isOpen ? false : index)}
-                          disableGutters
-                          sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
-                        >
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
-                            <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
-                              <Typography variant="body1" fontWeight="bold">{month.month}</Typography>
-                              <Typography variant="body2" fontWeight="bold" color={month.net >= 0 ? 'success.main' : 'error.main'}>
-                                {formatCurrency(month.net)}
-                              </Typography>
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
-                            <Divider sx={{ mb: 1.5 }} />
-                            <Stack spacing={1}>
-                              <Box display="flex" justifyContent="space-between">
-                                <Typography variant="body2" color="text.secondary">Ingresos</Typography>
-                                <Typography variant="body2" color="success.main">{formatCurrency(month.income)}</Typography>
-                              </Box>
-                              <Box display="flex" justifyContent="space-between">
-                                <Typography variant="body2" color="text.secondary">Gastos</Typography>
-                                <Typography variant="body2" color="error.main">{formatCurrency(month.expense)}</Typography>
-                              </Box>
-                              <Box display="flex" justifyContent="space-between">
-                                <Typography variant="body2" color="text.secondary">Transacciones</Typography>
-                                <Chip label={month.transactionCount} size="small" />
-                              </Box>
-                              {index > 0 && data.monthlySummary[index - 1] && (
-                                <Box display="flex" justifyContent="space-between">
-                                  <Typography variant="body2" color="text.secondary">Tendencia</Typography>
-                                  <Chip
-                                    icon={month.net > data.monthlySummary[index - 1].net ? <TrendingUpIcon /> : <TrendingDownIcon />}
-                                    label={`${((month.net - data.monthlySummary[index - 1].net) / Math.abs(data.monthlySummary[index - 1].net || 1) * 100).toFixed(1)}%`}
-                                    size="small"
-                                    color={month.net > data.monthlySummary[index - 1].net ? 'success' : 'error'}
-                                  />
-                                </Box>
-                              )}
-                            </Stack>
-                          </AccordionDetails>
-                        </Accordion>
-                      );
-                    })}
+                    {data.monthlySummary.map((month, index) => (
+                      <MonthlyAccordionItem
+                        key={index}
+                        month={month}
+                        prevNet={index > 0 ? data.monthlySummary[index - 1].net : undefined}
+                        isOpen={monthlyExpanded === index}
+                        index={index}
+                        onToggle={handleMonthlyToggle}
+                      />
+                    ))}
                   </Box>
                 ) : (
                 <TableContainer component={Paper} variant="outlined">
@@ -507,39 +632,16 @@ export default function ReportsPage() {
                 isMobile ? (
                   // MOBILE: acordeón por categoría
                   <Box>
-                    {data.byCategory.slice(0, 8).map((category, index) => {
-                      const isOpen = categoryExpanded === index;
-                      return (
-                        <Accordion
-                          key={index}
-                          expanded={isOpen}
-                          onChange={() => setCategoryExpanded(isOpen ? false : index)}
-                          disableGutters
-                          sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
-                        >
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
-                            <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
-                              <Typography variant="body1">{category.category}</Typography>
-                              <Chip
-                                label={`${(category.total / data.summary.totalExpenses * 100).toFixed(1)}%`}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                              />
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
-                            <Divider sx={{ mb: 1.5 }} />
-                            <Stack spacing={1}>
-                              <Box display="flex" justifyContent="space-between">
-                                <Typography variant="body2" color="text.secondary">Monto</Typography>
-                                <Typography variant="body2">{formatCurrency(category.total)}</Typography>
-                              </Box>
-                            </Stack>
-                          </AccordionDetails>
-                        </Accordion>
-                      );
-                    })}
+                    {data.byCategory.slice(0, 8).map((category, index) => (
+                      <CategoryAccordionItem
+                        key={index}
+                        category={category}
+                        totalExpenses={data.summary.totalExpenses}
+                        isOpen={categoryExpanded === index}
+                        index={index}
+                        onToggle={handleCategoryToggle}
+                      />
+                    ))}
                   </Box>
                 ) : (
                 <Box>
@@ -611,44 +713,15 @@ export default function ReportsPage() {
                 isMobile ? (
                   // MOBILE: acordeón por billetera
                   <Box>
-                    {data.walletBalances.map((wallet, index) => {
-                      const isOpen = walletExpanded === index;
-                      return (
-                        <Accordion
-                          key={index}
-                          expanded={isOpen}
-                          onChange={() => setWalletExpanded(isOpen ? false : index)}
-                          disableGutters
-                          sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
-                        >
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
-                            <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
-                              <Typography variant="body1">{wallet.name}</Typography>
-                              <Typography variant="body2" fontWeight="bold" color={wallet.balance >= 0 ? 'success.main' : 'error.main'}>
-                                {formatCurrency(wallet.balance)}
-                              </Typography>
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
-                            <Divider sx={{ mb: 1.5 }} />
-                            <Stack spacing={1}>
-                              <Box display="flex" justifyContent="space-between">
-                                <Typography variant="body2" color="text.secondary">Moneda</Typography>
-                                <Chip label={wallet.currency} size="small" variant="outlined" />
-                              </Box>
-                              <Box display="flex" justifyContent="space-between">
-                                <Typography variant="body2" color="text.secondary">Estado</Typography>
-                                <Chip
-                                  label={wallet.balance >= 0 ? 'Activa' : 'Negativa'}
-                                  size="small"
-                                  color={wallet.balance >= 0 ? 'success' : 'error'}
-                                />
-                              </Box>
-                            </Stack>
-                          </AccordionDetails>
-                        </Accordion>
-                      );
-                    })}
+                    {data.walletBalances.map((wallet, index) => (
+                      <WalletAccordionItem
+                        key={index}
+                        wallet={wallet}
+                        isOpen={walletExpanded === index}
+                        index={index}
+                        onToggle={handleWalletToggle}
+                      />
+                    ))}
                   </Box>
                 ) : (
                 <TableContainer component={Paper} variant="outlined">

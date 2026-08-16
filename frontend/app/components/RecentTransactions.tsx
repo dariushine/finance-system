@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -48,6 +48,118 @@ interface Transaction {
 
 const MAX_ROWS = 5;
 
+// --- Formateadores a nivel de módulo (referencias estables, no se reconstruyen por render) ---
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+  if (diffHours < 24) {
+    return `Hoy ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
+  } else if (diffHours < 48) {
+    return `Ayer ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
+  } else {
+    return date.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
+  }
+};
+
+const formatCurrency = (amount: number, currency: string = 'USD') => {
+  return new Intl.NumberFormat('es-VE', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2,
+  }).format(amount);
+};
+
+const getTypeColor = (type: string) => type === 'income' ? 'success' : 'error';
+const getTypeIcon = (type: string) => type === 'income' ? <IncomeIcon /> : <ExpenseIcon />;
+
+// --- Tarjeta móvil memorizada: solo se re-renderiza si SUS props cambian ---
+const MobileTransactionItem = memo(function MobileTransactionItem({
+  transaction,
+  isOpen,
+  onToggle,
+  onView,
+}: {
+  transaction: Transaction;
+  isOpen: boolean;
+  onToggle: (id: number) => void;
+  onView: (id: number) => void;
+}) {
+  const isIncome = transaction.type === 'income';
+
+  return (
+    <Accordion
+      expanded={isOpen}
+      onChange={() => onToggle(transaction.id)}
+      disableGutters
+      sx={{
+        '&:before': { display: 'none' },
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        mb: 1,
+        boxShadow: 'none',
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        sx={{ px: 1.5, minHeight: 48 }}
+      >
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+          <Stack spacing={0.25}>
+            <Typography variant="body2" color="text.secondary">
+              {formatDate(transaction.date)}
+            </Typography>
+            <Chip
+              icon={getTypeIcon(transaction.type)}
+              label={transaction.type === 'income' ? 'Ingreso' : 'Gasto'}
+              color={getTypeColor(transaction.type)}
+              size="small"
+              sx={{ height: 22, '& .MuiChip-icon': { fontSize: 16 } }}
+            />
+          </Stack>
+          <Typography
+            variant="body1"
+            fontWeight="bold"
+            color={isIncome ? 'success.main' : 'error.main'}
+          >
+            {isIncome ? '+' : '-'}
+            {formatCurrency(transaction.amount, transaction.walletCurrency)}
+          </Typography>
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+        <Divider sx={{ mb: 1.5 }} />
+        <Stack spacing={1}>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Categoría</Typography>
+            <Chip label={transaction.category || '—'} size="small" variant="outlined" />
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Billetera</Typography>
+            <Typography variant="body2">{transaction.walletName || '—'}</Typography>
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Descripción</Typography>
+            <Typography variant="body2" textAlign="right">{transaction.description || '—'}</Typography>
+          </Box>
+          <Box display="flex" justifyContent="flex-end">
+            <Button
+              size="small"
+              startIcon={<ViewIcon />}
+              onClick={() => onView(transaction.id)}
+            >
+              Ver detalles
+            </Button>
+          </Box>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+});
+
 export default function RecentTransactions() {
   const router = useRouter();
   const theme = useTheme();
@@ -79,31 +191,15 @@ export default function RecentTransactions() {
 
   const displayed = transactions.slice(0, MAX_ROWS);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  // Handler ESTABLE: su referencia no cambia entre renders, así el memo de cada
+  // tarjeta solo re-renderiza la que se abre/cierra (no toda la lista).
+  const handleToggle = useCallback((id: number) => {
+    setExpanded((prev) => (prev === id ? false : id));
+  }, []);
 
-    if (diffHours < 24) {
-      return `Hoy ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
-    } else if (diffHours < 48) {
-      return `Ayer ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
-    } else {
-      return date.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
-    }
-  };
-
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('es-VE', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  };
-
-  const getTypeColor = (type: string) => type === 'income' ? 'success' : 'error';
-  const getTypeIcon = (type: string) => type === 'income' ? <IncomeIcon /> : <ExpenseIcon />;
+  const handleView = useCallback((id: number) => {
+    router.push(`/transactions/${id}`);
+  }, [router]);
 
   return (
     <Card>
@@ -139,80 +235,15 @@ export default function RecentTransactions() {
         ) : isMobile ? (
           // MOBILE: acordeón por transacción
           <Box>
-            {displayed.map((transaction) => {
-              const isIncome = transaction.type === 'income';
-              const isOpen = expanded === transaction.id;
-              return (
-                <Accordion
-                  key={transaction.id}
-                  expanded={isOpen}
-                  onChange={() => setExpanded(isOpen ? false : transaction.id)}
-                  disableGutters
-                  sx={{
-                    '&:before': { display: 'none' },
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    mb: 1,
-                    boxShadow: 'none',
-                  }}
-                >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    sx={{ px: 1.5, minHeight: 48 }}
-                  >
-                    <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
-                      <Stack spacing={0.25}>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatDate(transaction.date)}
-                        </Typography>
-                        <Chip
-                          icon={getTypeIcon(transaction.type)}
-                          label={transaction.type === 'income' ? 'Ingreso' : 'Gasto'}
-                          color={getTypeColor(transaction.type)}
-                          size="small"
-                          sx={{ height: 22, '& .MuiChip-icon': { fontSize: 16 } }}
-                        />
-                      </Stack>
-                      <Typography
-                        variant="body1"
-                        fontWeight="bold"
-                        color={isIncome ? 'success.main' : 'error.main'}
-                      >
-                        {isIncome ? '+' : '-'}
-                        {formatCurrency(transaction.amount, transaction.walletCurrency)}
-                      </Typography>
-                    </Box>
-                  </AccordionSummary>
-                  <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
-                    <Divider sx={{ mb: 1.5 }} />
-                    <Stack spacing={1}>
-                      <Box display="flex" justifyContent="space-between">
-                        <Typography variant="body2" color="text.secondary">Categoría</Typography>
-                        <Chip label={transaction.category || '—'} size="small" variant="outlined" />
-                      </Box>
-                      <Box display="flex" justifyContent="space-between">
-                        <Typography variant="body2" color="text.secondary">Billetera</Typography>
-                        <Typography variant="body2">{transaction.walletName || '—'}</Typography>
-                      </Box>
-                      <Box display="flex" justifyContent="space-between">
-                        <Typography variant="body2" color="text.secondary">Descripción</Typography>
-                        <Typography variant="body2" textAlign="right">{transaction.description || '—'}</Typography>
-                      </Box>
-                      <Box display="flex" justifyContent="flex-end">
-                        <Button
-                          size="small"
-                          startIcon={<ViewIcon />}
-                          onClick={() => router.push(`/transactions/${transaction.id}`)}
-                        >
-                          Ver detalles
-                        </Button>
-                      </Box>
-                    </Stack>
-                  </AccordionDetails>
-                </Accordion>
-              );
-            })}
+            {displayed.map((transaction) => (
+              <MobileTransactionItem
+                key={transaction.id}
+                transaction={transaction}
+                isOpen={expanded === transaction.id}
+                onToggle={handleToggle}
+                onView={handleView}
+              />
+            ))}
           </Box>
         ) : (
           // DESKTOP: tabla completa

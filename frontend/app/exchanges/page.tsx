@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -58,6 +58,79 @@ interface Exchange {
   toCurrency?: string;
 }
 
+// --- Formateador a nivel de módulo (referencia estable) ---
+const formatCurrency = (amount: number, currency: string = 'USD') => {
+  return new Intl.NumberFormat('es-VE', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+};
+
+// --- Tarjeta móvil memorizada: solo se re-renderiza si SUS props cambian ---
+const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
+  exchange,
+  isOpen,
+  onToggle,
+}: {
+  exchange: Exchange;
+  isOpen: boolean;
+  onToggle: (id: number) => void;
+}) {
+  return (
+    <Accordion
+      expanded={isOpen}
+      onChange={() => onToggle(exchange.id)}
+      disableGutters
+      sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+          <Stack spacing={0.25}>
+            <Typography variant="body2" color="text.secondary">#{exchange.id}</Typography>
+            <Typography variant="body2">{exchange.fromWalletName || `Wallet ${exchange.fromWalletId}`}</Typography>
+          </Stack>
+          <Typography variant="body2" fontWeight="bold" color="success.main">
+            +{formatCurrency(exchange.toAmount, exchange.toCurrency)}
+          </Typography>
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+        <Divider sx={{ mb: 1.5 }} />
+        <Stack spacing={1}>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Fecha</Typography>
+            <Typography variant="body2">{new Date(exchange.createdAt).toLocaleDateString('es-VE')} · {new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</Typography>
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Hacia</Typography>
+            <Typography variant="body2">{exchange.toWalletName || `Wallet ${exchange.toWalletId}`}</Typography>
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Enviado</Typography>
+            <Typography variant="body2" color="error.main">-{formatCurrency(exchange.fromAmount, exchange.fromCurrency)}</Typography>
+          </Box>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Tasa</Typography>
+            <Chip label={exchange.rate.toFixed(4)} size="small" color="primary" />
+          </Box>
+          {exchange.fee != null && exchange.fee > 0 && (
+            <Box display="flex" justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">Fee</Typography>
+              <Typography variant="body2">{exchange.fee.toFixed(2)} {exchange.fromCurrency || ''}</Typography>
+            </Box>
+          )}
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Descripción</Typography>
+            <Typography variant="body2" textAlign="right">{exchange.description || '—'}</Typography>
+          </Box>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+});
+
 export default function ExchangesPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -74,6 +147,11 @@ export default function ExchangesPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [applied, setApplied] = useState<{ period: string; from: string; to: string }>({ period: 'all', from: '', to: '' });
+
+  // Handler ESTABLE: solo se re-renderiza la tarjeta que se abre/cierra.
+  const handleToggle = useCallback((id: number) => {
+    setExpanded((prev) => (prev === id ? false : id));
+  }, []);
 
   useEffect(() => {
     loadExchanges();
@@ -131,15 +209,6 @@ export default function ExchangesPage() {
       setPage(0);
       setApplied({ period, from: '', to: '' });
     }
-  };
-
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('es-VE', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
   };
 
   const exportToCSV = () => {
@@ -264,61 +333,14 @@ export default function ExchangesPage() {
           {isMobile ? (
             // MOBILE: acordeón por exchange
             <Box>
-              {exchanges.map((exchange) => {
-                const isOpen = expanded === exchange.id;
-                return (
-                  <Accordion
-                    key={exchange.id}
-                    expanded={isOpen}
-                    onChange={() => setExpanded(isOpen ? false : exchange.id)}
-                    disableGutters
-                    sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
-                  >
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
-                      <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
-                        <Stack spacing={0.25}>
-                          <Typography variant="body2" color="text.secondary">#{exchange.id}</Typography>
-                          <Typography variant="body2">{exchange.fromWalletName || `Wallet ${exchange.fromWalletId}`}</Typography>
-                        </Stack>
-                        <Typography variant="body2" fontWeight="bold" color="success.main">
-                          +{formatCurrency(exchange.toAmount, exchange.toCurrency)}
-                        </Typography>
-                      </Box>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
-                      <Divider sx={{ mb: 1.5 }} />
-                      <Stack spacing={1}>
-                        <Box display="flex" justifyContent="space-between">
-                          <Typography variant="body2" color="text.secondary">Fecha</Typography>
-                          <Typography variant="body2">{new Date(exchange.createdAt).toLocaleDateString('es-VE')} · {new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</Typography>
-                        </Box>
-                        <Box display="flex" justifyContent="space-between">
-                          <Typography variant="body2" color="text.secondary">Hacia</Typography>
-                          <Typography variant="body2">{exchange.toWalletName || `Wallet ${exchange.toWalletId}`}</Typography>
-                        </Box>
-                        <Box display="flex" justifyContent="space-between">
-                          <Typography variant="body2" color="text.secondary">Enviado</Typography>
-                          <Typography variant="body2" color="error.main">-{formatCurrency(exchange.fromAmount, exchange.fromCurrency)}</Typography>
-                        </Box>
-                        <Box display="flex" justifyContent="space-between">
-                          <Typography variant="body2" color="text.secondary">Tasa</Typography>
-                          <Chip label={exchange.rate.toFixed(4)} size="small" color="primary" />
-                        </Box>
-                        {exchange.fee != null && exchange.fee > 0 && (
-                          <Box display="flex" justifyContent="space-between">
-                            <Typography variant="body2" color="text.secondary">Fee</Typography>
-                            <Typography variant="body2">{exchange.fee.toFixed(2)} {exchange.fromCurrency || ''}</Typography>
-                          </Box>
-                        )}
-                        <Box display="flex" justifyContent="space-between">
-                          <Typography variant="body2" color="text.secondary">Descripción</Typography>
-                          <Typography variant="body2" textAlign="right">{exchange.description || '—'}</Typography>
-                        </Box>
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
-                );
-              })}
+              {exchanges.map((exchange) => (
+                <ExchangeAccordionItem
+                  key={exchange.id}
+                  exchange={exchange}
+                  isOpen={expanded === exchange.id}
+                  onToggle={handleToggle}
+                />
+              ))}
             </Box>
           ) : (
           <TableContainer component={Paper} variant="outlined">
