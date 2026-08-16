@@ -1,34 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, Grid, Typography, Box, Avatar, LinearProgress, CircularProgress, Alert } from '@mui/material';
-import { AccountBalance, AttachMoney, CreditCard, Savings } from '@mui/icons-material';
-import { financeApi, Wallet } from '../services/financeApi';
+import {
+  Card, CardContent, Grid, Typography, Box, Avatar, CircularProgress, Alert,
+  CardActionArea, Chip, Pagination
+} from '@mui/material';
+import { AccountBalance, AttachMoney, CreditCard, Savings, ShowChart, ChevronRight } from '@mui/icons-material';
+import { useRouter } from 'next/navigation';
+import { useWallets } from '../lib/hooks';
+import theme from '../theme';
+
+const icons: Record<string, React.ReactNode> = {
+  bank: <AccountBalance />,
+  cash: <AttachMoney />,
+  card: <CreditCard />,
+  crypto: <Savings />,
+  investment: <ShowChart />,
+};
+
+const formatUsd = (n: number) =>
+  new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n);
+
+const PER_PAGE = 6;
 
 export default function WalletList() {
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const { wallets, loading, error } = useWallets();
+  const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    const fetchWallets = async () => {
-      try {
-        setLoading(true);
-        const data = await financeApi.getWallets();
-        setWallets(data);
-        setError(null);
-      } catch (err) {
-        setError('Error al cargar billeteras');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchWallets();
-    const interval = setInterval(fetchWallets, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
-  }, []);
+  const pageCount = Math.max(1, Math.ceil(wallets.length / PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const shown = wallets.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
 
   if (loading) {
     return (
@@ -51,77 +53,79 @@ export default function WalletList() {
     );
   }
 
-  const getWalletIcon = (type: string) => {
-    switch (type) {
-      case 'bank': return <AccountBalance />;
-      case 'cash': return <AttachMoney />;
-      case 'crypto': return <Savings />;
-      case 'card': return <CreditCard />;
-      default: return <AccountBalance />;
-    }
-  };
-
-  const getWalletColor = (index: number) => {
-    const colors = ['#2196f3', '#f44336', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
-    return colors[index % colors.length];
-  };
-
-  const totalUSD = wallets
-    .filter(w => w.currency === 'USD')
-    .reduce((sum, w) => sum + w.balance, 0);
-  
-  const totalVES = wallets
-    .filter(w => w.currency === 'VES')
-    .reduce((sum, w) => sum + w.balance, 0);
-
-  const totalBalance = totalUSD + (totalVES / 635); // Assuming VES rate
-  const progressValue = Math.min(100, (totalBalance / 5000) * 100); // Assuming $5k target
+  const gotoWallet = (id: number) => router.push(`/wallets/${id}`);
 
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" gutterBottom>
-          💰 Billeteras
-        </Typography>
-        <Box mb={3}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Total USD: ${totalUSD.toLocaleString()} | Total VES: {totalVES.toLocaleString()} VES
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
+            💰 Billeteras
           </Typography>
-          <LinearProgress variant="determinate" value={progressValue} sx={{ height: 8, borderRadius: 4 }} />
+          <Chip
+            label={`${wallets.length} ${wallets.length === 1 ? 'billetera' : 'billeteras'}`}
+            size="small"
+            variant="outlined"
+          />
         </Box>
 
         <Grid container spacing={2}>
-          {wallets.map((wallet, index) => (
+          {shown.map((wallet) => (
             <Grid item xs={12} sm={6} md={4} key={wallet.id}>
-              <Card variant="outlined" sx={{ p: 2, height: '100%' }}>
-                <Box display="flex" alignItems="center" mb={2}>
-                  <Avatar sx={{ bgcolor: getWalletColor(index), mr: 2 }}>
-                    {getWalletIcon(wallet.type || 'bank')}
-                  </Avatar>
-                  <div>
-                    <Typography variant="subtitle2" fontWeight="bold">
-                      {wallet.name}
+              <Card variant="outlined" sx={{ height: '100%' }}>
+                <CardActionArea onClick={() => gotoWallet(wallet.id)} sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                      <Avatar sx={{ bgcolor: wallet.color || theme.palette.primary.main }}>
+                        {icons[wallet.type] || <AccountBalance />}
+                      </Avatar>
+                      <Box minWidth={0}>
+                        <Typography variant="subtitle2" fontWeight="bold" noWrap>
+                          {wallet.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {wallet.type} · {wallet.currency}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Typography variant="h5" fontWeight="bold" color="primary">
+                      {Number(wallet.balance).toLocaleString('es-VE')} {wallet.currency}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {wallet.type || 'bank'} • {wallet.currency}
-                    </Typography>
-                  </div>
-                </Box>
-                <Typography variant="h5" fontWeight="bold" color="primary">
-                  {wallet.balance.toLocaleString()} {wallet.currency}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  ≈ ${(wallet.currency === 'VES' ? wallet.balance / 635 : wallet.balance).toFixed(2)} USD
-                </Typography>
+                    {wallet.currency !== 'USD' && wallet.usdValue != null ? (
+                      <Typography variant="caption" color="text.secondary">
+                        ≈ {formatUsd(wallet.usdValue)} USD
+                        {wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        Dólares estadounidenses
+                      </Typography>
+                    )}
+                    <Box display="flex" justifyContent="flex-end" mt={1}>
+                      <ChevronRight color="disabled" />
+                    </Box>
+                  </CardContent>
+                </CardActionArea>
               </Card>
             </Grid>
           ))}
-          {wallets.length === 0 && (
-            <Grid item xs={12}>
-              <Alert severity="info">No hay billeteras configuradas. Agrega una para comenzar.</Alert>
-            </Grid>
-          )}
         </Grid>
+
+        {wallets.length === 0 && (
+          <Alert severity="info" sx={{ mt: 2 }}>No hay billeteras configuradas. Agrega una para comenzar.</Alert>
+        )}
+
+        {pageCount > 1 && (
+          <Box display="flex" justifyContent="center" mt={3}>
+            <Pagination
+              count={pageCount}
+              page={currentPage}
+              onChange={(_, value) => setPage(value)}
+              color="primary"
+              size="small"
+            />
+          </Box>
+        )}
       </CardContent>
     </Card>
   );

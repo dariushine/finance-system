@@ -1,5 +1,6 @@
 import BalanceCard from './components/BalanceCard';
 import WalletList from './components/WalletList';
+import RecentTransactions from './components/RecentTransactions';
 import { Box, Typography } from '@mui/material';
 
 export default function Home() {
@@ -35,6 +36,11 @@ export default function Home() {
       {/* Wallets - Responsive grid */}
       <Box sx={{ mb: { xs: 3, sm: 4 } }}>
         <WalletList />
+      </Box>
+
+      {/* Últimas transacciones */}
+      <Box sx={{ mb: { xs: 3, sm: 4 } }}>
+        <RecentTransactions />
       </Box>
 
       {/* Features Footer - Mobile optimized */}
