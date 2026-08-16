@@ -6,11 +6,12 @@ import {
   DialogContent, DialogTitle, Table, TableBody, TableCell, TableContainer, TableHead,
   TablePagination, TableRow, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
-import { Add, Download } from '@mui/icons-material';
+import { Add, Download, Visibility } from '@mui/icons-material';
 import TransactionForm from '../components/TransactionForm';
 import TransactionAccordionList from '../components/TransactionAccordionList';
 import DateRangeFilter from '../components/DateRangeFilter';
 import { API_URL } from '../lib/api';
+import { useRouter } from 'next/navigation';
 
 interface Transaction {
   id: number;
@@ -25,6 +26,7 @@ interface Transaction {
 }
 
 export default function TransactionsPage() {
+  const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -153,14 +155,14 @@ export default function TransactionsPage() {
             <TransactionAccordionList
               transactions={pagedTransactions}
               showFee
-              showView={false}
+              showView
             />
           ) : (
             <TableContainer>
               <Table>
                 <TableHead><TableRow>
                   <TableCell>Fecha</TableCell><TableCell>Categoría</TableCell><TableCell>Billetera</TableCell>
-                  <TableCell>Tipo</TableCell><TableCell align="right">Monto</TableCell><TableCell align="right">Fee</TableCell><TableCell>Descripción</TableCell>
+                  <TableCell>Tipo</TableCell><TableCell align="right">Monto</TableCell><TableCell align="right">Fee</TableCell><TableCell>Descripción</TableCell><TableCell align="center">Detalle</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
                   {pagedTransactions.map((transaction) => (
@@ -178,6 +180,16 @@ export default function TransactionsPage() {
                         ) : '—'}
                       </TableCell>
                       <TableCell>{transaction.description || '—'}</TableCell>
+                      <TableCell align="center">
+                        <Button
+                          size="small"
+                          variant="text"
+                          startIcon={<Visibility />}
+                          onClick={() => router.push(`/transactions/${transaction.id}`)}
+                        >
+                          Ver
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -28,6 +28,26 @@ export interface Transaction {
   description?: string;
 }
 
+// Detalle de una transacción (GET /api/transactions/:id)
+export interface TransactionDetail {
+  id: number;
+  walletId: number;
+  walletName?: string;
+  walletCurrency?: string;
+  category: string;
+  type: 'income' | 'expense';
+  amount: number;
+  description?: string;
+  date: string;
+  fee?: number;
+  parentTransactionId?: number | null;
+  createdAt?: string;
+  /** Saldo de la billetera después de aplicar esta transacción */
+  balanceAfter?: number | null;
+  /** Transacciones hijas (ej: fees de comisión) */
+  children?: TransactionDetail[];
+}
+
 // Exchange API  
 export interface Exchange {
   id: number;
@@ -179,6 +199,16 @@ export async function getTransactions(
   
   const response = await fetch(`${API_URL}/transactions?${params}`);
   if (!response.ok) throw new Error('Failed to load transactions');
+  return response.json();
+}
+
+// Obtener el detalle de una transacción (incluye balanceAfter y transacciones hijas)
+export async function getTransaction(id: number | string): Promise<TransactionDetail> {
+  const response = await fetch(`${API_URL}/transactions/${id}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'No se pudo cargar la transacción');
+  }
   return response.json();
 }
 
