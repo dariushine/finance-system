@@ -6,31 +6,16 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
+  IconButton,
   Tabs,
   Tab,
   Box,
-  AppBar,
-  Toolbar,
-  IconButton,
   Typography,
-  Slide,
 } from '@mui/material';
 import { Close, Add, SwapHoriz } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
-import { TransitionProps } from '@mui/material/transitions';
-import { forwardRef, ReactElement, Ref } from 'react';
 import TransactionForm from './TransactionForm';
 import ExchangeForm from './ExchangeForm';
-
-// Transición a pantalla completa (como en apps móviles nativas)
-const FullScreenTransition = forwardRef(function FullScreenTransition(
-  props: TransitionProps & { children: ReactElement },
-  ref: Ref<unknown>
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
 
 export default function AddFab() {
   const [open, setOpen] = useState(false);
@@ -62,37 +47,38 @@ export default function AddFab() {
       </Fab>
 
       <Dialog
-        fullScreen
         open={open}
         onClose={handleClose}
-        TransitionComponent={FullScreenTransition}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
       >
-        {/* Barra superior con título y pestañas */}
-        <AppBar position="static" color="primary">
-          <Toolbar>
-            <IconButton
-              edge="start"
-              color="inherit"
-              onClick={handleClose}
-              aria-label="Cerrar"
-            >
-              <Close />
-            </IconButton>
-            <Typography variant="h6" sx={{ ml: 1, flexGrow: 1 }}>
-              Nueva operación
-            </Typography>
-          </Toolbar>
+        {/* Barra superior con título, cerrar y pestañas */}
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pb: 0,
+          }}
+        >
+          <Typography variant="h6">Nueva operación</Typography>
+          <IconButton onClick={handleClose} aria-label="Cerrar" size="small">
+            <Close />
+          </IconButton>
+        </DialogTitle>
+
+        <Box sx={{ px: 3, pt: 1 }}>
           <Tabs
             value={tab}
             onChange={(_, v) => setTab(v)}
-            textColor="inherit"
-            indicatorColor="secondary"
             variant="fullWidth"
+            textColor="primary"
           >
             <Tab icon={<Add />} iconPosition="start" label="Transacción" />
             <Tab icon={<SwapHoriz />} iconPosition="start" label="Exchange" />
           </Tabs>
-        </AppBar>
+        </Box>
 
         <DialogContent sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'background.default' }}>
           {tab === 0 ? (
@@ -101,12 +87,6 @@ export default function AddFab() {
             <ExchangeForm onSuccess={handleSuccess} />
           )}
         </DialogContent>
-
-        <DialogActions>
-          <Button onClick={handleClose} color="inherit">
-            Cerrar
-          </Button>
-        </DialogActions>
       </Dialog>
     </>
   );
