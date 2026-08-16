@@ -255,6 +255,7 @@ export default function RecentTransactions() {
                   <TableCell width="120px">Fecha</TableCell>
                   <TableCell>Categoría</TableCell>
                   <TableCell>Tipo</TableCell>
+                  <TableCell>Descripción</TableCell>
                   <TableCell align="right">Monto</TableCell>
                   <TableCell align="center">Acciones</TableCell>
                 </TableRow>
@@ -277,6 +278,11 @@ export default function RecentTransactions() {
                         color={getTypeColor(transaction.type)}
                         size="small"
                       />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" noWrap maxWidth={180}>
+                        {transaction.description || '—'}
+                      </Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Typography
