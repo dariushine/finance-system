@@ -6,7 +6,7 @@ import {
   DialogContent, DialogTitle, Table, TableBody, TableCell, TableContainer, TableHead,
   TablePagination, TableRow, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
-import { Add, Download, Visibility } from '@mui/icons-material';
+import { Add, Download } from '@mui/icons-material';
 import TransactionForm from '../components/TransactionForm';
 import TransactionAccordionList from '../components/TransactionAccordionList';
 import DateRangeFilter from '../components/DateRangeFilter';
@@ -184,11 +184,11 @@ export default function TransactionsPage() {
               <Table>
                 <TableHead><TableRow>
                   <TableCell>Fecha</TableCell><TableCell>Categoría</TableCell><TableCell>Billetera</TableCell>
-                  <TableCell>Tipo</TableCell><TableCell align="right">Monto</TableCell><TableCell align="right">Fee</TableCell><TableCell>Descripción</TableCell><TableCell align="center">Detalle</TableCell>
+                  <TableCell>Tipo</TableCell><TableCell align="right">Monto</TableCell><TableCell align="right">Fee</TableCell><TableCell>Descripción</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
                   {pagedTransactions.map((transaction) => (
-                    <TableRow key={transaction.id} hover>
+                    <TableRow key={transaction.id} hover onClick={() => goToDetail(transaction.id)} sx={{ cursor: 'pointer' }}>
                       <TableCell>{new Date(transaction.date).toLocaleDateString('es-VE')}</TableCell>
                       <TableCell><Chip label={transaction.category} size="small" variant="outlined" /></TableCell>
                       <TableCell>{transaction.walletName || '—'}</TableCell>
@@ -202,16 +202,6 @@ export default function TransactionsPage() {
                         ) : '—'}
                       </TableCell>
                       <TableCell>{transaction.description || '—'}</TableCell>
-                      <TableCell align="center">
-                        <Button
-                          size="small"
-                          variant="text"
-                          startIcon={<Visibility />}
-                          onClick={() => goToDetail(transaction.id)}
-                        >
-                          Ver
-                        </Button>
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

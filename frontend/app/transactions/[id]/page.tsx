@@ -193,9 +193,24 @@ export default function TransactionDetailPage() {
               />
               <Box display="flex" justifyContent="space-between" gap={2}>
                 <Typography variant="body2" color="text.secondary">Billetera</Typography>
-                <Box display="flex" alignItems="center" gap={0.5}>
+                <Box
+                  component="button"
+                  onClick={() => router.push(`/wallets/${tx.walletId}`)}
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    color: 'text.primary',
+                    '&:hover': { textDecoration: 'underline', color: 'primary.main' },
+                  }}
+                >
                   <AccountBalanceWallet fontSize="small" color="action" />
                   <Typography variant="body2">{tx.walletName || `#${tx.walletId}`}</Typography>
+                  <ChevronRight fontSize="small" color="action" />
                 </Box>
               </Box>
               {tx.date && (

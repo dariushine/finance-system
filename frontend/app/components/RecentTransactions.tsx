@@ -257,12 +257,16 @@ export default function RecentTransactions() {
                   <TableCell>Tipo</TableCell>
                   <TableCell>Descripción</TableCell>
                   <TableCell align="right">Monto</TableCell>
-                  <TableCell align="center">Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {displayed.map((transaction) => (
-                  <TableRow key={transaction.id} hover>
+                  <TableRow
+                    key={transaction.id}
+                    hover
+                    onClick={() => router.push(`/transactions/${transaction.id}`)}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
                         {formatDate(transaction.date)}
@@ -297,13 +301,6 @@ export default function RecentTransactions() {
                           {transaction.walletName}
                         </Typography>
                       )}
-                    </TableCell>
-                    <TableCell align="center">
-                      <Tooltip title="Ver detalles">
-                        <IconButton size="small" onClick={() => router.push(`/transactions/${transaction.id}`)}>
-                          <ViewIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
