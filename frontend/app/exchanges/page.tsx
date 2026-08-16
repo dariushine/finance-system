@@ -88,7 +88,7 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
       <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
           <Stack spacing={0.25}>
-            <Typography variant="body2" color="text.secondary">#{exchange.id}</Typography>
+            <Typography variant="body2" color="text.secondary">{new Date(exchange.createdAt).toLocaleDateString('es-VE')} · {new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</Typography>
             <Typography variant="body2">{exchange.fromWalletName || `Wallet ${exchange.fromWalletId}`}</Typography>
           </Stack>
           <Typography variant="body2" fontWeight="bold" color="success.main">
@@ -100,20 +100,12 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
         <Divider sx={{ mb: 1.5 }} />
         <Stack spacing={1}>
           <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Fecha</Typography>
-            <Typography variant="body2">{new Date(exchange.createdAt).toLocaleDateString('es-VE')} · {new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</Typography>
-          </Box>
-          <Box display="flex" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Hacia</Typography>
             <Typography variant="body2">{exchange.toWalletName || `Wallet ${exchange.toWalletId}`}</Typography>
           </Box>
           <Box display="flex" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Enviado</Typography>
             <Typography variant="body2" color="error.main">-{formatCurrency(exchange.fromAmount, exchange.fromCurrency)}</Typography>
-          </Box>
-          <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Tasa</Typography>
-            <Chip label={exchange.rate.toFixed(4)} size="small" color="primary" />
           </Box>
           {exchange.fee != null && exchange.fee > 0 && (
             <Box display="flex" justifyContent="space-between">
@@ -347,12 +339,10 @@ export default function ExchangesPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>ID</TableCell>
                   <TableCell>Fecha</TableCell>
                   <TableCell>From → To</TableCell>
                   <TableCell>From Amount</TableCell>
                   <TableCell>To Amount</TableCell>
-                  <TableCell>Tasa</TableCell>
                   <TableCell>Fee</TableCell>
                   <TableCell>Descripción</TableCell>
                   <TableCell align="right">Acciones</TableCell>
@@ -363,9 +353,6 @@ export default function ExchangesPage() {
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((exchange) => (
                     <TableRow key={exchange.id} hover>
-                      <TableCell>
-                        <Typography variant="body2">#{exchange.id}</Typography>
-                      </TableCell>
                       <TableCell>
                         <Typography variant="body2">
                           {new Date(exchange.createdAt).toLocaleDateString('es-VE')}
@@ -396,13 +383,6 @@ export default function ExchangesPage() {
                         <Typography variant="body2" color="success.main">
                           +{formatCurrency(exchange.toAmount, exchange.toCurrency)}
                         </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={exchange.rate.toFixed(4)}
-                          size="small"
-                          color="primary"
-                        />
                       </TableCell>
                       <TableCell>
                         {exchange.fee && exchange.fee > 0 ? (
