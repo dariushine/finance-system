@@ -106,8 +106,10 @@ export default function CategoryAutocomplete({
       }
       freeSolo={allowCreate}
       autoSelect={false}
-      renderOption={(props, option) => (
-        <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      renderOption={(props, option) => {
+        const { key, ...restProps } = props as any;
+        return (
+          <Box component="li" key={key} {...restProps} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
               width: 12,
@@ -121,8 +123,9 @@ export default function CategoryAutocomplete({
           {option.id === -1 && (
             <Chip size="small" icon={<AddIcon />} label="Nueva" color="primary" variant="outlined" sx={{ ml: 'auto' }} />
           )}
-        </Box>
-      )}
+          </Box>
+        );
+      }}
       renderInput={(params) => (
         <TextField
           {...params}

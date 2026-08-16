@@ -10,6 +10,8 @@ import {
   Tabs,
   Tab,
   Box,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import { Close, Add, SwapHoriz } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
@@ -21,6 +23,7 @@ import ExchangeForm from './ExchangeForm';
 export default function AddFab() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState(0);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const router = useRouter();
   const theme = useTheme();
   // Pantallas pequeñas: a pantalla completa. Grandes: modal centrado.
@@ -29,9 +32,10 @@ export default function AddFab() {
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
 
-  const handleSuccess = () => {
-    router.refresh(); // refresca las cards de balance / listas
-    setOpen(false);  // cierra el diálogo tras una operación exitosa
+  const handleSuccess = (msg: string) => {
+    router.refresh();    // refresca las cards de balance / listas
+    setOpen(false);       // cierra el diálogo tras una operación exitosa
+    setSuccessMsg(msg);   // muestra un aviso a nivel de app (sobrevive al cierre)
   };
 
   return (
@@ -97,12 +101,24 @@ export default function AddFab() {
 
         <DialogContent sx={{ p: { xs: 2, sm: 3 }, bgcolor: 'background.default' }}>
           {tab === 0 ? (
-            <TransactionForm onSuccess={handleSuccess} />
+            <TransactionForm onSuccess={() => handleSuccess('Transacción creada')} />
           ) : (
-            <ExchangeForm onSuccess={handleSuccess} />
+            <ExchangeForm onSuccess={() => handleSuccess('Exchange creado')} />
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Aviso de éxito a nivel de app: queda visible aunque el diálogo se cierre */}
+      <Snackbar
+        open={!!successMsg}
+        autoHideDuration={3000}
+        onClose={() => setSuccessMsg(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSuccessMsg(null)} severity="success" variant="filled" sx={{ width: '100%' }}>
+          {successMsg}
+        </Alert>
+      </Snackbar>
     </>
   );
 }
