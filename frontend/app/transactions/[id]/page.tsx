@@ -57,6 +57,8 @@ import {
   TransactionDetail,
 } from '../../lib/api';
 import { parseLocalDate } from '../../lib/dates';
+import CategoryAutocomplete from '../../components/CategoryAutocomplete';
+import type { Category } from '../../lib/api';
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '—';
@@ -91,8 +93,6 @@ const formatCurrency = (n: number, currency = 'USD') => {
 
 const todayISODate = () => new Date().toISOString().split('T')[0];
 
-const EXPENSE_CATEGORIES = ['food', 'transport', 'housing', 'utilities', 'entertainment', 'health', 'shopping', 'other_expense'];
-const INCOME_CATEGORIES = ['salary', 'freelance', 'investment', 'gift', 'other_income'];
 const SYSTEM_CATEGORIES = ['fee', 'exchange_out', 'exchange_in'];
 
 export default function TransactionDetailPage() {
@@ -603,18 +603,13 @@ export default function TransactionDetailPage() {
               helperText="Se aplica la misma regla de fecha a la hora"
             />
             <FormControl fullWidth disabled={isFee}>
-              <InputLabel>Categoría</InputLabel>
-              <Select
-                value={editCategory}
-                label="Categoría"
-                onChange={(e) => setEditCategory(e.target.value as string)}
-              >
-                {(tx.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)
-                  .filter((c) => !SYSTEM_CATEGORIES.includes(c))
-                  .map((c) => (
-                    <MenuItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</MenuItem>
-                  ))}
-              </Select>
+              <CategoryAutocomplete
+                type={tx.type as 'income' | 'expense'}
+                valueName={editCategory}
+                onChange={(cat) => setEditCategory(cat ? cat.name : '')}
+                disabled={isFee}
+                allowCreate
+              />
             </FormControl>
             {isFee && (
               <Typography variant="caption" color="text.secondary">
@@ -724,18 +719,12 @@ export default function TransactionDetailPage() {
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>Categoría</InputLabel>
-              <Select
-                value={assocForm.categoryName}
-                label="Categoría"
-                onChange={(e) => setAssocForm({ ...assocForm, categoryName: e.target.value as string })}
-              >
-                {(assocForm.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)
-                  .filter((c) => !SYSTEM_CATEGORIES.includes(c))
-                  .map((c) => (
-                    <MenuItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</MenuItem>
-                  ))}
-              </Select>
+              <CategoryAutocomplete
+                type={assocForm.type}
+                valueName={assocForm.categoryName}
+                onChange={(cat) => setAssocForm((f) => ({ ...f, categoryName: cat ? cat.name : '' }))}
+                allowCreate
+              />
             </FormControl>
             <TextField
               label="Descripción"

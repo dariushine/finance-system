@@ -15,7 +15,10 @@ import { useCategories, categoryLabel, isSystemCategoryName } from '../lib/hooks
 
 interface CategoryAutocompleteProps {
   type: 'expense' | 'income';
-  value: string | null; // id de categoría (o null)
+  /** id de categoría (o null). Si se pasa valueName, se usa name en su lugar. */
+  value?: string | null;
+  /** nombre de categoría para resolver la selección (alternativa a value). */
+  valueName?: string | null;
   onChange: (category: Category | null) => void;
   disabled?: boolean;
   /** Si true, permite escribir una categoría nueva que no existe aún. */
@@ -30,6 +33,7 @@ interface CategoryAutocompleteProps {
 export default function CategoryAutocomplete({
   type,
   value,
+  valueName,
   onChange,
   disabled,
   allowCreate = true,
@@ -38,8 +42,15 @@ export default function CategoryAutocomplete({
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
 
-  // Categoría seleccionada (por id). Las de sistema se filtran en el hook.
-  const selected = categories.find((c) => String(c.id) === String(value)) || null;
+  // Categoría seleccionada (por id o por nombre). Las de sistema se filtran en el hook.
+  const selected =
+    categories.find((c) => (valueName ? c.name === valueName : String(c.id) === String(value))) ||
+    null;
+
+  // Al abrir, sincroniza el texto del input con la selección actual.
+  const syncInputFromSelection = () => {
+    if (selected && !open) setInputValue(categoryLabel(selected.name));
+  };
 
   // Posible "crear nueva" si el texto no coincide con ninguna categoría.
   const trimmedInput = inputValue.trim();
@@ -57,6 +68,7 @@ export default function CategoryAutocomplete({
         // creadas al vuelo o en /categories después del primer render (el formulario
         // permanece montado en el Dialog del AddFab, así que no basta con el mount).
         setOpen(true);
+        syncInputFromSelection();
         refetch();
       }}
       onClose={() => setOpen(false)}
