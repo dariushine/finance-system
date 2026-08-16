@@ -147,10 +147,10 @@ export default function ExchangeDetailPage() {
                 alignItems="center"
                 justifyContent="center"
                 gap={{ xs: 1, sm: 3 }}
-                sx={{ mt: 1 }}
+                sx={{ mt: 1, width: '100%' }}
               >
                 {/* Monto de origen (enviado) */}
-                <Stack alignItems="center" spacing={0.25}>
+                <Stack alignItems="center" spacing={0.25} sx={{ flex: { sm: '1 1 0' }, minWidth: 0 }}>
                   <WalletLink id={exchange.fromWalletId} name={exchange.fromWalletName} fallback={`Billetera ${exchange.fromWalletId}`} />
                   <Typography variant="h5" fontWeight="bold" color="error.main" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' } }}>
                     -{formatCurrency(exchange.fromAmount, fromCurrency)}
@@ -163,10 +163,11 @@ export default function ExchangeDetailPage() {
                     fontSize: { xs: 32, sm: 36 },
                     transform: { xs: 'rotate(90deg)', sm: 'none' },
                     mt: { xs: 0, sm: 2.5 },
+                    flexShrink: 0,
                   }}
                 />
                 {/* Monto de destino (recibido) */}
-                <Stack alignItems="center" spacing={0.25}>
+                <Stack alignItems="center" spacing={0.25} sx={{ flex: { sm: '1 1 0' }, minWidth: 0 }}>
                   <WalletLink id={exchange.toWalletId} name={exchange.toWalletName} fallback={`Billetera ${exchange.toWalletId}`} />
                   <Typography variant="h5" fontWeight="bold" color="success.main" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' } }}>
                     +{formatCurrency(exchange.toAmount, toCurrency)}
