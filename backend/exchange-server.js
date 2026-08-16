@@ -1784,25 +1784,33 @@ app.put('/api/exchanges/:id', async (req, res) => {
     );
 
     // ---- Manejo del fee ----
+    // 1) Cambios de monto / creación / eliminación del fee.
+    let feesAlive = [...prevFees]; // fees que siguen vigentes tras el cambio
     if (feeChanged) {
       if (newFee > 0 && prevFees.length === 0) {
-        // Crear fee nuevo (hijo del débito) con la fecha/hora del exchange.
+        // fee 0 -> >0: crear fee nuevo hijo del débito con la fecha/hora del exchange.
         await createFeeForExchange(debit, newFee, newDate, newTime, newDescription);
+        feesAlive = [];
       } else if (newFee === 0) {
-        // Eliminar virtualmente los fees existentes (hijos del débito).
+        // fee >0 -> 0: eliminar virtualmente todos los fees.
         for (const f of prevFees) {
           await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
         }
+        feesAlive = [];
       } else {
-        // fee > 0 y ya existían fees: actualizar el monto del primer fee.
+        // fee >0 -> otro >0: actualizar el monto del primer fee; borrar adicionales.
         const firstFee = prevFees[0];
-        await runDb('UPDATE transactions SET amount = ?, date = ?, time = ? WHERE id = ?',
-          [newFee, newDate, newTime, firstFee.id]);
-        // Si había más de un fee, eliminar virtualmente los adicionales (quedan consistentes).
+        await runDb('UPDATE transactions SET amount = ? WHERE id = ?', [newFee, firstFee.id]);
         for (const f of prevFees.slice(1)) {
           await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
         }
+        feesAlive = [firstFee];
       }
+    }
+    // 2) Sincronizar fecha/hora de los fees que quedan vivos: el fee comparte la
+    //    fecha/hora del exchange, incluso cuando NO cambió el monto del fee.
+    for (const f of feesAlive) {
+      await runDb('UPDATE transactions SET date = ?, time = ? WHERE id = ?', [newDate, newTime, f.id]);
     }
 
     // ---- Actualizar metadata del exchange ----
