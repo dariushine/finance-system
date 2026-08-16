@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import {
   Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select,
-  FormControl, InputLabel, Alert, Snackbar, CircularProgress
+  FormControl, InputLabel, Alert, Snackbar, CircularProgress, Collapse, IconButton
 } from '@mui/material';
-import { Add, Remove } from '@mui/icons-material';
+import { Add, Remove, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 
 interface TransactionFormProps {
@@ -25,6 +25,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   // Hora opcional (HH:MM). Por defecto vacía => backend usa hora local actual.
   const [time, setTime] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -141,45 +142,63 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               }}
             />
 
-            <TextField
-              label="Fecha"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              disabled={loading}
-              required
-              InputLabelProps={{ shrink: true }}
-              error={date > todayISODate}
-              helperText={date > todayISODate
-                ? '⚠️ Es una fecha futura. Verifica que sea correcta.'
-                : 'Registra gastos de hoy o de días anteriores'}
-            />
+            {/* Opcionales (fecha, hora, comisión) en bloque colapsable */}
+            <Box>
+              <Box
+                onClick={() => setShowOptional((v) => !v)}
+                sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
+              >
+                <Typography variant="body2">Opcionales</Typography>
+                <IconButton size="small" sx={{ ml: 0.5 }}>
+                  {showOptional ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                </IconButton>
+              </Box>
+              <Collapse in={showOptional}>
+                <Box display="flex" flexDirection="column" gap={2} mt={1}>
 
-            <TextField
-              label="Hora (opcional)"
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              disabled={loading}
-              InputLabelProps={{ shrink: true }}
-              helperText="Si la dejas vacía se usa la hora actual"
-            />
+                  <TextField
+                    label="Fecha"
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    disabled={loading}
+                    required
+                    InputLabelProps={{ shrink: true }}
+                    error={date > todayISODate}
+                    helperText={date > todayISODate
+                      ? '⚠️ Es una fecha futura. Verifica que sea correcta.'
+                      : 'Registra gastos de hoy o de días anteriores'}
+                  />
 
-            <TextField
-              label="Comisión (opcional)"
-              type="number"
-              value={fee}
-              onChange={(e) => setFee(e.target.value)}
-              placeholder="Ej: 3.75"
-              disabled={loading}
-              onWheel={(e) => e.currentTarget.blur()}
-              helperText="Se descuenta aparte del monto"
-              InputProps={{
-                endAdornment: wallet ? (
-                  wallets.find((w) => w.name === wallet)?.currency || ''
-                ) : ''
-              }}
-            />
+                  <TextField
+                    label="Hora (opcional)"
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    disabled={loading}
+                    InputLabelProps={{ shrink: true }}
+                    helperText="Si la dejas vacía se usa la hora actual"
+                  />
+
+                  <TextField
+                    label="Comisión (opcional)"
+                    type="number"
+                    value={fee}
+                    onChange={(e) => setFee(e.target.value)}
+                    placeholder="Ej: 3.75"
+                    disabled={loading}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    helperText="Se descuenta aparte del monto"
+                    InputProps={{
+                      endAdornment: wallet ? (
+                        wallets.find((w) => w.name === wallet)?.currency || ''
+                      ) : ''
+                    }}
+                  />
+
+                </Box>
+              </Collapse>
+            </Box>
 
             <FormControl fullWidth required>
               <InputLabel>Billetera</InputLabel>
