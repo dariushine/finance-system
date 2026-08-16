@@ -135,10 +135,10 @@ export default function TransactionDetailPage() {
                 {isIncome ? '+' : '-'}{formatCurrency(tx.amount, currency)}
               </Typography>
             </Box>
-            {tx.fee && tx.fee > 0 && (
+            {(tx.fee ?? 0) > 0 && (
               <Chip
                 icon={<ReceiptLong />}
-                label={`Comisión ${formatCurrency(tx.fee, currency)}`}
+                label={`Comisión ${formatCurrency(tx.fee!, currency)}`}
                 color="warning"
                 variant="outlined"
               />
