@@ -538,25 +538,27 @@ app.post('/api/wallets', (req, res) => {
   );
 });
 
-// Actualizar una billetera (campos editables)
+// Actualizar una billetera (campos editables: metadata únicamente)
+// El balance NO se puede editar aquí: solo cambia vía transacciones/exchanges
+// (createTransaction/createExchange actualizan wallets.balance). Tampoco se
+// permite cambiar type ni currency: son fijos tras la creación.
 app.put('/api/wallets/:id', (req, res) => {
-  const { name, alias, balance, description, icon, color, type, currency } = req.body;
+  const { name, alias, description, icon, color } = req.body;
   db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [req.params.id], (err, wallet) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada' });
 
     const newName = name !== undefined ? name : wallet.name;
     const newAlias = alias !== undefined ? alias : wallet.alias;
-    const newBalance = balance !== undefined ? Number(balance) : wallet.balance;
     const newDescription = description !== undefined ? description : wallet.description;
     const newIcon = icon !== undefined ? icon : wallet.icon;
     const newColor = color !== undefined ? color : wallet.color;
-    // Moneda y tipo: solo se pueden cambiar si no hay transacciones asociadas (se valida aquí)
-    // Por simplicidad y seguridad, permitimos cambiar descripción/nombre/alias/icono/color/balance
+    // Se BORRA el balance de la query de actualización: aunque el cliente mande
+    // un campo balance/type/currency en el body, se ignora.
 
     db.run(
-      `UPDATE wallets SET name = ?, alias = ?, balance = ?, description = ?, icon = ?, color = ? WHERE id = ?`,
-      [newName, newAlias, newBalance, newDescription, newIcon, newColor, req.params.id],
+      `UPDATE wallets SET name = ?, alias = ?, description = ?, icon = ?, color = ? WHERE id = ?`,
+      [newName, newAlias, newDescription, newIcon, newColor, req.params.id],
       function (updErr) {
         if (updErr) return res.status(400).json({ error: updErr.message });
         db.get('SELECT * FROM wallets WHERE id = ?', [req.params.id], (e, row) => {
