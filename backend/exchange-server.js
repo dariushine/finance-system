@@ -82,6 +82,7 @@ db.serialize(() => {
     from_amount DECIMAL(10,2) NOT NULL,
     to_amount DECIMAL(10,2) NOT NULL,
     rate DECIMAL(10,4) NOT NULL,
+    fee DECIMAL(10,2) DEFAULT 0,
     description TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (debit_transaction_id) REFERENCES transactions(id),
@@ -91,15 +92,20 @@ db.serialize(() => {
   )`);
 
   // Migración: quitar columnas market_rate, spread y fee de exchanges.
-  // Migración de exchanges: si aún tiene market_rate o spread (de versiones viejas),
-  // se recrea la tabla sin esas columnas (el spread se calculará sobre la marcha
-  // contra daily_rates). No hay columna fee: la comisión vive como transacción
-  // separada tipo 'fee' vinculada por parent_transaction_id.
+  // Migración de exchanges:
+  // - Si aún tiene market_rate o spread (de versiones viejas), se recrea la tabla
+  //   SIN esas columnas (el spread se calcula sobre la marcha contra daily_rates)
+  //   pero CON la columna fee (total de comisión, denormalizada).
+  // - Si solo falta fee, se agrega con ALTER TABLE.
+  // La columna fee se sincroniza automáticamente vía trigger en transactions
+  // (ver función ensureExchangesFeeSync), de modo que quede consistente con las
+  // transacciones tipo 'fee' vinculadas por parent_transaction_id.
   db.all(`PRAGMA table_info(exchanges)`, (err, cols) => {
     if (err) return;
     const names = (cols || []).map((c) => c.name);
     const hasMarket = names.includes('market_rate');
     const hasSpread = names.includes('spread');
+    const hasFee = names.includes('fee');
     if (hasMarket || hasSpread) {
       db.exec(`
         BEGIN;
@@ -112,6 +118,7 @@ db.serialize(() => {
           from_amount DECIMAL(10,2) NOT NULL,
           to_amount DECIMAL(10,2) NOT NULL,
           rate DECIMAL(10,4) NOT NULL,
+          fee DECIMAL(10,2) DEFAULT 0,
           description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (debit_transaction_id) REFERENCES transactions(id),
@@ -119,13 +126,17 @@ db.serialize(() => {
           FOREIGN KEY (from_wallet_id) REFERENCES wallets(id),
           FOREIGN KEY (to_wallet_id) REFERENCES wallets(id)
         );
-        INSERT INTO exchanges_new (id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, description, created_at)
-          SELECT id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, description, created_at FROM exchanges;
+        INSERT INTO exchanges_new (id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, fee, description, created_at)
+          SELECT id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, COALESCE(fee,0), description, created_at FROM exchanges;
         DROP TABLE exchanges;
         ALTER TABLE exchanges_new RENAME TO exchanges;
         COMMIT;
       `, (rebuildErr) => {
-        if (!rebuildErr) console.log('✅ exchanges: eliminadas columnas market_rate, spread');
+        if (!rebuildErr) console.log('✅ exchanges: recreada sin market_rate/spread, con fee');
+      });
+    } else if (!hasFee) {
+      db.run(`ALTER TABLE exchanges ADD COLUMN fee DECIMAL(10,2) DEFAULT 0`, (addErr) => {
+        if (!addErr) console.log('✅ exchanges: agregada columna fee');
       });
     }
   });
@@ -139,6 +150,8 @@ db.serialize(() => {
       db.run(`ALTER TABLE transactions ADD COLUMN parent_transaction_id INTEGER`);
       console.log('✅ transactions: agregada columna parent_transaction_id');
     }
+    // Sincronizar exchanges.fee con las transacciones fee (crea triggers + backfill)
+    ensureExchangesFeeSync();
   });
   
   // Insertar datos iniciales
@@ -283,6 +296,97 @@ async function getTodayRate() {
   } catch (err) {
     return { error: 'No se pudo guardar la tasa en la base de datos.' };
   }
+}
+
+// Sincroniza las columnas denormalizadas de comisión (fee):
+// - exchanges.fee      = suma de transacciones tipo 'fee' con
+//                        parent_transaction_id = exchange.debit_transaction_id
+// - transactions.fee   = suma de transacciones tipo 'fee' con
+//                        parent_transaction_id = transacción padre
+// Usa triggers SQL (AFTER INSERT/UPDATE/DELETE sobre transactions) para que el
+// total quede siempre consistente con el detalle, sin depender del código.
+function ensureExchangesFeeSync() {
+  const createTriggers = () => {
+    // Recalcula el fee del padre y de los exchanges cuyo débito es ese padre.
+    // Una transacción fee (parent_transaction_id != NULL) alimenta:
+    //   - transactions.fee  de su padre
+    //   - exchanges.fee     del exchange cuyo debit_transaction_id = ese padre
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_sync_fee_after_insert
+      AFTER INSERT ON transactions
+      FOR EACH ROW
+      WHEN NEW.parent_transaction_id IS NOT NULL
+      BEGIN
+        UPDATE transactions SET fee =
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE parent_transaction_id = NEW.parent_transaction_id)
+          WHERE id = NEW.parent_transaction_id;
+        UPDATE exchanges SET fee =
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE parent_transaction_id = NEW.parent_transaction_id)
+          WHERE debit_transaction_id = NEW.parent_transaction_id;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_sync_fee_after_delete
+      AFTER DELETE ON transactions
+      FOR EACH ROW
+      WHEN OLD.parent_transaction_id IS NOT NULL
+      BEGIN
+        UPDATE transactions SET fee =
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE parent_transaction_id = OLD.parent_transaction_id)
+          WHERE id = OLD.parent_transaction_id;
+        UPDATE exchanges SET fee =
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE parent_transaction_id = OLD.parent_transaction_id)
+          WHERE debit_transaction_id = OLD.parent_transaction_id;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_sync_fee_after_update
+      AFTER UPDATE OF amount, parent_transaction_id ON transactions
+      FOR EACH ROW
+      BEGIN
+        -- Recalcular el padre viejo y los exchanges de ese padre
+        UPDATE transactions SET fee =
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE parent_transaction_id = OLD.parent_transaction_id)
+          WHERE id = OLD.parent_transaction_id;
+        UPDATE exchanges SET fee =
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE parent_transaction_id = OLD.parent_transaction_id)
+          WHERE debit_transaction_id = OLD.parent_transaction_id;
+        -- Recalcular el padre nuevo
+        UPDATE transactions SET fee =
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE parent_transaction_id = NEW.parent_transaction_id)
+          WHERE id = NEW.parent_transaction_id;
+        UPDATE exchanges SET fee =
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE parent_transaction_id = NEW.parent_transaction_id)
+          WHERE debit_transaction_id = NEW.parent_transaction_id;
+      END;
+    `);
+  };
+
+  const backfill = () => {
+    // Recalcular fee de cada transacción padre
+    db.run(`
+      UPDATE transactions SET fee = COALESCE((
+        SELECT SUM(t.amount) FROM transactions t WHERE t.parent_transaction_id = transactions.id
+      ), 0)
+      WHERE id IN (SELECT DISTINCT parent_transaction_id FROM transactions WHERE parent_transaction_id IS NOT NULL)
+    `);
+    // Recalcular fee de cada exchange (suma de fees cuyo parent = débito del exchange)
+    db.run(`
+      UPDATE exchanges SET fee = COALESCE((
+        SELECT SUM(t.amount) FROM transactions t
+        WHERE t.parent_transaction_id = exchanges.debit_transaction_id
+      ), 0)
+    `);
+  };
+
+  createTriggers();
+  backfill();
 }
 
 // Obtener la tasa (bcv | paralelo) para una fecha dada; si no hay registro, usa la última disponible
@@ -554,6 +658,7 @@ app.get('/api/wallets/:id/report', (req, res) => {
          t.amount,
          t.description,
          t.date,
+         t.fee,
          c.name AS category,
          t.created_at AS createdAt
        FROM transactions t
@@ -626,6 +731,7 @@ app.get('/api/transactions', (req, res) => {
       t.amount,
       t.description,
       t.date,
+      t.fee,
       t.parent_transaction_id AS parentTransactionId,
       t.created_at AS createdAt
     FROM transactions t
@@ -656,6 +762,7 @@ app.get('/api/transactions/:id', (req, res) => {
       t.amount,
       t.description,
       t.date,
+      t.fee,
       t.parent_transaction_id AS parentTransactionId,
       t.created_at AS createdAt
     FROM transactions t
@@ -746,8 +853,8 @@ app.post('/api/exchanges', async (req, res) => {
     // Registrar metadata del exchange
     db.run(
       `INSERT INTO exchanges (debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, 
-       from_amount, to_amount, rate, description) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       from_amount, to_amount, rate, fee, description) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         debitTransaction.id,
         creditTransaction.id,
@@ -756,6 +863,7 @@ app.post('/api/exchanges', async (req, res) => {
         fromAmount,
         toAmount,
         rate,
+        commission,
         description || ''
       ],
       function(err) {
@@ -808,6 +916,7 @@ app.get('/api/exchanges', (req, res) => {
       e.rate,
       e.debit_transaction_id AS debitTransactionId,
       e.credit_transaction_id AS creditTransactionId,
+      e.fee,
       e.description,
       e.created_at AS createdAt,
       from_wallet.name AS fromWalletName,
@@ -822,31 +931,9 @@ app.get('/api/exchanges', (req, res) => {
 
   db.all(query, [limit, offset], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-
-    // Calcular el fee de cada exchange: sumar las transacciones tipo 'fee'
-    // vinculadas (parent_transaction_id = debit_transaction_id del exchange).
-    const feeQueries = (rows || []).map((ex) => new Promise((resolve) => {
-      db.all(
-        `SELECT t.amount FROM transactions t
-         JOIN categories c ON c.id = t.category_id
-         WHERE c.name = 'fee' AND t.parent_transaction_id = ?`,
-        [ex.debitTransactionId],
-        (feeErr, feeRows) => {
-          const total = (feeRows || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-          resolve({ id: ex.id, fee: parseFloat(total.toFixed(2)) });
-        }
-      );
-    }));
-
-    Promise.all(feeQueries).then((fees) => {
-      const feeMap = {};
-      fees.forEach((f) => { feeMap[f.id] = f.fee; });
-      const data = (rows || []).map((ex) => ({ ...ex, fee: feeMap[ex.id] || 0 }));
-
-      db.get('SELECT COUNT(*) AS total FROM exchanges', (countErr, result) => {
-        if (countErr) return res.status(500).json({ error: countErr.message });
-        res.json({ data, total: result?.total || 0, page, limit });
-      });
+    db.get('SELECT COUNT(*) AS total FROM exchanges', (countErr, result) => {
+      if (countErr) return res.status(500).json({ error: countErr.message });
+      res.json({ data: rows || [], total: result?.total || 0, page, limit });
     });
   });
 });

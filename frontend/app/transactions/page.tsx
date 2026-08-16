@@ -15,6 +15,7 @@ interface Transaction {
   category: string;
   type: 'income' | 'expense';
   amount: number;
+  fee?: number;
   description?: string;
   date: string;
   walletName?: string;
@@ -63,7 +64,7 @@ export default function TransactionsPage() {
               <Table>
                 <TableHead><TableRow>
                   <TableCell>Fecha</TableCell><TableCell>Categoría</TableCell><TableCell>Billetera</TableCell>
-                  <TableCell>Tipo</TableCell><TableCell align="right">Monto</TableCell><TableCell>Descripción</TableCell>
+                  <TableCell>Tipo</TableCell><TableCell align="right">Monto</TableCell><TableCell align="right">Fee</TableCell><TableCell>Descripción</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
                   {transactions.map((transaction) => (
@@ -74,6 +75,11 @@ export default function TransactionsPage() {
                       <TableCell><Chip label={transaction.type === 'income' ? 'Ingreso' : 'Gasto'} color={transaction.type === 'income' ? 'success' : 'error'} size="small" /></TableCell>
                       <TableCell align="right" sx={{ color: transaction.type === 'income' ? 'success.main' : 'error.main', fontWeight: 600 }}>
                         {transaction.type === 'income' ? '+' : '-'}{transaction.amount.toLocaleString('es-VE')} {transaction.walletCurrency || ''}
+                      </TableCell>
+                      <TableCell align="right">
+                        {transaction.fee && transaction.fee > 0 ? (
+                          <Chip label={`${transaction.fee.toFixed(2)} ${transaction.walletCurrency || ''}`} size="small" color="warning" variant="outlined" />
+                        ) : '—'}
                       </TableCell>
                       <TableCell>{transaction.description || '—'}</TableCell>
                     </TableRow>
