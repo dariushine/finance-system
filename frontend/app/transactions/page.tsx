@@ -11,6 +11,7 @@ import TransactionForm from '../components/TransactionForm';
 import TransactionAccordionList from '../components/TransactionAccordionList';
 import DateRangeFilter from '../components/DateRangeFilter';
 import { API_URL } from '../lib/api';
+import { formatLocalDate } from '../lib/dates';
 import { useRouter } from 'next/navigation';
 
 interface Transaction {
@@ -126,7 +127,7 @@ export default function TransactionsPage() {
     const header = ['ID', 'Fecha', 'Categoría', 'Tipo', 'Billetera', 'Monto', 'Moneda', 'Fee', 'Descripción'];
     const rows = transactions.map((t) => [
       t.id,
-      new Date(t.date).toLocaleDateString('es-VE'),
+      formatLocalDate(t.date),
       t.category,
       t.type === 'income' ? 'Ingreso' : 'Gasto',
       t.walletName || '',
@@ -189,7 +190,7 @@ export default function TransactionsPage() {
                 <TableBody>
                   {pagedTransactions.map((transaction) => (
                     <TableRow key={transaction.id} hover onClick={() => goToDetail(transaction.id)} sx={{ cursor: 'pointer' }}>
-                      <TableCell>{new Date(transaction.date).toLocaleDateString('es-VE')}</TableCell>
+                      <TableCell>{formatLocalDate(transaction.date)}</TableCell>
                       <TableCell><Chip label={transaction.category} size="small" variant="outlined" /></TableCell>
                       <TableCell>{transaction.walletName || '—'}</TableCell>
                       <TableCell><Chip label={transaction.type === 'income' ? 'Ingreso' : 'Gasto'} color={transaction.type === 'income' ? 'success' : 'error'} size="small" /></TableCell>

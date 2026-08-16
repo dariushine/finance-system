@@ -52,6 +52,10 @@ interface Exchange {
   fee?: number;
   description?: string;
   createdAt: string;
+  /** Fecha seleccionada por el usuario (YYYY-MM-DD) */
+  date?: string;
+  /** Hora seleccionada por el usuario (HH:MM:SS) */
+  time?: string | null;
   fromWalletName?: string;
   toWalletName?: string;
   fromCurrency?: string;
@@ -66,6 +70,26 @@ const formatCurrency = (amount: number, currency: string = 'USD') => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(amount);
+};
+
+// Muestra una hora cruda HH:MM o HH:MM:SS sin pasar por parseLocalDate.
+const formatTimeOnly = (time?: string | null) => {
+  if (!time) return '';
+  return time.slice(0, 5); // HH:MM
+};
+
+// Muestra fecha/hora seleccionada por el usuario si existe; si no, la de creación.
+const formatExchangeDate = (exchange: Exchange) => {
+  if (exchange.date) {
+    const [y, m, d] = exchange.date.split('-').map(Number);
+    const dt = new Date(y, (m || 1) - 1, d || 1);
+    const dateStr = dt.toLocaleDateString('es-VE');
+    const timeStr = exchange.time ? exchange.time.slice(0, 5) : '';
+    return timeStr ? `${dateStr} · ${timeStr}` : dateStr;
+  }
+  const c = new Date(exchange.createdAt);
+  if (isNaN(c.getTime())) return '';
+  return `${c.toLocaleDateString('es-VE')} · ${c.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
 };
 
 // --- Tarjeta móvil memorizada: solo se re-renderiza si SUS props cambian ---
@@ -88,7 +112,7 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
       <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
           <Stack spacing={0.25}>
-            <Typography variant="body2" color="text.secondary">{new Date(exchange.createdAt).toLocaleDateString('es-VE')} · {new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</Typography>
+            <Typography variant="body2" color="text.secondary">{formatExchangeDate(exchange)}</Typography>
             <Typography variant="body2">{exchange.fromWalletName || `Wallet ${exchange.fromWalletId}`}</Typography>
           </Stack>
           <Typography variant="body2" fontWeight="bold" color="success.main">
@@ -220,12 +244,12 @@ export default function ExchangesPage() {
       ex.toAmount,
       ex.rate.toFixed(4),
       ex.fee ? ex.fee.toFixed(2) : '',
-      new Date(ex.createdAt).toLocaleString('es-VE')
+      formatExchangeDate(ex)
     ]);
 
     const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -362,10 +386,10 @@ export default function ExchangesPage() {
                     <TableRow key={exchange.id} hover>
                       <TableCell>
                         <Typography variant="body2">
-                          {new Date(exchange.createdAt).toLocaleDateString('es-VE')}
+                          {exchange.date ? exchange.date.split('-').reverse().join('/') : new Date(exchange.createdAt).toLocaleDateString('es-VE')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                          {exchange.time ? formatTimeOnly(exchange.time) : new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
                         </Typography>
                       </TableCell>
                       <TableCell>

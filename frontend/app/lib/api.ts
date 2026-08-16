@@ -39,6 +39,8 @@ export interface TransactionDetail {
   amount: number;
   description?: string;
   date: string;
+  /** Hora guardada por el usuario (HH:MM:SS) si la proporcionó */
+  time?: string | null;
   fee?: number;
   parentTransactionId?: number | null;
   createdAt?: string;
@@ -62,6 +64,11 @@ export interface Exchange {
   toAmount: number;
   description?: string;
   created_at: string;
+  createdAt?: string;
+  /** Fecha seleccionada por el usuario (YYYY-MM-DD) si la puso */
+  date?: string;
+  /** Hora seleccionada por el usuario (HH:MM:SS) si la puso */
+  time?: string | null;
 }
 
 // Wallets API

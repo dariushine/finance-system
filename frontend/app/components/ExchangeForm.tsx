@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select, FormControl, InputLabel, Chip, Alert, Snackbar, CircularProgress } from '@mui/material';
-import { SwapHoriz } from '@mui/icons-material';
+import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select, FormControl, InputLabel, Chip, Alert, Snackbar, CircularProgress, Collapse, IconButton } from '@mui/material';
+import { SwapHoriz, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 
 interface ExchangeFormProps {
@@ -16,7 +16,13 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   const [toAmount, setToAmount] = useState('');
   const [fee, setFee] = useState('');
   const [description, setDescription] = useState('');
+  // Fecha del exchange (débito/crédito): por defecto hoy.
+  const todayISODate = new Date().toISOString().split('T')[0];
+  const [date, setDate] = useState(todayISODate);
+  // Hora opcional (HH:MM). Vacía => backend usa hora local actual.
+  const [time, setTime] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
     open: false,
     severity: 'success',
@@ -69,7 +75,9 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         fromAmount: parseFloat(fromAmount),
         toAmount: parseFloat(toAmount),
         fee: rateData.commission || undefined,
-        description: description || undefined
+        description: description || undefined,
+        date: date || undefined,
+        time: time || undefined,
       };
       
       // Hacer la llamada al endpoint de exchanges
@@ -101,6 +109,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setToAmount('');
       setFee('');
       setDescription('');
+      setDate(todayISODate);
+      setTime('');
 
       // Notificar éxito al componente padre
       onSuccess?.();
@@ -204,23 +214,65 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               </Box>
             </Box>
 
-            {/* Tasa de mercado: eliminada. El spread se compara contra la tasa diaria
-                (BCV/paralelo) que ya vive en la entidad daily_rates. */}
-            <TextField
-              label="Comisión (fee)"
-              type="number"
-              value={fee}
-              onChange={(e) => setFee(e.target.value)}
-              placeholder="Ej: 3.75"
-              disabled={loading}
-              onWheel={(e) => e.currentTarget.blur()}
-              helperText="Comisión pagada en la moneda de origen"
-              InputProps={{
-                endAdornment: fromWalletId ? (
-                  wallets.find(w => w.id === fromWalletId)?.currency || ''
-                ) : ''
-              }}
-            />
+            {/* Opcionales (comisión, fecha, hora) en bloque colapsable */}
+            <Box>
+              <Box
+                onClick={() => setShowOptional((v) => !v)}
+                sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
+              >
+                <Typography variant="body2">Opcionales</Typography>
+                <IconButton size="small" sx={{ ml: 0.5 }}>
+                  {showOptional ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                </IconButton>
+              </Box>
+              <Collapse in={showOptional}>
+                <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                  {/* Tasa de mercado: eliminada. El spread se compara contra la tasa diaria
+                      (BCV/paralelo) que ya vive en la entidad daily_rates. */}
+                  <TextField
+                    label="Comisión (fee)"
+                    type="number"
+                    value={fee}
+                    onChange={(e) => setFee(e.target.value)}
+                    placeholder="Ej: 3.75"
+                    disabled={loading}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    helperText="Comisión pagada en la moneda de origen"
+                    InputProps={{
+                      endAdornment: fromWalletId ? (
+                        wallets.find(w => w.id === fromWalletId)?.currency || ''
+                      ) : ''
+                    }}
+                  />
+
+                  <TextField
+                    label="Fecha"
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    disabled={loading}
+                    required
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    error={date > todayISODate}
+                    helperText={date > todayISODate
+                      ? '⚠️ Es una fecha futura. Verifica que sea correcta.'
+                      : 'Registra exchanges de hoy o de días anteriores'}
+                  />
+
+                  <TextField
+                    label="Hora (opcional)"
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    disabled={loading}
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    helperText="Si la dejas vacía se usa la hora actual"
+                  />
+                </Box>
+              </Collapse>
+            </Box>
 
             <Box>
               <TextField

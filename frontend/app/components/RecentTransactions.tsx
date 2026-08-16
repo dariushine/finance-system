@@ -34,6 +34,7 @@ import {
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
+import { parseLocalDate } from '../lib/dates';
 
 interface Transaction {
   id: number;
@@ -50,7 +51,7 @@ const MAX_ROWS = 5;
 
 // --- Formateadores a nivel de módulo (referencias estables, no se reconstruyen por render) ---
 const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
+  const date = parseLocalDate(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -178,7 +179,7 @@ export default function RecentTransactions() {
       if (!response.ok) throw new Error(payload.error || 'No se pudieron cargar las transacciones');
       const list: Transaction[] = Array.isArray(payload) ? payload : payload.data || [];
       // Ordenar de más reciente a más antigua
-      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      list.sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
       setTransactions(list);
       setError(null);
     } catch (err) {
