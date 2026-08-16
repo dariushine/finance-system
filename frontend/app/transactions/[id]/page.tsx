@@ -16,6 +16,9 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
+  ListItemIcon,
+  Menu,
   MenuItem,
   Select,
   FormControl,
@@ -42,6 +45,7 @@ import {
   DeleteOutline,
   Add as AddIcon,
   Link as LinkIcon,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
 import {
   getTransaction,
@@ -122,6 +126,10 @@ export default function TransactionDetailPage() {
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
     open: false, severity: 'success', message: '',
   });
+
+  // Menú hamburguesa de acciones
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const closeMenu = () => setMenuAnchor(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -302,13 +310,43 @@ export default function TransactionDetailPage() {
       </Button>
 
       {/* Header / monto principal */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          {isExchange && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Transacción de un exchange (inmutable desde aquí). Para modificarla usa el panel de exchange (feature futuro).
-            </Alert>
-          )}
+      <Card sx={{ mb: 3, position: 'relative' }}>
+        {/* Menú de acciones (esquina superior derecha) */}
+        <Box display="flex" justifyContent="flex-end" px={2} pt={1}>
+          <IconButton
+            aria-label="Acciones de transacción"
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+            size="medium"
+          >
+            <MenuIcon />
+          </IconButton>
+          <Menu
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={closeMenu}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={() => { closeMenu(); openEdit(); }}>
+              <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+              Editar
+            </MenuItem>
+            <MenuItem onClick={() => { closeMenu(); if (!blockIfExchange()) setDelOpen(true); }}>
+              <ListItemIcon><DeleteOutline fontSize="small" color="error" /></ListItemIcon>
+              Eliminar
+            </MenuItem>
+            <MenuItem onClick={() => { closeMenu(); openFee(); }}>
+              <ListItemIcon><ReceiptLong fontSize="small" /></ListItemIcon>
+              Agregar comisión
+            </MenuItem>
+            <MenuItem onClick={() => { closeMenu(); openAssoc(); }}>
+              <ListItemIcon><LinkIcon fontSize="small" /></ListItemIcon>
+              Crear asociada
+            </MenuItem>
+          </Menu>
+        </Box>
+
+        <CardContent sx={{ pt: 0 }}>
           <Stack spacing={2} alignItems="center" textAlign="center">
             <Avatar
               sx={{
@@ -352,30 +390,16 @@ export default function TransactionDetailPage() {
                   <Typography variant="body1" fontWeight="medium">{tx.walletName}</Typography>
                 </Box>
               )}
+              {/* Comisión debajo de la billetera */}
               {(tx.fee ?? 0) > 0 && (
                 <Chip
                   icon={<ReceiptLong />}
                   label={`Comisión ${formatCurrency(tx.fee!, currency)}`}
                   color="warning"
                   variant="outlined"
+                  sx={{ mt: 1 }}
                 />
               )}
-            </Box>
-
-            {/* Botones de acción */}
-            <Box display="flex" gap={1} flexWrap="wrap" justifyContent="center" mt={1}>
-              <Button variant="outlined" startIcon={<EditIcon />} onClick={openEdit}>
-                Editar
-              </Button>
-              <Button variant="outlined" color="error" startIcon={<DeleteOutline />} onClick={() => { if (!blockIfExchange()) setDelOpen(true); }}>
-                Eliminar
-              </Button>
-              <Button variant="outlined" startIcon={<ReceiptLong />} onClick={openFee}>
-                Agregar comisión
-              </Button>
-              <Button variant="outlined" startIcon={<LinkIcon />} onClick={openAssoc}>
-                Crear asociada
-              </Button>
             </Box>
           </Stack>
         </CardContent>
