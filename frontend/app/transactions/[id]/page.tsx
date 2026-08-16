@@ -30,10 +30,11 @@ import {
   InfoOutlined,
 } from '@mui/icons-material';
 import { getTransaction, TransactionDetail } from '../../lib/api';
+import { parseLocalDate } from '../../lib/dates';
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '—';
-  return new Date(dateString).toLocaleDateString('es-VE', {
+  return parseLocalDate(dateString).toLocaleDateString('es-VE', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -43,7 +44,7 @@ const formatDate = (dateString?: string) => {
 
 const formatTime = (dateString?: string) => {
   if (!dateString) return '—';
-  const d = new Date(dateString);
+  const d = parseLocalDate(dateString);
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
 };

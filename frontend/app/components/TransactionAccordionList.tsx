@@ -18,6 +18,7 @@ import {
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
+import { parseLocalDate } from '../lib/dates';
 
 export interface AccordionTransaction {
   id: number;
@@ -61,7 +62,7 @@ const getCurrencyFormatter = (currency: string) => {
 };
 
 const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
+  const date = parseLocalDate(dateString);
   const now = Date.now();
   const diffMs = now - date.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
