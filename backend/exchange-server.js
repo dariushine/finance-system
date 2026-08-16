@@ -370,8 +370,12 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
               return reject(new Error(`Fondos insuficientes. Balance actual: ${wallet.balance} ${wallet.currency}, necesita ${total}`));
             }
             
-            // 4. Calcular nuevo balance: se descuenta monto + comisión (gasto) o suma monto (ingreso)
-            const newBalance = type === 'expense' ? wallet.balance - total : wallet.balance + amount;
+            // 4. Calcular nuevo balance:
+            //    - Gasto: se descuenta monto + comisión.
+            //    - Ingreso: se suma el monto pero la comisión se resta (es un GASTO aparte).
+            const newBalance = type === 'expense'
+              ? wallet.balance - total
+              : wallet.balance + amount - commission;
             
             // 5. Crear transacción y actualizar balance en transacción
             db.run('BEGIN TRANSACTION');
@@ -413,15 +417,16 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                   });
                 };
 
-                // 5b. Si hay comisión, crear una transacción SEPARADA tipo fee con ese monto
+                // 5b. Si hay comisión, crear una transacción SEPARADA tipo fee.
+                //     La comisión SIEMPRE es un gasto, aunque el padre sea un ingreso.
                 if (commission > 0) {
                   db.get('SELECT * FROM categories WHERE name = ? AND type = ? AND isActive = 1',
-                    ['fee', type], (fErr, feeCategory) => {
+                    ['fee', 'expense'], (fErr, feeCategory) => {
                       const fc = (!fErr && feeCategory) ? feeCategory : category;
                       db.run(
                         `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [walletId, fc.id, type, commission,
+                        [walletId, fc.id, 'expense', commission,
                          `Comisión: ${description || category.name}`,
                          date, 1.0, commission, 0, transactionId],
                         function(err2) {
