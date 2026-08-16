@@ -80,9 +80,6 @@ db.serialize(() => {
     from_amount DECIMAL(10,2) NOT NULL,
     to_amount DECIMAL(10,2) NOT NULL,
     rate DECIMAL(10,4) NOT NULL,
-    market_rate DECIMAL(10,4),
-    spread DECIMAL(5,2),
-    fee DECIMAL(10,2) DEFAULT 0,
     description TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (debit_transaction_id) REFERENCES transactions(id),
@@ -91,18 +88,43 @@ db.serialize(() => {
     FOREIGN KEY (to_wallet_id) REFERENCES wallets(id)
   )`);
 
-  // Migración: asegurar columnas opcionales de exchanges en DBs creadas antes de que existieran
+  // Migración: quitar columnas market_rate, spread y fee de exchanges.
+  // El spread ya no se guarda: se calculará sobre la marcha contra daily_rates
+  // (la tasa del día) en la futura página de detalle. La comisión (fee) se
+  // conserva como transacción separada tipo 'fee', no como columna.
   db.all(`PRAGMA table_info(exchanges)`, (err, cols) => {
     if (err) return;
     const names = (cols || []).map((c) => c.name);
-    if (!names.includes('market_rate')) {
-      db.run(`ALTER TABLE exchanges ADD COLUMN market_rate DECIMAL(10,4)`);
-    }
-    if (!names.includes('spread')) {
-      db.run(`ALTER TABLE exchanges ADD COLUMN spread DECIMAL(5,2)`);
-    }
-    if (!names.includes('fee')) {
-      db.run(`ALTER TABLE exchanges ADD COLUMN fee DECIMAL(10,2) DEFAULT 0`);
+    const hasMarket = names.includes('market_rate');
+    const hasSpread = names.includes('spread');
+    const hasFee = names.includes('fee');
+    if (hasMarket || hasSpread || hasFee) {
+      db.exec(`
+        BEGIN;
+        CREATE TABLE exchanges_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          debit_transaction_id INTEGER NOT NULL,
+          credit_transaction_id INTEGER NOT NULL,
+          from_wallet_id INTEGER NOT NULL,
+          to_wallet_id INTEGER NOT NULL,
+          from_amount DECIMAL(10,2) NOT NULL,
+          to_amount DECIMAL(10,2) NOT NULL,
+          rate DECIMAL(10,4) NOT NULL,
+          description TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (debit_transaction_id) REFERENCES transactions(id),
+          FOREIGN KEY (credit_transaction_id) REFERENCES transactions(id),
+          FOREIGN KEY (from_wallet_id) REFERENCES wallets(id),
+          FOREIGN KEY (to_wallet_id) REFERENCES wallets(id)
+        );
+        INSERT INTO exchanges_new (id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, description, created_at)
+          SELECT id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, description, created_at FROM exchanges;
+        DROP TABLE exchanges;
+        ALTER TABLE exchanges_new RENAME TO exchanges;
+        COMMIT;
+      `, (rebuildErr) => {
+        if (!rebuildErr) console.log('✅ exchanges: eliminadas columnas market_rate, spread, fee');
+      });
     }
   });
   db.all(`PRAGMA table_info(transactions)`, (err, cols) => {
@@ -644,7 +666,7 @@ app.get('/api/transactions/:id', (req, res) => {
 // Exchanges con transacciones separadas
 app.post('/api/exchanges', async (req, res) => {
   try {
-    const { fromWalletId, toWalletId, fromAmount, toAmount, description, marketRate, fee } = req.body;
+    const { fromWalletId, toWalletId, fromAmount, toAmount, description, fee } = req.body;
     
     console.log('💱 Procesando exchange:', { fromWalletId, toWalletId, fromAmount, toAmount, fee });
     
@@ -693,15 +715,6 @@ app.post('/api/exchanges', async (req, res) => {
     // Ej: 100 USD -> 87.000 VES = 870 bs/$, con comisión 3.75 aparte.
     const rate = toAmount / fromAmount;
 
-    // La tasa usada para el spread también es la tasa real (monto, sin comisión)
-    const netRate = rate;
-
-    // Calcular spread sobre la tasa real (monto, sin comisión)
-    let spread = null;
-    if (marketRate !== undefined && marketRate !== null) {
-      spread = ((marketRate - netRate) / marketRate) * 100;
-    }
-    
     // Crear transacción de débito (exchange_out): descontará fromAmount + fee, creando
     // además una transacción separada tipo fee con la comisión.
     const debitTransaction = await createTransaction(
@@ -725,8 +738,8 @@ app.post('/api/exchanges', async (req, res) => {
     // Registrar metadata del exchange
     db.run(
       `INSERT INTO exchanges (debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, 
-       from_amount, to_amount, rate, market_rate, spread, fee, description) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       from_amount, to_amount, rate, description) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         debitTransaction.id,
         creditTransaction.id,
@@ -735,9 +748,6 @@ app.post('/api/exchanges', async (req, res) => {
         fromAmount,
         toAmount,
         rate,
-        marketRate || null,
-        spread,
-        commission,
         description || ''
       ],
       function(err) {
@@ -754,14 +764,10 @@ app.post('/api/exchanges', async (req, res) => {
           exchange: {
             id: exchangeId,
             rate,
-            marketRate: marketRate || null,
-            spread,
-            fee: commission,
             fromWallet: fromWallet.name,
             toWallet: toWallet.name,
             fromAmount,
             toAmount,
-            netRate,
             fromCurrency: fromWallet.currency,
             toCurrency: toWallet.currency,
             description: description || ''
@@ -792,9 +798,6 @@ app.get('/api/exchanges', (req, res) => {
       e.from_amount AS fromAmount,
       e.to_amount AS toAmount,
       e.rate,
-      e.market_rate AS marketRate,
-      e.spread,
-      e.fee,
       e.description,
       e.created_at AS createdAt,
       from_wallet.name AS fromWalletName,
@@ -1041,7 +1044,7 @@ if (require.main === module) {
     console.log('\n✨ Sistema completo con:');
     console.log('   • Exchanges generan transacciones separadas (débito/crédito)');
     console.log('   • Currency automático de wallets');
-    console.log('   • Spread calculado solo si se provee marketRate');
+    console.log('   • Tasa de referencia (BCV/paralelo) desde daily_rates');
     console.log('   • Validación de fondos antes del exchange');
   });
 
