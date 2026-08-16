@@ -31,6 +31,7 @@ export default function AddFab() {
 
   const handleSuccess = () => {
     router.refresh(); // refresca las cards de balance / listas
+    setOpen(false);  // cierra el diálogo tras una operación exitosa
   };
 
   return (
