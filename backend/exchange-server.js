@@ -3,7 +3,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 const app = express();
-const port = 3002;
+const port = process.env.PORT ? Number(process.env.PORT) : 3002;
 
 const dbPath = path.join(__dirname, 'data/finance.db');
 const db = new sqlite3.Database(dbPath);
@@ -106,6 +106,12 @@ db.serialize(() => {
     const hasMarket = names.includes('market_rate');
     const hasSpread = names.includes('spread');
     const hasFee = names.includes('fee');
+    const hasDeleted = names.includes('deleted');
+    if (!hasDeleted) {
+      db.run(`ALTER TABLE exchanges ADD COLUMN deleted INTEGER DEFAULT 0`, (addDelErr) => {
+        if (!addDelErr) console.log('✅ exchanges: agregada columna deleted (soft-delete)');
+      });
+    }
     if (hasMarket || hasSpread) {
       db.exec(`
         BEGIN;
@@ -120,14 +126,15 @@ db.serialize(() => {
           rate DECIMAL(10,4) NOT NULL,
           fee DECIMAL(10,2) DEFAULT 0,
           description TEXT,
+          deleted INTEGER DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (debit_transaction_id) REFERENCES transactions(id),
           FOREIGN KEY (credit_transaction_id) REFERENCES transactions(id),
           FOREIGN KEY (from_wallet_id) REFERENCES wallets(id),
           FOREIGN KEY (to_wallet_id) REFERENCES wallets(id)
         );
-        INSERT INTO exchanges_new (id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, fee, description, created_at)
-          SELECT id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, COALESCE(fee,0), description, created_at FROM exchanges;
+        INSERT INTO exchanges_new (id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, fee, description, deleted, created_at)
+          SELECT id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, COALESCE(fee,0), description, COALESCE(deleted,0), created_at FROM exchanges;
         DROP TABLE exchanges;
         ALTER TABLE exchanges_new RENAME TO exchanges;
         COMMIT;
@@ -1500,7 +1507,7 @@ app.get('/api/exchanges', (req, res) => {
     }
   }
 
-  const conditions = ["COALESCE(dt.date, '') >= ?", "COALESCE(dt.date, '') <= ?"];
+  const conditions = ["COALESCE(dt.date, '') >= ?", "COALESCE(dt.date, '') <= ?", 'e.deleted = 0'];
   const params = [fromDate, toDate, limit, offset];
 
   const query = `
@@ -1569,13 +1576,295 @@ app.get('/api/exchanges/:id', (req, res) => {
     JOIN wallets fw ON fw.id = e.from_wallet_id
     JOIN wallets tw ON tw.id = e.to_wallet_id
     LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
-    WHERE e.id = ?`;
+    WHERE e.id = ? AND e.deleted = 0`;
 
   db.get(query, [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Exchange no encontrado' });
     res.json(row);
   });
+});
+
+// Obtiene el débito y el crédito de un exchange junto con su wallet.
+function getExchangeTransactions(exchange, tRow = {}) {
+  return Promise.all([
+    getExchangeTransactionRow(exchange.debitTransactionId),
+    getExchangeTransactionRow(exchange.creditTransactionId),
+  ]);
+}
+
+// Row de una transacción para edición de exchange (incluye wallet balance).
+function getExchangeTransactionRow(id) {
+  return getDb(
+    `SELECT
+       t.id,
+       t.wallet_id AS walletId,
+       t.type,
+       t.amount,
+       t.description,
+       t.date,
+       t.time,
+       t.category_id AS categoryId,
+       t.parent_transaction_id AS parentId,
+       t.deleted AS deleted,
+       c.name AS category,
+       w.balance AS walletBalance
+     FROM transactions t
+     JOIN categories c ON c.id = t.category_id
+     JOIN wallets w ON w.id = t.wallet_id
+     WHERE t.id = ?`,
+    [id]
+  );
+}
+
+// Crea una transacción fee (hija del débito) con la fecha/hora del exchange.
+// La comisión SIEMPRE es un gasto en la billetera del débito (origen).
+async function createFeeForExchange(debit, amount, date, time, description) {
+  const category = await getDb("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1");
+  const fc = category ? category.id : debit.categoryId;
+  await runDb(
+    `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
+     VALUES (?, ?, 'expense', ?, ?, ?, ?, 1.0, ?, 0, ?)`,
+    [debit.walletId, fc, amount, `Comisión: ${description || 'Exchange'}`, date, time, amount, debit.id]
+  );
+}
+
+// Elimina virtualmente todas las transacciones de un exchange (débito, crédito y fees)
+// y devuelve el efecto neto por billetera para reajustar balances.
+async function softDeleteExchangeTransactions(debit, credit) {  const txIds = [debit.id, credit.id];
+  // Todos los fees (hijos del débito y del crédito, no borrados) también se borran.
+  const fees = await allDb(
+    `SELECT id, wallet_id AS walletId, type, amount, parent_transaction_id AS parentId
+     FROM transactions
+     WHERE parent_transaction_id IN (?, ?) AND deleted = 0`,
+    [debit.id, credit.id]
+  );
+  fees.forEach((f) => txIds.push(f.id));
+
+  // Efecto por billetera (los fees son gasto en su billetera).
+  const byWallet = {};
+  const applyEffect = (row) => {
+    const key = String(row.walletId);
+    if (!byWallet[key]) byWallet[key] = 0;
+    byWallet[key] += balanceEffect(row.type, row.amount); // income suma, expense descuenta
+  };
+  applyEffect(debit);   // gasto (exchange_out)
+  applyEffect(credit);  // ingreso (exchange_in)
+  fees.forEach(applyEffect);
+
+  for (const id of txIds) {
+    if (!id) continue;
+    await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [id]);
+  }
+  return byWallet;
+}
+
+// PUT /api/exchanges/:id — editar montos, fee, fecha/hora y descripción.
+// Las billeteras son FIJAS (no se pueden cambiar). Ajusta balances con el delta
+// neto entre el estado anterior y el nuevo. La tasa se recalcula.
+app.put('/api/exchanges/:id', async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID inválido' });
+
+    const ex = await getDb(
+      `SELECT id, debit_transaction_id AS debitTransactionId, credit_transaction_id AS creditTransactionId,
+              from_wallet_id AS fromWalletId, to_wallet_id AS toWalletId,
+              from_amount AS fromAmount, to_amount AS toAmount, rate, fee, description, deleted
+       FROM exchanges WHERE id = ?`,
+      [id]
+    );
+    if (!ex || ex.deleted) return res.status(404).json({ error: 'Exchange no encontrado' });
+
+    const { fromAmount, toAmount, fee, description, date, time } = req.body;
+
+    // ---- Captura del estado anterior ----
+    const [debit, credit] = await getExchangeTransactions(ex);
+    if (!debit || debit.deleted || !credit || credit.deleted) {
+      return res.status(400).json({ error: 'El exchange tiene transacciones inconsistentes.' });
+    }
+    const fromWalletBalanceBefore = debit.walletBalance;
+    const toWalletBalanceBefore = credit.walletBalance;
+
+    // Nombres de billeteras para las descripciones de débito/crédito.
+    const [fromWalletInfo, toWalletInfo] = await Promise.all([
+      getDb('SELECT name FROM wallets WHERE id = ?', [ex.fromWalletId]),
+      getDb('SELECT name FROM wallets WHERE id = ?', [ex.toWalletId]),
+    ]);
+    const debitWalletName = fromWalletInfo ? fromWalletInfo.name : 'origen';
+    const creditWalletName = toWalletInfo ? toWalletInfo.name : 'destino';
+
+    // Fees previos (hijos del débito y del crédito).
+    const prevFees = await allDb(
+      `SELECT t.id, t.wallet_id AS walletId, t.type, t.amount, t.parent_transaction_id AS parentId
+       FROM transactions t JOIN categories c ON c.id = t.category_id
+       WHERE t.parent_transaction_id IN (?, ?) AND c.name = 'fee' AND t.deleted = 0`,
+      [debit.id, credit.id]
+    );
+
+    // ---- Validaciones ----
+    // Nuevo monto origen (por defecto el actual).
+    let newFromAmount = Number(ex.fromAmount);
+    let newToAmount = Number(ex.toAmount);
+    if (fromAmount != null && fromAmount !== '') {
+      const parsed = Number(fromAmount);
+      if (!Number.isFinite(parsed) || parsed <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+      newFromAmount = parsed;
+    }
+    if (toAmount != null && toAmount !== '') {
+      const parsed = Number(toAmount);
+      if (!Number.isFinite(parsed) || parsed <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+      newToAmount = parsed;
+    }
+
+    let newFee = Number(ex.fee) || 0;
+    let feeChanged = false;
+    if (fee != null && fee !== '') {
+      const parsed = Number(fee);
+      if (!Number.isFinite(parsed) || parsed < 0) return res.status(400).json({ error: 'La comisión no puede ser negativa' });
+      newFee = parsed;
+      feeChanged = newFee !== (Number(ex.fee) || 0);
+    }
+
+    // Fecha + hora (regla: misma para débito y crédito, y para fees asociados).
+    let newDate = debit.date || credit.date;
+    let newTime = debit.time || credit.time || null;
+    if (date != null && date !== '') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
+      newDate = date;
+    }
+    if (time != null && time !== '') {
+      if (!isValidTime(time)) return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+      newTime = time.length === 5 ? `${time}:00` : time;
+    } else if (time === '') {
+      newTime = null;
+    }
+
+    const newDescription = description !== undefined ? (description || '') : ex.description;
+
+    // Validación de balance origen: monto + comisión nueva no supera balance (solo si sube).
+    const newFromTotal = newFromAmount + newFee;
+    if (fromWalletBalanceBefore < newFromTotal) {
+      return res.status(400).json({
+        error: `Fondos insuficientes en la billetera origen. Balance: ${fromWalletBalanceBefore}, requiere ${newFromTotal}`
+      });
+    }
+
+    // ---- Recalcular balances con el delta neto ----
+    // Efecto anterior sobre el origen: -(fromAmount) - (suma de fees previos)
+    const prevFromFeeTotal = prevFees.reduce((s, f) => s + Number(f.amount), 0);
+    const oldFromEffect = -(Number(ex.fromAmount)) - prevFromFeeTotal;
+    const oldToEffect = Number(ex.toAmount);
+    const newFromEffect = -(newFromAmount) - newFee; // fee nuevo duplica el descuento si cambió y hay fee
+    const newToEffect = newToAmount;
+
+    // Nota: cuando fee NO cambió, newFee == prevFromFeeTotal, así que newFromEffect
+    // captura correctamente el descuento del fee (si lo hay). Evitamos doble conteo
+    // creando la transacción fee solo cuando viene de 0.
+    const fromDelta = newFromEffect - oldFromEffect;
+    const toDelta = newToEffect - oldToEffect;
+
+    await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [fromWalletBalanceBefore + fromDelta, ex.fromWalletId]);
+    await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [toWalletBalanceBefore + toDelta, ex.toWalletId]);
+
+    const newRate = newToAmount / newFromAmount;
+
+    // ---- Actualizar débito ----
+    const debitDesc = `${newDescription || 'Exchange'} → ${creditWalletName || 'destino'}`;
+    await runDb(
+      `UPDATE transactions SET amount = ?, description = ?, date = ?, time = ? WHERE id = ?`,
+      [newFromAmount, debitDesc, newDate, newTime, debit.id]
+    );
+
+    // ---- Actualizar crédito ----
+    const creditDesc = `${newDescription || 'Exchange'} ← ${debitWalletName || 'origen'}`;
+    await runDb(
+      `UPDATE transactions SET amount = ?, description = ?, date = ?, time = ? WHERE id = ?`,
+      [newToAmount, creditDesc, newDate, newTime, credit.id]
+    );
+
+    // ---- Manejo del fee ----
+    // 1) Cambios de monto / creación / eliminación del fee.
+    let feesAlive = [...prevFees]; // fees que siguen vigentes tras el cambio
+    if (feeChanged) {
+      if (newFee > 0 && prevFees.length === 0) {
+        // fee 0 -> >0: crear fee nuevo hijo del débito con la fecha/hora del exchange.
+        await createFeeForExchange(debit, newFee, newDate, newTime, newDescription);
+        feesAlive = [];
+      } else if (newFee === 0) {
+        // fee >0 -> 0: eliminar virtualmente todos los fees.
+        for (const f of prevFees) {
+          await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
+        }
+        feesAlive = [];
+      } else {
+        // fee >0 -> otro >0: actualizar el monto del primer fee; borrar adicionales.
+        const firstFee = prevFees[0];
+        await runDb('UPDATE transactions SET amount = ? WHERE id = ?', [newFee, firstFee.id]);
+        for (const f of prevFees.slice(1)) {
+          await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
+        }
+        feesAlive = [firstFee];
+      }
+    }
+    // 2) Sincronizar fecha/hora de los fees que quedan vivos: el fee comparte la
+    //    fecha/hora del exchange, incluso cuando NO cambió el monto del fee.
+    for (const f of feesAlive) {
+      await runDb('UPDATE transactions SET date = ?, time = ? WHERE id = ?', [newDate, newTime, f.id]);
+    }
+
+    // ---- Actualizar metadata del exchange ----
+    await runDb(
+      `UPDATE exchanges SET from_amount = ?, to_amount = ?, rate = ?, fee = ?, description = ? WHERE id = ?`,
+      [newFromAmount, newToAmount, newRate, newFee, newDescription || '', id]
+    );
+
+    // Re-sincronizar fee denormalizado a partir de los fees hijos.
+    await syncParentFee(debit.id);
+
+    res.json({ success: true, message: 'Exchange actualizado' });
+  } catch (e) {
+    console.error('Error actualizando exchange:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/exchanges/:id — eliminar virtualmente el exchange y sus transacciones.
+app.delete('/api/exchanges/:id', async (req, res) => {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID inválido' });
+
+    const ex = await getDb(
+      `SELECT id, debit_transaction_id AS debitTransactionId, credit_transaction_id AS creditTransactionId,
+              from_wallet_id AS fromWalletId, to_wallet_id AS toWalletId, deleted
+       FROM exchanges WHERE id = ?`,
+      [id]
+    );
+    if (!ex || ex.deleted) return res.status(404).json({ error: 'Exchange no encontrado' });
+
+    const [debit, credit] = await getExchangeTransactions(ex);
+    if (!debit || !credit) {
+      return res.status(400).json({ error: 'El exchange tiene transacciones inconsistentes.' });
+    }
+
+    // Revertir balance por billetera (devolver lo descontado, quitar lo sumado).
+    const byWallet = await softDeleteExchangeTransactions(debit, credit);
+    for (const walletId of Object.keys(byWallet)) {
+      const wallet = await getDb('SELECT balance FROM wallets WHERE id = ?', [walletId]);
+      if (!wallet) continue;
+      // byWallet guarda el efecto: expense => -valor; para revertir sumamos el inverso.
+      const newBalance = Number(wallet.balance) - byWallet[walletId];
+      await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [newBalance, walletId]);
+    }
+
+    await runDb('UPDATE exchanges SET deleted = 1 WHERE id = ?', [id]);
+
+    res.json({ success: true, message: 'Exchange eliminado (virtualmente)' });
+  } catch (e) {
+    console.error('Error eliminando exchange:', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/balance', (req, res) => {
