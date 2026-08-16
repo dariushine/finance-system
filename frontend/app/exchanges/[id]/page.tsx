@@ -141,7 +141,14 @@ export default function ExchangeDetailPage() {
               <Typography variant="caption" color="text.secondary" display="block" textTransform="uppercase" letterSpacing={1}>
                 Exchange
               </Typography>
-              <Box display="flex" alignItems="center" justifyContent="center" gap={{ xs: 2, sm: 3 }} flexWrap="wrap" sx={{ mt: 1 }}>
+              <Box
+                display="flex"
+                flexDirection={{ xs: 'column', sm: 'row' }}
+                alignItems="center"
+                justifyContent="center"
+                gap={{ xs: 1, sm: 3 }}
+                sx={{ mt: 1 }}
+              >
                 {/* Monto de origen (enviado) */}
                 <Stack alignItems="center" spacing={0.25}>
                   <WalletLink id={exchange.fromWalletId} name={exchange.fromWalletName} fallback={`Billetera ${exchange.fromWalletId}`} />
@@ -149,7 +156,15 @@ export default function ExchangeDetailPage() {
                     -{formatCurrency(exchange.fromAmount, fromCurrency)}
                   </Typography>
                 </Stack>
-                <CompareArrows sx={{ color: 'text.secondary', fontSize: { xs: 28, sm: 36 } }} />
+                {/* Icono de intercambio: vertical en móvil (debajo del monto origen), horizontal en escritorio */}
+                <CompareArrows
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: { xs: 32, sm: 36 },
+                    transform: { xs: 'rotate(90deg)', sm: 'none' },
+                    mt: { xs: 0, sm: 2.5 },
+                  }}
+                />
                 {/* Monto de destino (recibido) */}
                 <Stack alignItems="center" spacing={0.25}>
                   <WalletLink id={exchange.toWalletId} name={exchange.toWalletName} fallback={`Billetera ${exchange.toWalletId}`} />
