@@ -72,6 +72,12 @@ const formatCurrency = (amount: number, currency: string = 'USD') => {
   }).format(amount);
 };
 
+// Muestra una hora cruda HH:MM o HH:MM:SS sin pasar por parseLocalDate.
+const formatTimeOnly = (time?: string | null) => {
+  if (!time) return '';
+  return time.slice(0, 5); // HH:MM
+};
+
 // Muestra fecha/hora seleccionada por el usuario si existe; si no, la de creación.
 const formatExchangeDate = (exchange: Exchange) => {
   if (exchange.date) {
@@ -380,10 +386,10 @@ export default function ExchangesPage() {
                     <TableRow key={exchange.id} hover>
                       <TableCell>
                         <Typography variant="body2">
-                          {new Date(exchange.createdAt).toLocaleDateString('es-VE')}
+                          {exchange.date ? exchange.date.split('-').reverse().join('/') : new Date(exchange.createdAt).toLocaleDateString('es-VE')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                          {exchange.time ? formatTimeOnly(exchange.time) : new Date(exchange.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
                         </Typography>
                       </TableCell>
                       <TableCell>

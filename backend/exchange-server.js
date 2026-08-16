@@ -1088,7 +1088,7 @@ app.get('/api/exchanges', (req, res) => {
     JOIN wallets to_wallet ON to_wallet.id = e.to_wallet_id
     LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
     WHERE ${conditions.join(' AND ')}
-    ORDER BY COALESCE(dt.date, '1970-01-01'), COALESCE(dt.time, ''), e.created_at DESC, e.id DESC
+    ORDER BY COALESCE(dt.date, '1970-01-01') DESC, COALESCE(dt.time, '') DESC, e.created_at DESC, e.id DESC
     LIMIT ? OFFSET ?`;
 
   db.all(query, params, (err, rows) => {
