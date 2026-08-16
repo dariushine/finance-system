@@ -15,6 +15,7 @@ import {
   Stack,
   Typography,
   useTheme,
+  Tooltip,
 } from '@mui/material';
 import {
   ArrowBack,
@@ -26,6 +27,7 @@ import {
   Notes,
   Tag,
   ChevronRight,
+  InfoOutlined,
 } from '@mui/icons-material';
 import { getTransaction, TransactionDetail } from '../../lib/api';
 
@@ -225,6 +227,7 @@ export default function TransactionDetailPage() {
                       {formatCurrency(tx.balanceAfter, currency)}
                     </Typography>
                   }
+                  hint="Saldo de la billetera después de esta transacción, sin contar la comisión (se aplica aparte)"
                 />
               )}
               {tx.parentTransactionId != null && (
@@ -281,10 +284,20 @@ export default function TransactionDetailPage() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+function InfoRow({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
     <Box display="flex" justifyContent="space-between" gap={2}>
-      <Typography variant="body2" color="text.secondary">{label}</Typography>
+      <Box display="flex" alignItems="center" gap={0.5}>
+        <Typography variant="body2" color="text.secondary">{label}</Typography>
+        {hint && (
+          <Tooltip title={hint} arrow placement="top">
+            <InfoOutlined
+              fontSize="small"
+              sx={{ color: 'text.disabled', cursor: 'help', fontSize: 15 }}
+            />
+          </Tooltip>
+        )}
+      </Box>
       <Box>{value}</Box>
     </Box>
   );
