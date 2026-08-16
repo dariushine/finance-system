@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select, FormControl, InputLabel, Chip, Alert, Snackbar, CircularProgress } from '@mui/material';
-import { SwapHoriz, TrendingUp, TrendingDown } from '@mui/icons-material';
+import { SwapHoriz } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 
 interface ExchangeFormProps {
@@ -15,7 +15,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   const [fromAmount, setFromAmount] = useState('');
   const [toAmount, setToAmount] = useState('');
   const [fee, setFee] = useState('');
-  const [marketRate, setMarketRate] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
@@ -39,10 +38,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
     const commission = fee ? parseFloat(fee) : 0;
     // Total que se descuenta de la billetera origen (monto + comisión)
     const fromTotal = from + commission;
-    const market = marketRate ? parseFloat(marketRate) : null;
-    const spread = market ? ((market - rate) / market) * 100 : null;
     
-    return { rate, netRate: rate, market, spread, commission, fromTotal };
+    return { rate, netRate: rate, commission, fromTotal };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,7 +68,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         toWalletId: toWalletId,
         fromAmount: parseFloat(fromAmount),
         toAmount: parseFloat(toAmount),
-        marketRate: rateData.market || undefined,
         fee: rateData.commission || undefined,
         description: description || undefined
       };
@@ -97,13 +93,12 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setSnackbar({
         open: true,
         severity: 'success',
-        message: `Exchange registrado: ${fromAmount} ${fromCurrency} → ${toAmount} ${toCurrency} (tasa ${rateData.rate.toFixed(2)}${rateData.spread ? `, spread ${rateData.spread.toFixed(2)}%` : ''})`,
+        message: `Exchange registrado: ${fromAmount} ${fromCurrency} → ${toAmount} ${toCurrency} (tasa ${rateData.rate.toFixed(2)})`,
       });
       
       // Reset form
       setFromAmount('');
       setToAmount('');
-      setMarketRate('');
       setFee('');
       setDescription('');
 
@@ -209,34 +204,23 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
               </Box>
             </Box>
 
-            {/* Tasa de mercado (opcional) */}
-            <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr' }} gap={2}>
-              <TextField
-                label="Tasa de mercado (opcional)"
-                type="number"
-                value={marketRate}
-                onChange={(e) => setMarketRate(e.target.value)}
-                placeholder="Ej: 635 VES/USD"
-                disabled={loading}
-                onWheel={(e) => e.currentTarget.blur()}
-                helperText="Proporcionar tasa de mercado para calcular spread"
-              />
-              <TextField
-                label="Comisión (fee)"
-                type="number"
-                value={fee}
-                onChange={(e) => setFee(e.target.value)}
-                placeholder="Ej: 3.75"
-                disabled={loading}
-                onWheel={(e) => e.currentTarget.blur()}
-                helperText="Comisión pagada en la moneda de origen"
-                InputProps={{
-                  endAdornment: fromWalletId ? (
-                    wallets.find(w => w.id === fromWalletId)?.currency || ''
-                  ) : ''
-                }}
-              />
-            </Box>
+            {/* Tasa de mercado: eliminada. El spread se compara contra la tasa diaria
+                (BCV/paralelo) que ya vive en la entidad daily_rates. */}
+            <TextField
+              label="Comisión (fee)"
+              type="number"
+              value={fee}
+              onChange={(e) => setFee(e.target.value)}
+              placeholder="Ej: 3.75"
+              disabled={loading}
+              onWheel={(e) => e.currentTarget.blur()}
+              helperText="Comisión pagada en la moneda de origen"
+              InputProps={{
+                endAdornment: fromWalletId ? (
+                  wallets.find(w => w.id === fromWalletId)?.currency || ''
+                ) : ''
+              }}
+            />
 
             <Box>
               <TextField
@@ -280,27 +264,9 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                       variant="outlined"
                     />
                   )}
-                  {rateData.market && (
-                    <Chip
-                      label={`Mercado: ${rateData.market} ${toCur}/${fromCur}`}
-                      color="secondary"
-                      size="small"
-                    />
-                  )}
-                  {rateData.spread !== null && (
-                    <Chip
-                      label={`Spread: ${rateData.spread.toFixed(2)}%`}
-                      color={rateData.spread > 0 ? 'success' : 'error'}
-                      size="small"
-                      icon={rateData.spread > 0 ? <TrendingUp /> : <TrendingDown />}
-                    />
-                  )}
                 </Box>
                 <Typography variant="caption" color="text.secondary">
                   {rateData.commission > 0 && `La comisión (${rateData.commission.toFixed(2)} ${fromCur}) es aparte del monto. `}
-                  {rateData.spread !== null
-                    ? (rateData.spread > 0 ? '🎉 Spread positivo' : '⚠️ Spread negativo sobre tasa neta')
-                    : 'ℹ️ No se calculó spread (falta tasa de mercado)'}
                 </Typography>
               </Box>
               );
@@ -322,7 +288,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
 
         <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
           💡 Ejemplo: 100 USD → 60,000 VES (tasa 600 VES/USD)
-          {marketRate && ` vs mercado ${marketRate} VES/USD`}
         </Typography>
       </CardContent>
       <Snackbar
