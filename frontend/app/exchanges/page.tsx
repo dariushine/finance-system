@@ -40,6 +40,7 @@ import {
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 import ExchangeForm from '../components/ExchangeForm';
+import DateRangeFilter from '../components/DateRangeFilter';
 
 interface Exchange {
   id: number;
@@ -68,14 +69,24 @@ export default function ExchangesPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [openNewExchange, setOpenNewExchange] = useState(false);
 
+  // Filtro por período / rango de fechas
+  const [period, setPeriod] = useState<string>('all');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [applied, setApplied] = useState<{ period: string; from: string; to: string }>({ period: 'all', from: '', to: '' });
+
   useEffect(() => {
     loadExchanges();
-  }, [page, rowsPerPage]);
+  }, [page, rowsPerPage, applied]);
 
   const loadExchanges = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/exchanges?page=${page + 1}&limit=${rowsPerPage}`);
+      const params = new URLSearchParams({ page: String(page + 1), limit: String(rowsPerPage) });
+      if (applied.period) params.set('period', applied.period);
+      if (applied.from) params.set('from', applied.from);
+      if (applied.to) params.set('to', applied.to);
+      const response = await fetch(`${API_URL}/exchanges?${params.toString()}`);
       if (!response.ok) throw new Error('Error al cargar exchanges');
       
       const data: { data: Exchange[] } | Exchange[] = await response.json();
@@ -95,6 +106,31 @@ export default function ExchangesPage() {
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
+  };
+
+  const handlePeriodChange = (v: string) => {
+    setPeriod(v);
+    if (v === 'custom') return;
+    setPage(0);
+    setApplied({ period: v, from: '', to: '' });
+    setFrom('');
+    setTo('');
+  };
+
+  const handleRangeChange = (f: string, t: string) => {
+    setFrom(f);
+    setTo(t);
+  };
+
+  const handleApply = () => {
+    if (period === 'custom') {
+      if (!from || !to) return;
+      setPage(0);
+      setApplied({ period: 'custom', from, to });
+    } else {
+      setPage(0);
+      setApplied({ period, from: '', to: '' });
+    }
   };
 
   const formatCurrency = (amount: number, currency: string = 'USD') => {
@@ -169,6 +205,17 @@ export default function ExchangesPage() {
             Nuevo Exchange
           </Button>
         </Box>
+      </Box>
+
+      <Box mb={2}>
+        <DateRangeFilter
+          value={period}
+          onChange={handlePeriodChange}
+          from={from}
+          to={to}
+          onRangeChange={handleRangeChange}
+          onApply={handleApply}
+        />
       </Box>
 
       {error && (

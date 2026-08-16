@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import {
   Accordion,
   AccordionSummary,
@@ -89,7 +89,7 @@ const TransactionAccordionItem = memo(function TransactionAccordionItem({
 }: {
   transaction: AccordionTransaction;
   isOpen: boolean;
-  onToggle: () => void;
+  onToggle: (id: number) => void;
   showFee: boolean;
   currency: string | undefined;
   showView: boolean;
@@ -102,7 +102,7 @@ const TransactionAccordionItem = memo(function TransactionAccordionItem({
   return (
     <Accordion
       expanded={isOpen}
-      onChange={onToggle}
+      onChange={() => onToggle(transaction.id)}
       disableGutters
       sx={{
         '&:before': { display: 'none' },
@@ -194,6 +194,12 @@ export default function TransactionAccordionList({
   const [expanded, setExpanded] = useState<number | false>(false);
   const [visibleCount, setVisibleCount] = useState(pageSize ?? transactions.length);
 
+  // Handler ESTABLE: su referencia no cambia entre renders, así React.memo
+  // de cada tarjeta solo re-renderiza la que se abre/cierra (no toda la lista).
+  const handleToggle = useCallback((id: number) => {
+    setExpanded((prev) => (prev === id ? false : id));
+  }, []);
+
   // Si cambian los datos o el pageSize, reinicia la paginación
   useEffect(() => {
     setVisibleCount(pageSize ?? transactions.length);
@@ -208,7 +214,7 @@ export default function TransactionAccordionList({
           key={transaction.id}
           transaction={transaction}
           isOpen={expanded === transaction.id}
-          onToggle={() => setExpanded((prev) => (prev === transaction.id ? false : transaction.id))}
+          onToggle={handleToggle}
           showFee={showFee && transaction.fee != null && transaction.fee > 0}
           currency={walletCurrencyFallback}
           showView={showView}

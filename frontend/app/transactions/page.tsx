@@ -9,6 +9,7 @@ import {
 import { Add } from '@mui/icons-material';
 import TransactionForm from '../components/TransactionForm';
 import TransactionAccordionList from '../components/TransactionAccordionList';
+import DateRangeFilter from '../components/DateRangeFilter';
 import { API_URL } from '../lib/api';
 
 interface Transaction {
@@ -31,10 +32,20 @@ export default function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
 
+  // Filtro por período / rango de fechas
+  const [period, setPeriod] = useState<string>('all');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [applied, setApplied] = useState<{ period: string; from: string; to: string }>({ period: 'all', from: '', to: '' });
+
   const loadTransactions = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/transactions?limit=100`);
+      const params = new URLSearchParams({ limit: '100' });
+      if (applied.period) params.set('period', applied.period);
+      if (applied.from) params.set('from', applied.from);
+      if (applied.to) params.set('to', applied.to);
+      const response = await fetch(`${API_URL}/transactions?${params.toString()}`);
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'No se pudieron cargar las transacciones');
       setTransactions(Array.isArray(payload) ? payload : payload.data || []);
@@ -44,9 +55,32 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applied]);
 
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
+
+  const handlePeriodChange = (v: string) => {
+    setPeriod(v);
+    if (v === 'custom') return;
+    // Preset: aplicar de una vez
+    setApplied({ period: v, from: '', to: '' });
+    setFrom('');
+    setTo('');
+  };
+
+  const handleRangeChange = (f: string, t: string) => {
+    setFrom(f);
+    setTo(t);
+  };
+
+  const handleApply = () => {
+    if (period === 'custom') {
+      if (!from || !to) return;
+      setApplied({ period: 'custom', from, to });
+    } else {
+      setApplied({ period, from: '', to: '' });
+    }
+  };
 
   return (
     <Box>
@@ -56,6 +90,17 @@ export default function TransactionsPage() {
           <Typography variant="body1" color="text.secondary">Historial de ingresos y gastos.</Typography>
         </Box>
         <Button variant="contained" startIcon={<Add />} onClick={() => setFormOpen(true)}>Nueva transacción</Button>
+      </Box>
+
+      <Box mb={2}>
+        <DateRangeFilter
+          value={period}
+          onChange={handlePeriodChange}
+          from={from}
+          to={to}
+          onRangeChange={handleRangeChange}
+          onApply={handleApply}
+        />
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>{error}</Alert>}
