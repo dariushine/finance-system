@@ -318,7 +318,7 @@ export default function RecentTransactions() {
               startIcon={<ExpandMoreIcon />}
               onClick={() => setVisibleCount((c) => c + MAX_ROWS)}
             >
-              Ver más ({transactions.length - visibleCount} restantes)
+              Ver más
             </Button>
           </Box>
         )}
