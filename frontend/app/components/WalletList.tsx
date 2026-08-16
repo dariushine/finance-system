@@ -8,6 +8,8 @@ import {
 import { AccountBalance, AttachMoney, CreditCard, Savings, ShowChart, ChevronRight } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useRef } from 'react';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import { useWallets } from '../lib/hooks';
 import theme from '../theme';
 
@@ -26,6 +28,10 @@ const PER_PAGE = 6;
 
 export default function WalletList() {
   const router = useRouter();
+  const theme = useTheme();
+  // En pantallas grandes (>= md, 3 columnas) no hace falta corregir el scroll;
+  // solo en móvil (1 tarjeta por fila) el salto de altura molesta.
+  const isSmallScreens = useMediaQuery(theme.breakpoints.down('md'));
   const cardRef = useRef<HTMLDivElement>(null);
   const { wallets, loading, error } = useWallets();
   const [page, setPage] = useState(1);
@@ -41,12 +47,13 @@ export default function WalletList() {
   useEffect(() => {
     if (prevPageRef.current !== currentPage) {
       prevPageRef.current = currentPage;
+      if (!isSmallScreens) return; // en grandes no hacemos scroll
       const id = window.setTimeout(() => {
         cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 50);
       return () => window.clearTimeout(id);
     }
-  }, [currentPage]);
+  }, [currentPage, isSmallScreens]);
 
   const handlePageChange = (_: unknown, value: number) => {
     setPage(value);
