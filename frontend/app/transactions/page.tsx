@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
   DialogContent, DialogTitle, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Typography, useMediaQuery, useTheme,
+  TablePagination, TableRow, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
-import { Add } from '@mui/icons-material';
+import { Add, Download } from '@mui/icons-material';
 import TransactionForm from '../components/TransactionForm';
 import TransactionAccordionList from '../components/TransactionAccordionList';
 import DateRangeFilter from '../components/DateRangeFilter';
@@ -31,6 +31,10 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+
+  // Paginación
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // Filtro por período / rango de fechas
   const [period, setPeriod] = useState<string>('all');
@@ -80,6 +84,41 @@ export default function TransactionsPage() {
     } else {
       setApplied({ period, from: '', to: '' });
     }
+    setPage(0);
+  };
+
+  const handleChangePage = (_e: unknown, newPage: number) => setPage(newPage);
+
+  const handleChangeRowsPerPage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(e.target.value, 10));
+    setPage(0);
+  };
+
+  // Transacciones visibles en la página actual
+  const startIndex = page * rowsPerPage;
+  const pagedTransactions = transactions.slice(startIndex, startIndex + rowsPerPage);
+
+  const exportCSV = () => {
+    const header = ['ID', 'Fecha', 'Categoría', 'Tipo', 'Billetera', 'Monto', 'Moneda', 'Fee', 'Descripción'];
+    const rows = transactions.map((t) => [
+      t.id,
+      new Date(t.date).toLocaleDateString('es-VE'),
+      t.category,
+      t.type === 'income' ? 'Ingreso' : 'Gasto',
+      t.walletName || '',
+      t.type === 'income' ? String(t.amount) : `-${t.amount}`,
+      t.walletCurrency || '',
+      t.fee ? String(t.fee) : '',
+      t.description || '',
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transacciones_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -89,7 +128,10 @@ export default function TransactionsPage() {
           <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>Transacciones</Typography>
           <Typography variant="body1" color="text.secondary">Historial de ingresos y gastos.</Typography>
         </Box>
-        <Button variant="contained" startIcon={<Add />} onClick={() => setFormOpen(true)}>Nueva transacción</Button>
+        <Box display="flex" gap={1} flexWrap="wrap">
+          <Button variant="outlined" startIcon={<Download />} onClick={exportCSV}>Exportar</Button>
+          <Button variant="contained" startIcon={<Add />} onClick={() => setFormOpen(true)}>Nueva transacción</Button>
+        </Box>
       </Box>
 
       <Box mb={2}>
@@ -109,10 +151,9 @@ export default function TransactionsPage() {
         <CardContent>
           {loading ? <Box display="flex" justifyContent="center" py={5}><CircularProgress /></Box> : isMobile ? (
             <TransactionAccordionList
-              transactions={transactions}
+              transactions={pagedTransactions}
               showFee
               showView={false}
-              pageSize={10}
             />
           ) : (
             <TableContainer>
@@ -122,7 +163,7 @@ export default function TransactionsPage() {
                   <TableCell>Tipo</TableCell><TableCell align="right">Monto</TableCell><TableCell align="right">Fee</TableCell><TableCell>Descripción</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
-                  {transactions.map((transaction) => (
+                  {pagedTransactions.map((transaction) => (
                     <TableRow key={transaction.id} hover>
                       <TableCell>{new Date(transaction.date).toLocaleDateString('es-VE')}</TableCell>
                       <TableCell><Chip label={transaction.category} size="small" variant="outlined" /></TableCell>
@@ -143,6 +184,18 @@ export default function TransactionsPage() {
               </Table>
               {!transactions.length && <Typography color="text.secondary" textAlign="center" py={4}>No hay transacciones registradas.</Typography>}
             </TableContainer>
+          )}
+          {transactions.length > 0 && (
+            <TablePagination
+              component="div"
+              count={transactions.length}
+              page={page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              labelRowsPerPage="Registros por página"
+            />
           )}
         </CardContent>
       </Card>

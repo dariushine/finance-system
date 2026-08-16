@@ -168,6 +168,7 @@ export default function RecentTransactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(MAX_ROWS);
 
   const load = async () => {
     try {
@@ -189,7 +190,7 @@ export default function RecentTransactions() {
 
   useEffect(() => { load(); }, []);
 
-  const displayed = transactions.slice(0, MAX_ROWS);
+  const displayed = transactions.slice(0, visibleCount);
 
   // Handler ESTABLE: su referencia no cambia entre renders, así el memo de cada
   // tarjeta solo re-renderiza la que se abre/cierra (no toda la lista).
@@ -303,6 +304,17 @@ export default function RecentTransactions() {
               </TableBody>
             </Table>
           </TableContainer>
+        )}
+        {visibleCount < transactions.length && (
+          <Box display="flex" justifyContent="center" mt={2}>
+            <Button
+              size="small"
+              startIcon={<ExpandMoreIcon />}
+              onClick={() => setVisibleCount((c) => c + MAX_ROWS)}
+            >
+              Ver más ({transactions.length - visibleCount} restantes)
+            </Button>
+          </Box>
         )}
       </CardContent>
     </Card>
