@@ -674,7 +674,7 @@ app.get('/api/wallets/:id/report', (req, res) => {
        FROM transactions t
        JOIN categories c ON c.id = t.category_id
        WHERE t.wallet_id = ? AND t.date >= ? AND t.date <= ?
-       ORDER BY t.date DESC, t.created_at DESC, t.id DESC`,
+       ORDER BY t.date DESC, t.time DESC, t.created_at DESC, t.id DESC`,
       [walletId, fromDate, toDate],
       (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -782,7 +782,7 @@ app.get('/api/transactions', (req, res) => {
     JOIN wallets w ON w.id = t.wallet_id
     JOIN categories c ON c.id = t.category_id
     WHERE ${conditions.join(' AND ')}
-    ORDER BY t.created_at DESC, t.id DESC
+    ORDER BY t.date DESC, t.time DESC, t.created_at DESC, t.id DESC
     LIMIT ? OFFSET ?`;
 
   db.all(query, params, (err, rows) => {
