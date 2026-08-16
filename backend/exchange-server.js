@@ -1061,7 +1061,7 @@ app.get('/api/exchanges', (req, res) => {
     }
   }
 
-  const conditions = ['date(e.created_at) >= ?', 'date(e.created_at) <= ?'];
+  const conditions = ["COALESCE(dt.date, '') >= ?", "COALESCE(dt.date, '') <= ?"];
   const params = [fromDate, toDate, limit, offset];
 
   const query = `
@@ -1077,6 +1077,8 @@ app.get('/api/exchanges', (req, res) => {
       e.fee,
       e.description,
       e.created_at AS createdAt,
+      dt.date AS date,
+      dt.time AS time,
       from_wallet.name AS fromWalletName,
       to_wallet.name AS toWalletName,
       from_wallet.currency AS fromCurrency,
@@ -1084,13 +1086,14 @@ app.get('/api/exchanges', (req, res) => {
     FROM exchanges e
     JOIN wallets from_wallet ON from_wallet.id = e.from_wallet_id
     JOIN wallets to_wallet ON to_wallet.id = e.to_wallet_id
+    LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
     WHERE ${conditions.join(' AND ')}
-    ORDER BY e.created_at DESC, e.id DESC
+    ORDER BY COALESCE(dt.date, '1970-01-01'), COALESCE(dt.time, ''), e.created_at DESC, e.id DESC
     LIMIT ? OFFSET ?`;
 
   db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.get(`SELECT COUNT(*) AS total FROM exchanges e WHERE ${conditions.join(' AND ')}`, [fromDate, toDate], (countErr, result) => {
+    db.get(`SELECT COUNT(*) AS total FROM exchanges e LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id WHERE ${conditions.join(' AND ')}`, [fromDate, toDate], (countErr, result) => {
       if (countErr) return res.status(500).json({ error: countErr.message });
       res.json({ data: rows || [], total: result?.total || 0, page, limit });
     });

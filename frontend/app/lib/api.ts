@@ -64,6 +64,11 @@ export interface Exchange {
   toAmount: number;
   description?: string;
   created_at: string;
+  createdAt?: string;
+  /** Fecha seleccionada por el usuario (YYYY-MM-DD) si la puso */
+  date?: string;
+  /** Hora seleccionada por el usuario (HH:MM:SS) si la puso */
+  time?: string | null;
 }
 
 // Wallets API
