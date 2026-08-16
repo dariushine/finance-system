@@ -13,14 +13,7 @@ import {
   CircularProgress,
   Divider,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Typography,
-  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import {
@@ -32,7 +25,7 @@ import {
   CalendarMonth,
   Notes,
   Tag,
-  Savings,
+  ChevronRight,
 } from '@mui/icons-material';
 import { getTransaction, TransactionDetail } from '../../lib/api';
 
@@ -66,7 +59,6 @@ export default function TransactionDetailPage() {
   const router = useRouter();
   const id = Number(params.id);
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [tx, setTx] = useState<TransactionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,11 +102,6 @@ export default function TransactionDetailPage() {
   const currency = tx.walletCurrency || 'USD';
   const children = tx.children || [];
   const hasChildren = children.length > 0;
-
-  let balanceCaption = 'Saldo de la billetera';
-  if (tx.balanceAfter != null) {
-    balanceCaption = isIncome ? 'Saldo después del ingreso' : 'Saldo después del gasto';
-  }
 
   return (
     <Box>
@@ -209,77 +196,40 @@ export default function TransactionDetailPage() {
                   </Box>
                 </Box>
               )}
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* Saldo */}
-        <Card>
-          <CardContent>
-            <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <Savings color="action" />
-              <Typography variant="h6">Saldo</Typography>
-            </Box>
-            <Stack spacing={1}>
-              {tx.balanceAfter != null ? (
-                <>
-                  <Typography variant="caption" color="text.secondary">{balanceCaption}</Typography>
-                  <Typography variant="h4" fontWeight="bold" color="primary.main">
-                    {formatCurrency(tx.balanceAfter, currency)}
-                  </Typography>
-                </>
-              ) : (
-                <Alert severity="info">No se pudo calcular el saldo después de esta transacción.</Alert>
+              {tx.balanceAfter != null && (
+                <InfoRow
+                  label="Saldo resultante"
+                  value={
+                    <Typography variant="body1" fontWeight="bold" color="primary.main">
+                      {formatCurrency(tx.balanceAfter, currency)}
+                    </Typography>
+                  }
+                />
               )}
             </Stack>
           </CardContent>
         </Card>
-      </Box>
 
-      {/* Transacciones hijas */}
-      {hasChildren && (
+        {/* Transacciones asociadas */}
         <Card>
           <CardContent>
             <Box display="flex" alignItems="center" gap={1} mb={2}>
               <Tag color="action" />
               <Typography variant="h6">Transacciones asociadas</Typography>
-              <Chip size="small" label={`${children.length}`} />
+              {hasChildren && <Chip size="small" label={`${children.length}`} />}
             </Box>
-            {isMobile ? (
+            {hasChildren ? (
               <Stack spacing={1}>
                 {children.map((c) => (
-                  <TransactionChildRow key={c.id} child={c} />
+                  <TransactionChildRow key={c.id} child={c} currency={currency} onClick={() => router.push(`/transactions/${c.id}`)} />
                 ))}
               </Stack>
             ) : (
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Categoría</TableCell>
-                      <TableCell>Descripción</TableCell>
-                      <TableCell align="right">Monto</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {children.map((c) => (
-                      <TableRow key={c.id} hover>
-                        <TableCell><Chip size="small" label={c.category} variant="outlined" /></TableCell>
-                        <TableCell>{c.description || '—'}</TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight="bold" color={c.type === 'income' ? 'success.main' : 'error.main'}>
-                            {c.type === 'income' ? '+' : '-'}{formatCurrency(c.amount, c.walletCurrency || currency)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <Typography variant="body2" color="text.secondary">Sin transacciones asociadas.</Typography>
             )}
           </CardContent>
         </Card>
-      )}
+      </Box>
     </Box>
   );
 }
@@ -293,10 +243,27 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function TransactionChildRow({ child }: { child: TransactionDetail }) {
+function TransactionChildRow({
+  child,
+  currency,
+  onClick,
+}: {
+  child: TransactionDetail;
+  currency: string;
+  onClick: () => void;
+}) {
   const isIncome = child.type === 'income';
   return (
-    <Card variant="outlined" sx={{ boxShadow: 'none' }}>
+    <Card
+      variant="outlined"
+      onClick={onClick}
+      sx={{
+        boxShadow: 'none',
+        cursor: 'pointer',
+        transition: 'background-color 0.15s ease',
+        '&:hover': { backgroundColor: 'action.hover' },
+      }}
+    >
       <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" gap={1}>
           <Stack spacing={0.25}>
@@ -305,9 +272,12 @@ function TransactionChildRow({ child }: { child: TransactionDetail }) {
               <Typography variant="caption" color="text.secondary">{child.description}</Typography>
             )}
           </Stack>
-          <Typography variant="body1" fontWeight="bold" color={isIncome ? 'success.main' : 'error.main'}>
-            {isIncome ? '+' : '-'}{formatCurrency(child.amount, child.walletCurrency || 'USD')}
-          </Typography>
+          <Box display="flex" alignItems="center" gap={0.5}>
+            <Typography variant="body1" fontWeight="bold" color={isIncome ? 'success.main' : 'error.main'}>
+              {isIncome ? '+' : '-'}{formatCurrency(child.amount, child.walletCurrency || currency)}
+            </Typography>
+            <ChevronRight fontSize="small" color="action" />
+          </Box>
         </Box>
       </CardContent>
     </Card>
