@@ -474,7 +474,7 @@ export default function WalletDetailPage() {
               <TransactionAccordionList
                 transactions={pagedTransactions}
                 walletCurrencyFallback={wallet.currency}
-                showView={false}
+                showView
               />
             ) : (
             <TableContainer component={Paper} variant="outlined">
@@ -490,7 +490,12 @@ export default function WalletDetailPage() {
                 </TableHead>
                 <TableBody>
                   {pagedTransactions.map((t) => (
-                    <TableRow key={t.id}>
+                    <TableRow
+                      key={t.id}
+                      hover
+                      onClick={() => router.push(`/transactions/${t.id}`)}
+                      sx={{ cursor: 'pointer' }}
+                    >
                       <TableCell>{t.date}</TableCell>
                       <TableCell>
                         <Chip

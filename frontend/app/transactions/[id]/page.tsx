@@ -135,7 +135,22 @@ export default function TransactionDetailPage() {
                 {isIncome ? '+' : '-'}{formatCurrency(tx.amount, currency)}
               </Typography>
               {tx.walletName && (
-                <Box display="flex" alignItems="center" justifyContent="center" gap={0.75}>
+                <Box
+                  component="button"
+                  onClick={() => router.push(`/wallets/${tx.walletId}`)}
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    mx: 'auto',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    color: 'text.primary',
+                    '&:hover': { textDecoration: 'underline', color: 'primary.main' },
+                  }}
+                >
                   <AccountBalanceWallet fontSize="small" color="action" />
                   <Typography variant="body1" fontWeight="medium">{tx.walletName}</Typography>
                 </Box>
