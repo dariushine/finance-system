@@ -184,22 +184,25 @@ export default function Navigation() {
 
   return (
     <>
-      {/* Barra superior (solo escritorio): tasas del día + flecha para ocultar/mostrar */}
+      {/* Barra superior (solo escritorio): tasas del día + botón único para ocultar/mostrar.
+          El panel se desliza hacia arriba/abajo con animación y, al colapsar, el botón
+          se asoma un poco por encima del borde superior de la ventana. */}
       {!isMobile && (
-        appBarOpen ? (
-          <AppBar
-            position="fixed"
-            sx={{
-              zIndex: theme.zIndex.drawer + 1,
-              width: `calc(100% - ${sidebarWidth}px)`,
-              ml: `${sidebarWidth}px`,
-              borderRadius: 0, // sin bordes redondeados: conecta bien con la barra lateral
-              transition: theme.transitions.create(['width', 'margin-left'], {
-                easing: theme.transitions.easing.sharp,
-                duration: theme.transitions.duration.enteringScreen,
-              }),
-            }}
-          >
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: `${sidebarWidth}px`,
+            width: `calc(100% - ${sidebarWidth}px)`,
+            zIndex: theme.zIndex.drawer + 1,
+            transform: appBarOpen ? 'translateY(0)' : 'translateY(-58px)',
+            transition: theme.transitions.create('transform', {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.enteringScreen,
+            }),
+          }}
+        >
+          <AppBar position="static" sx={{ borderRadius: 0 }}>
             <Toolbar>
               <DashboardIcon sx={{ mr: 1 }} />
               <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
@@ -223,44 +226,38 @@ export default function Navigation() {
               ) : (
                 <Chip size="small" label="Tasas —" sx={{ color: 'text.primary' }} />
               )}
-
-              <Tooltip title="Ocultar tasas">
-                <IconButton color="inherit" onClick={() => setAppBarOpen(false)} sx={{ ml: 1 }}>
-                  <AppBarCollapseIcon />
-                </IconButton>
-              </Tooltip>
             </Toolbar>
           </AppBar>
-        ) : (
-          /* Colapsado: se oculta todo el panel y queda solo un botón cuadrado
-             con la flecha hacia abajo, centrado debajo donde estaba el panel. */
-          <Box
-            sx={{
-              position: 'fixed',
-              top: 12,
-              zIndex: theme.zIndex.drawer + 1,
-              left: `calc(${sidebarWidth}px + (100% - ${sidebarWidth}px) / 2)`,
-              transform: 'translateX(-50%)',
-            }}
-          >
-            <Tooltip title="Mostrar tasas">
-              <IconButton
-                onClick={() => setAppBarOpen(true)}
-                aria-label="Mostrar tasas"
-                sx={{
-                  borderRadius: 1,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: 'background.paper',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                  '&:hover': { bgcolor: 'action.hover' },
-                }}
-              >
-                <AppBarExpandIcon />
-              </IconButton>
-            </Tooltip>
+
+          {/* Botón único: pegado al borde inferior del panel, centrado. */}
+          <Box sx={{ position: 'relative', height: 0, zIndex: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+              <Tooltip title={appBarOpen ? 'Ocultar tasas' : 'Mostrar tasas'}>
+                <IconButton
+                  onClick={() => setAppBarOpen(!appBarOpen)}
+                  aria-label={appBarOpen ? 'Ocultar tasas' : 'Mostrar tasas'}
+                  size="small"
+                  sx={{
+                    transform: 'translateY(50%)',
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                    width: 24,
+                    height: 24,
+                    minWidth: 24,
+                    p: 0,
+                    '& .MuiSvgIcon-root': { fontSize: 16 },
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  {appBarOpen ? <AppBarCollapseIcon /> : <AppBarExpandIcon />}
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
-        )
+        </Box>
       )}
 
       {/* Drawer móvil */}
