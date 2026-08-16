@@ -312,18 +312,24 @@ function ensureExchangesFeeSync() {
     //   - transactions.fee  de su padre
     //   - exchanges.fee     del exchange cuyo debit_transaction_id = ese padre
     db.exec(`
+      DROP TRIGGER IF EXISTS trg_sync_fee_after_insert;
+      DROP TRIGGER IF EXISTS trg_sync_fee_after_delete;
+      DROP TRIGGER IF EXISTS trg_sync_fee_after_update;
+
       CREATE TRIGGER IF NOT EXISTS trg_sync_fee_after_insert
       AFTER INSERT ON transactions
       FOR EACH ROW
       WHEN NEW.parent_transaction_id IS NOT NULL
       BEGIN
         UPDATE transactions SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions
-           WHERE parent_transaction_id = NEW.parent_transaction_id)
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = NEW.parent_transaction_id AND c.name = 'fee')
           WHERE id = NEW.parent_transaction_id;
         UPDATE exchanges SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions
-           WHERE parent_transaction_id = NEW.parent_transaction_id)
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = NEW.parent_transaction_id AND c.name = 'fee')
           WHERE debit_transaction_id = NEW.parent_transaction_id;
       END;
 
@@ -333,12 +339,14 @@ function ensureExchangesFeeSync() {
       WHEN OLD.parent_transaction_id IS NOT NULL
       BEGIN
         UPDATE transactions SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions
-           WHERE parent_transaction_id = OLD.parent_transaction_id)
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = OLD.parent_transaction_id AND c.name = 'fee')
           WHERE id = OLD.parent_transaction_id;
         UPDATE exchanges SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions
-           WHERE parent_transaction_id = OLD.parent_transaction_id)
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = OLD.parent_transaction_id AND c.name = 'fee')
           WHERE debit_transaction_id = OLD.parent_transaction_id;
       END;
 
@@ -348,21 +356,25 @@ function ensureExchangesFeeSync() {
       BEGIN
         -- Recalcular el padre viejo y los exchanges de ese padre
         UPDATE transactions SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions
-           WHERE parent_transaction_id = OLD.parent_transaction_id)
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = OLD.parent_transaction_id AND c.name = 'fee')
           WHERE id = OLD.parent_transaction_id;
         UPDATE exchanges SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions
-           WHERE parent_transaction_id = OLD.parent_transaction_id)
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = OLD.parent_transaction_id AND c.name = 'fee')
           WHERE debit_transaction_id = OLD.parent_transaction_id;
         -- Recalcular el padre nuevo
         UPDATE transactions SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions
-           WHERE parent_transaction_id = NEW.parent_transaction_id)
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = NEW.parent_transaction_id AND c.name = 'fee')
           WHERE id = NEW.parent_transaction_id;
         UPDATE exchanges SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions
-           WHERE parent_transaction_id = NEW.parent_transaction_id)
+          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = NEW.parent_transaction_id AND c.name = 'fee')
           WHERE debit_transaction_id = NEW.parent_transaction_id;
       END;
     `);
@@ -372,7 +384,9 @@ function ensureExchangesFeeSync() {
     // Recalcular fee de cada transacción padre
     db.run(`
       UPDATE transactions SET fee = COALESCE((
-        SELECT SUM(t.amount) FROM transactions t WHERE t.parent_transaction_id = transactions.id
+        SELECT SUM(t.amount) FROM transactions t
+        JOIN categories c ON c.id = t.category_id
+        WHERE t.parent_transaction_id = transactions.id AND c.name = 'fee'
       ), 0)
       WHERE id IN (SELECT DISTINCT parent_transaction_id FROM transactions WHERE parent_transaction_id IS NOT NULL)
     `);
@@ -380,7 +394,8 @@ function ensureExchangesFeeSync() {
     db.run(`
       UPDATE exchanges SET fee = COALESCE((
         SELECT SUM(t.amount) FROM transactions t
-        WHERE t.parent_transaction_id = exchanges.debit_transaction_id
+        JOIN categories c ON c.id = t.category_id
+        WHERE t.parent_transaction_id = exchanges.debit_transaction_id AND c.name = 'fee'
       ), 0)
     `);
   };
