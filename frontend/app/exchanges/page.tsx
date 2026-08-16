@@ -40,6 +40,7 @@ interface Exchange {
   fromAmount: number;
   toAmount: number;
   rate: number;
+  fee?: number;
   description?: string;
   createdAt: string;
   fromWalletName?: string;
@@ -95,7 +96,7 @@ export default function ExchangesPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ['ID', 'Desde', 'Hacia', 'Monto Desde', 'Monto Hacia', 'Tasa', 'Fecha'];
+    const headers = ['ID', 'Desde', 'Hacia', 'Monto Desde', 'Monto Hacia', 'Tasa', 'Fee', 'Fecha'];
     const rows = exchanges.map(ex => [
       ex.id,
       ex.fromWalletName || `Billetera ${ex.fromWalletId}`,
@@ -103,6 +104,7 @@ export default function ExchangesPage() {
       ex.fromAmount,
       ex.toAmount,
       ex.rate.toFixed(4),
+      ex.fee ? ex.fee.toFixed(2) : '',
       new Date(ex.createdAt).toLocaleString('es-VE')
     ]);
 
@@ -211,6 +213,7 @@ export default function ExchangesPage() {
                   <TableCell>From Amount</TableCell>
                   <TableCell>To Amount</TableCell>
                   <TableCell>Tasa</TableCell>
+                  <TableCell>Fee</TableCell>
                   <TableCell>Descripción</TableCell>
                   <TableCell align="right">Acciones</TableCell>
                 </TableRow>
@@ -260,6 +263,20 @@ export default function ExchangesPage() {
                           size="small"
                           color="primary"
                         />
+                      </TableCell>
+                      <TableCell>
+                        {exchange.fee && exchange.fee > 0 ? (
+                          <Chip
+                            label={`${(exchange.fee || 0).toFixed(2)} ${exchange.fromCurrency || ''}`}
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            -
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" noWrap maxWidth={150}>

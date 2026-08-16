@@ -91,16 +91,16 @@ db.serialize(() => {
   )`);
 
   // Migración: quitar columnas market_rate, spread y fee de exchanges.
-  // El spread ya no se guarda: se calculará sobre la marcha contra daily_rates
-  // (la tasa del día) en la futura página de detalle. La comisión (fee) se
-  // conserva como transacción separada tipo 'fee', no como columna.
+  // Migración de exchanges: si aún tiene market_rate o spread (de versiones viejas),
+  // se recrea la tabla sin esas columnas (el spread se calculará sobre la marcha
+  // contra daily_rates). No hay columna fee: la comisión vive como transacción
+  // separada tipo 'fee' vinculada por parent_transaction_id.
   db.all(`PRAGMA table_info(exchanges)`, (err, cols) => {
     if (err) return;
     const names = (cols || []).map((c) => c.name);
     const hasMarket = names.includes('market_rate');
     const hasSpread = names.includes('spread');
-    const hasFee = names.includes('fee');
-    if (hasMarket || hasSpread || hasFee) {
+    if (hasMarket || hasSpread) {
       db.exec(`
         BEGIN;
         CREATE TABLE exchanges_new (
@@ -125,7 +125,7 @@ db.serialize(() => {
         ALTER TABLE exchanges_new RENAME TO exchanges;
         COMMIT;
       `, (rebuildErr) => {
-        if (!rebuildErr) console.log('✅ exchanges: eliminadas columnas market_rate, spread, fee');
+        if (!rebuildErr) console.log('✅ exchanges: eliminadas columnas market_rate, spread');
       });
     }
   });
@@ -823,9 +823,30 @@ app.get('/api/exchanges', (req, res) => {
   db.all(query, [limit, offset], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    db.get('SELECT COUNT(*) AS total FROM exchanges', (countErr, result) => {
-      if (countErr) return res.status(500).json({ error: countErr.message });
-      res.json({ data: rows, total: result?.total || 0, page, limit });
+    // Calcular el fee de cada exchange: sumar las transacciones tipo 'fee'
+    // vinculadas (parent_transaction_id = debit_transaction_id del exchange).
+    const feeQueries = (rows || []).map((ex) => new Promise((resolve) => {
+      db.all(
+        `SELECT t.amount FROM transactions t
+         JOIN categories c ON c.id = t.category_id
+         WHERE c.name = 'fee' AND t.parent_transaction_id = ?`,
+        [ex.debitTransactionId],
+        (feeErr, feeRows) => {
+          const total = (feeRows || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+          resolve({ id: ex.id, fee: parseFloat(total.toFixed(2)) });
+        }
+      );
+    }));
+
+    Promise.all(feeQueries).then((fees) => {
+      const feeMap = {};
+      fees.forEach((f) => { feeMap[f.id] = f.fee; });
+      const data = (rows || []).map((ex) => ({ ...ex, fee: feeMap[ex.id] || 0 }));
+
+      db.get('SELECT COUNT(*) AS total FROM exchanges', (countErr, result) => {
+        if (countErr) return res.status(500).json({ error: countErr.message });
+        res.json({ data, total: result?.total || 0, page, limit });
+      });
     });
   });
 });
