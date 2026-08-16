@@ -208,9 +208,8 @@ export default function ExchangesPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ['ID', 'Desde', 'Hacia', 'Monto Desde', 'Monto Hacia', 'Tasa', 'Fee', 'Fecha'];
+    const headers = ['Desde', 'Hacia', 'Monto Desde', 'Monto Hacia', 'Tasa', 'Fee', 'Fecha'];
     const rows = exchanges.map(ex => [
-      ex.id,
       ex.fromWalletName || `Billetera ${ex.fromWalletId}`,
       ex.toWalletName || `Billetera ${ex.toWalletId}`,
       ex.fromAmount,
