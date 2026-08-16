@@ -41,6 +41,7 @@ import {
   Tag,
   ChevronRight,
   InfoOutlined,
+  SwapHoriz,
   Edit as EditIcon,
   DeleteOutline,
   Add as AddIcon,
@@ -507,6 +508,32 @@ export default function TransactionDetailPage() {
                   >
                     <ReceiptLong fontSize="small" />
                     #{tx.parentTransactionId}
+                    <ChevronRight fontSize="small" />
+                  </Box>
+                </Box>
+              )}
+              {tx.isExchangeMember && tx.exchangeId != null && (
+                <Box display="flex" justifyContent="space-between" gap={2}>
+                  <Typography variant="body2" color="text.secondary">Exchange</Typography>
+                  <Box
+                    component="button"
+                    onClick={() => router.push(`/exchanges/${tx.exchangeId}`)}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      color: 'primary.main',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      '&:hover': { textDecoration: 'underline' },
+                    }}
+                  >
+                    <SwapHoriz fontSize="small" />
+                    Ver exchange #{tx.exchangeId}
                     <ChevronRight fontSize="small" />
                   </Box>
                 </Box>
