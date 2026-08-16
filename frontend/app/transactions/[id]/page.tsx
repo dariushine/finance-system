@@ -533,7 +533,7 @@ export default function TransactionDetailPage() {
                     }}
                   >
                     <SwapHoriz fontSize="small" />
-                    Ver exchange #{tx.exchangeId}
+                    #{tx.exchangeId}
                     <ChevronRight fontSize="small" />
                   </Box>
                 </Box>

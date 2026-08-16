@@ -16,8 +16,6 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  IconButton,
-  Tooltip,
   Button,
   Dialog,
   DialogTitle,
@@ -393,14 +391,13 @@ export default function ExchangesPage() {
                   <TableCell>To Amount</TableCell>
                   <TableCell>Fee</TableCell>
                   <TableCell>Descripción</TableCell>
-                  <TableCell align="right">Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {exchanges
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((exchange) => (
-                    <TableRow key={exchange.id} hover>
+                    <TableRow key={exchange.id} hover onClick={() => router.push(`/exchanges/${exchange.id}`)} sx={{ cursor: 'pointer' }}>
                       <TableCell>
                         <Typography variant="body2">
                           {exchange.date ? exchange.date.split('-').reverse().join('/') : new Date(exchange.createdAt).toLocaleDateString('es-VE')}
@@ -450,13 +447,6 @@ export default function ExchangesPage() {
                         <Typography variant="body2" noWrap maxWidth={150}>
                           {exchange.description || '-'}
                         </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="Ver detalles">
-                          <IconButton size="small" onClick={() => router.push(`/exchanges/${exchange.id}`)}>
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
                       </TableCell>
                     </TableRow>
                 ))}

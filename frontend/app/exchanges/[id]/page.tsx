@@ -141,17 +141,23 @@ export default function ExchangeDetailPage() {
               <Typography variant="caption" color="text.secondary" display="block" textTransform="uppercase" letterSpacing={1}>
                 Exchange
               </Typography>
-              <Typography
-                variant="h3"
-                fontWeight="bold"
-                color="success.main"
-                sx={{ fontSize: { xs: '2rem', sm: '2.5rem' } }}
-              >
-                +{formatCurrency(exchange.toAmount, toCurrency)}
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                {formatCurrency(exchange.fromAmount, fromCurrency)} → {formatCurrency(exchange.toAmount, toCurrency)}
-              </Typography>
+              <Box display="flex" alignItems="center" justifyContent="center" gap={{ xs: 2, sm: 3 }} flexWrap="wrap" sx={{ mt: 1 }}>
+                {/* Monto de origen (enviado) */}
+                <Stack alignItems="center" spacing={0.25}>
+                  <WalletLink id={exchange.fromWalletId} name={exchange.fromWalletName} fallback={`Billetera ${exchange.fromWalletId}`} />
+                  <Typography variant="h5" fontWeight="bold" color="error.main" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' } }}>
+                    -{formatCurrency(exchange.fromAmount, fromCurrency)}
+                  </Typography>
+                </Stack>
+                <CompareArrows sx={{ color: 'text.secondary', fontSize: { xs: 28, sm: 36 } }} />
+                {/* Monto de destino (recibido) */}
+                <Stack alignItems="center" spacing={0.25}>
+                  <WalletLink id={exchange.toWalletId} name={exchange.toWalletName} fallback={`Billetera ${exchange.toWalletId}`} />
+                  <Typography variant="h5" fontWeight="bold" color="success.main" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' } }}>
+                    +{formatCurrency(exchange.toAmount, toCurrency)}
+                  </Typography>
+                </Stack>
+              </Box>
               <Box display="flex" gap={1} justifyContent="center" mt={1} flexWrap="wrap">
                 <Chip
                   icon={<Percent />}
