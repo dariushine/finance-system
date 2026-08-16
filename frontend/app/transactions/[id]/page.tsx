@@ -402,7 +402,7 @@ export default function TransactionDetailPage() {
                   label={`Comisión ${formatCurrency(tx.fee!, currency)}`}
                   color="warning"
                   variant="outlined"
-                  sx={{ mt: 1 }}
+                  sx={{ display: 'flex', width: 'fit-content', mx: 'auto', mt: 1 }}
                 />
               )}
             </Box>
