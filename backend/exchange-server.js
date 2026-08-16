@@ -349,9 +349,12 @@ function getRateForDate(date, type) {
   });
 }
 
-function createTransaction(walletId, categoryName, type, amount, description, fee = 0) {
+function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date) {
   return new Promise((resolve, reject) => {
     const commission = Number(fee) || 0;
+    // Fecha de la transacción: opcional. Si no se provee, se usa hoy (UTC).
+    // El endpoint valida el formato antes de llamar; aquí solo se aplica.
+    const txDate = typeof date === 'string' && date !== '' ? date : new Date().toISOString().split('T')[0];
     db.serialize(() => {
       // 1. Obtener wallet
       db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId], (err, wallet) => {
@@ -379,14 +382,12 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
             
             // 5. Crear transacción y actualizar balance en transacción
             db.run('BEGIN TRANSACTION');
-            
-            const date = new Date().toISOString().split('T')[0];
 
             // 5a. Transacción principal con el monto original (sin comisión)
             db.run(
               `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [walletId, category.id, type, amount, description || '', date, 1.0, amount, 0, null],
+              [walletId, category.id, type, amount, description || '', txDate, 1.0, amount, 0, null],
               function(err) {
                 if (err) {
                   db.run('ROLLBACK');
@@ -428,7 +429,7 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [walletId, fc.id, 'expense', commission,
                          `Comisión: ${description || category.name}`,
-                         date, 1.0, commission, 0, transactionId],
+                         txDate, 1.0, commission, 0, transactionId],
                         function(err2) {
                           if (err2) {
                             db.run('ROLLBACK');
@@ -677,7 +678,7 @@ app.get('/api/wallets/:id/report', (req, res) => {
 
 app.post('/api/transactions', async (req, res) => {
   try {
-    const { walletId, categoryName, type, amount, description, fee } = req.body;
+    const { walletId, categoryName, type, amount, description, fee, date } = req.body;
     
     if (!walletId || !categoryName || !type || !amount) {
       return res.status(400).json({ 
@@ -685,7 +686,12 @@ app.post('/api/transactions', async (req, res) => {
       });
     }
     
-    const result = await createTransaction(walletId, categoryName, type, amount, description, fee);
+    // Fecha opcional: validar formato si viene. Sin fecha => hoy.
+    if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
+    }
+    
+    const result = await createTransaction(walletId, categoryName, type, amount, description, fee, date);
     
     res.json({
       success: true,
@@ -862,9 +868,9 @@ app.get('/api/transactions/:id', (req, res) => {
 // Exchanges con transacciones separadas
 app.post('/api/exchanges', async (req, res) => {
   try {
-    const { fromWalletId, toWalletId, fromAmount, toAmount, description, fee } = req.body;
+    const { fromWalletId, toWalletId, fromAmount, toAmount, description, fee, date } = req.body;
     
-    console.log('💱 Procesando exchange:', { fromWalletId, toWalletId, fromAmount, toAmount, fee });
+    console.log('💱 Procesando exchange:', { fromWalletId, toWalletId, fromAmount, toAmount, fee, date });
     
     // Validaciones básicas
     if (!fromWalletId || !toWalletId || !fromAmount || !toAmount) {
@@ -880,6 +886,12 @@ app.post('/api/exchanges', async (req, res) => {
     if (fromAmount <= 0 || toAmount <= 0) {
       return res.status(400).json({ error: 'Los montos deben ser mayores a 0' });
     }
+    
+    // Fecha opcional para el exchange (débito/crédito). Sin fecha => hoy.
+    if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
+    }
+    const txDate = typeof date === 'string' && date !== '' ? date : undefined;
     
     // Obtener información de wallets
     const [fromWallet, toWallet] = await Promise.all([
@@ -919,7 +931,8 @@ app.post('/api/exchanges', async (req, res) => {
       'expense',
       fromAmount,
       `${description || 'Exchange'} → ${toWallet.name}`,
-      commission
+      commission,
+      txDate
     );
     
     // Crear transacción de crédito (exchange_in)
@@ -928,7 +941,9 @@ app.post('/api/exchanges', async (req, res) => {
       'exchange_in',
       'income',
       toAmount,
-      `${description || 'Exchange'} ← ${fromWallet.name}`
+      `${description || 'Exchange'} ← ${fromWallet.name}`,
+      0,
+      txDate
     );
     
     // Registrar metadata del exchange

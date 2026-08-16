@@ -16,6 +16,9 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   const [toAmount, setToAmount] = useState('');
   const [fee, setFee] = useState('');
   const [description, setDescription] = useState('');
+  // Fecha del exchange (débito/crédito): por defecto hoy.
+  const todayISODate = new Date().toISOString().split('T')[0];
+  const [date, setDate] = useState(todayISODate);
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
     open: false,
@@ -69,7 +72,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         fromAmount: parseFloat(fromAmount),
         toAmount: parseFloat(toAmount),
         fee: rateData.commission || undefined,
-        description: description || undefined
+        description: description || undefined,
+        date: date || undefined,
       };
       
       // Hacer la llamada al endpoint de exchanges
@@ -101,6 +105,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setToAmount('');
       setFee('');
       setDescription('');
+      setDate(todayISODate);
 
       // Notificar éxito al componente padre
       onSuccess?.();
@@ -220,6 +225,21 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   wallets.find(w => w.id === fromWalletId)?.currency || ''
                 ) : ''
               }}
+            />
+
+            <TextField
+              label="Fecha"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              disabled={loading}
+              required
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              error={date > todayISODate}
+              helperText={date > todayISODate
+                ? '⚠️ Es una fecha futura. Verifica que sea correcta.'
+                : 'Registra exchanges de hoy o de días anteriores'}
             />
 
             <Box>

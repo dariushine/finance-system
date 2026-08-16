@@ -19,6 +19,9 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   const [wallet, setWallet] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
+  // Fecha de la transacción: por defecto hoy (UTC, formato YYYY-MM-DD).
+  const todayISODate = new Date().toISOString().split('T')[0];
+  const [date, setDate] = useState(todayISODate);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -61,6 +64,9 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           amount: parsedAmount,
           fee: parsedFee > 0 ? parsedFee : undefined,
           description: description || undefined,
+          // Fecha opcional: solo se envía si es distinta de hoy, para no romper
+          // llamadas que dependen del default backend.
+          date: date || undefined,
         }),
       });
 
@@ -75,6 +81,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       setWallet('');
       setCategory('');
       setDescription('');
+      setDate(todayISODate);
       setSuccess(true);
       onSuccess?.();
     } catch (err) {
@@ -115,8 +122,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
         <form onSubmit={handleSubmit}>
           <Box display="flex" flexDirection="column" gap={2}>
             <TextField
-              label="Monto"
-              type="number"
+              label="Monto"              type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="Ej: 1200"
@@ -128,6 +134,20 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                   wallets.find((w) => w.name === wallet)?.currency || ''
                 ) : 'USD/VES'
               }}
+            />
+
+            <TextField
+              label="Fecha"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              disabled={loading}
+              required
+              InputLabelProps={{ shrink: true }}
+              error={date > todayISODate}
+              helperText={date > todayISODate
+                ? '⚠️ Es una fecha futura. Verifica que sea correcta.'
+                : 'Registra gastos de hoy o de días anteriores'}
             />
 
             <TextField
