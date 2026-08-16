@@ -257,10 +257,10 @@ export default function ExchangesPage() {
                           <Typography variant="body2" color="text.secondary">Tasa</Typography>
                           <Chip label={exchange.rate.toFixed(4)} size="small" color="primary" />
                         </Box>
-                        {exchange.fee && exchange.fee > 0 && (
+                        {exchange.fee != null && exchange.fee > 0 && (
                           <Box display="flex" justifyContent="space-between">
                             <Typography variant="body2" color="text.secondary">Fee</Typography>
-                            <Typography variant="body2">{(exchange.fee || 0).toFixed(2)} {exchange.fromCurrency || ''}</Typography>
+                            <Typography variant="body2">{exchange.fee.toFixed(2)} {exchange.fromCurrency || ''}</Typography>
                           </Box>
                         )}
                         <Box display="flex" justifyContent="space-between">
