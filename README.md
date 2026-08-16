@@ -1,108 +1,163 @@
 # Sistema de Finanzas Personal
 
-Sistema completo de gestión de finanzas personales con billeteras múltiples (USD/VES), transacciones, exchanges y dashboard web.
+Sistema completo de gestión de finanzas personales con billeteras múltiples (USD/VES/EUR), transacciones por categorías, exchanges entre billeteras, tasas diarias BCV/paralelo y un dashboard web **mobile-first**.
 
 ## ✨ Características
 
-- **🏦 Billeteras múltiples**: Cuenta Bancaria USD/VES, Efectivo USD/VES, Crypto Wallet, Tarjeta Prepagada
-- **💸 Transacciones**: Gastos e ingresos con categorías
-- **💱 Exchanges**: Cambios entre billeteras con transacciones separadas (débito/crédito automáticos)
-- **📊 Balance total**: En USD con conversión automática
-- **📱 Dashboard web**: NextJS 15 + Material UI, mobile-first
-- **🧩 Tablas responsivas tipo acordeón**: En móvil las listas se convierten en tarjetas expandibles; en escritorio se mantienen como tablas completas
-- **🗓️ Filtros por rango**: Selección de período preseteada o rango de fechas personalizado
-- **🤖 Skill OpenClaw**: Comandos para uso rápido
-- **🐳 Docker Compose**: Despliegue completo con un comando
+- **🏦 Billeteras múltiples**: Banco, Efectivo, Tarjeta, Cripto e Inversión, en USD/VES/EUR, con alias, icono y color. **Soft-delete** (las eliminadas quedan en "Billeteras eliminadas" y se pueden reactivar).
+- **💸 Transacciones**: Gastos e ingresos con categorías, comisión opcional (fee aparte del monto) y moneda tomada automáticamente de la billetera.
+- **💱 Exchanges**: Cambios entre billeteras con **transacciones separadas** (débito `exchange_out` + crédito `exchange_in` + comisión `fee`), validación de fondos y tasa calculada como `toAmount / fromAmount`.
+- **📊 Balance total**: En USD, con conversión de billeteras no-USD usando tasas diarias (BCV o paralelo).
+- **📱 Dashboard web**: Next.js 15 + React 19 + Material UI 6, App Router, **mobile-first**.
+- **🧩 Tablas responsivas tipo acordeón**: En pantallas < 600px las listas se convierten en tarjetas expandibles; en escritorio se mantienen tablas completas.
+- **🗓️ Filtros por período y rango de fechas**: Presets (Hoy, Semana, Mes, 3 meses, Año, Todo) o rango personalizado en el detalle de billetera.
+- **🕐 Tasas diarias BCV/paralelo**: CRUD completo + sincronización desde la API de **Dolarapi** (`ve.dolarapi.com`).
+- **🐳 Docker Compose**: Despliegue completo con un comando (producción) y override de desarrollo con hot reload.
+- **📄 Reportes**: Resumen (ingresos, gastos, neto, billeteras), rendimiento mensual, desglose por categoría, balances por billetera, stats de exchanges y exportación JSON.
 
 ## 🏗️ Arquitectura
 
+El frontend se comunica con el backend a través de un **reverse proxy de Next.js**: todas las rutas `/api/*` del frontend se redirigen al backend real (ver `frontend/next.config.js`).
+
 ```
 Sistema de Finanzas
-├── 📦 Backend API (Node.js + Express + SQLite)
-│   ├── GET /api/health          # Status del sistema
-│   ├── GET /api/wallets         # Listar billeteras
-│   ├── POST /api/transactions   # Registrar transacciones
-│   ├── POST /api/exchanges      # Exchange (genera 2 transacciones)
-│   └── GET /api/balance         # Balance total
-├── 🌐 Frontend Dashboard (NextJS + Material UI)
-│   ├── Balance total visual
-│   ├── Lista de billeteras
-│   ├── Formulario de transacciones
-│   └── Formulario de exchanges
-├── 🤖 Skill OpenClaw
-│   ├── /finance-app status
-│   ├── /finance-app wallets
-│   ├── /finance-app add
-│   └── /finance-app xchg
+├── 📦 Backend API (Node.js + Express 5 + SQLite)
+│   ├── backend/exchange-server.js   # Servidor real (puerto 3002)
+│   ├── backend/data/finance.db      # Base de datos SQLite (bind mount)
+│   └── backend/src/                 # Código NestJS (alternativo, no es el servidor de producción)
+├── 🌐 Frontend Dashboard (Next.js 15 + React 19 + MUI 6, App Router)
+│   ├── frontend/app/                # Páginas: dashboard, wallets, exchanges, rates, reports
+│   └── frontend/app/components/     # BalanceCard, WalletList, formularios, acordeones, layout
 └── 🐳 Docker Compose
-    ├── backend (3002)
-    └── frontend (3000)
+    ├── backend (3002)  ── healthcheck
+    └── frontend (3000) ── espera a que backend esté healthy
 ```
+
+> **Nota sobre NestJS**: en `backend/src/` existe un desarrollo experimental con NestJS + TypeORM (entidades wallets, transactions, etc.), pero **no** es el servidor que corre el sistema. El backend real y desplegado es `backend/exchange-server.js` (Express + `sqlite3`), que es el que usa el Docker Compose.
+
+## 🔌 Endpoints de la API
+
+Lista verificada de endpoints reales del backend (`backend/exchange-server.js`):
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/health` | Estado del sistema (health, features) |
+| GET | `/api/wallets` | Listar billeteras activas |
+| GET | `/api/wallets/deleted` | Listar billeteras eliminadas (soft-delete) |
+| GET | `/api/wallets/:id` | Obtener billetera por id |
+| POST | `/api/wallets` | Crear billetera (name, type, currency requeridos) |
+| PUT | `/api/wallets/:id` | Actualizar billetera (nombre, alias, balance, descripción, icono, color) |
+| DELETE | `/api/wallets/:id` | Soft-delete (marca `isActive = 0`) |
+| PUT | `/api/wallets/:id/reactivate` | Reactivar billetera eliminada |
+| GET | `/api/wallets/:id/report?from=&to=&period=` | Reporte de billetera: balance, ingresos/egresos, transacciones con rango de fechas |
+| POST | `/api/transactions` | Crear transacción (walletId, categoryName, type, amount, opcional fee) |
+| GET | `/api/transactions?page=&limit=` | Listar transacciones (paginadas, con joins de wallet y categoría) |
+| GET | `/api/transactions/:id` | Obtener transacción |
+| POST | `/api/exchanges` | Crear exchange (fromWalletId, toWalletId, fromAmount, toAmount, opcional fee) |
+| GET | `/api/exchanges?page=&limit=` | Listar exchanges (paginados) |
+| GET | `/api/balance` | Balance total en USD con desglose por moneda |
+| GET | `/api/exchange-rates` | Tasas de cambio centralizadas (USD:1, VES:635, EUR:1.07) |
+| GET | `/api/rates/effective?type=bcv\|paralelo&date=` | Tasa vigente para convertir VES→USD en el frontend |
+| GET | `/api/daily-rates` | Listar todas las tasas diarias (descendente) |
+| GET | `/api/daily-rates/today` | Obtener/crear la tasa de hoy (BD → API → error) |
+| POST | `/api/daily-rates` | Crear tasa manual (date, bcv, paralelo) |
+| PUT | `/api/daily-rates/:id` | Actualizar tasa |
+| DELETE | `/api/daily-rates/:id` | Eliminar tasa |
+| GET | `/api/stats?rate=bcv\|paralelo` | Estadísticas: ingresos, gastos, neto, mensual, por categoría |
+
+## 🗃️ Base de datos (SQLite)
+
+El backend crea automáticamente el esquema al arrancar y hace migraciones menores (agregar columnas) sin borrar datos. Tablas:
+
+- **wallets**: id, name, alias, type, currency, balance, description, icon, color, isActive, createdAt.
+- **categories**: id, name, type, color, icon, isActive, createdAt. Se siembran 18 categorías (incluye categorías especiales `exchange_out`, `exchange_in` y `fee`).
+- **transactions**: id, wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id, created_at.
+- **exchanges**: id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, fee, description, created_at.
+- **daily_rates**: id, date (única), bcv, paralelo, source, created_at.
+
+> 💾 La base vive en `backend/data/finance.db` y se persiste vía bind mount en Docker. Haz **backup** de esa carpeta.
+
+## 📱 Mobile-First Design
+
+- **Responsive completo**: 320px (iPhone SE) → 1920px.
+- **Tablas → acordeones < 600px**: En transacciones, exchanges, tasas, reportes, detalle de billetera y últimas transacciones del dashboard, las tablas se convierten en **tarjetas expandibles**; en escritorio se mantienen tablas completas.
+- **Bottom navigation móvil**: Aparece en pantallas < 900px (`< md`), con iconos + etiquetas, más un **Fab "+"** flotante que abre un diálogo con pestañas **Transacción / Exchange** (a pantalla completa en móvil).
+- **Barra lateral colapsable (escritorio)**: Drawer permanente en desktop que se colapsa a iconos con un botón.
+- **Barra superior de tasas colapsable (escritorio)**: AppBar con chips de **BCV** y **Paralelo** del día, colapsable con animación.
+- **Touch-friendly**: botones ≥ 48x48px, inputs altos, safe areas.
+
+## 📄 Páginas del frontend (App Router)
+
+| Ruta | Página | Características |
+|---|---|---|
+| `/` | Dashboard | Card de balance total (telemetría cada 60s), grid de billeteras con paginación, últimas transacciones |
+| `/wallets` | Billeteras | Grid de billeteras con equivalente USD (tasa BCV/paralelo), crear billetera, billeteras eliminadas + reactivar |
+| `/wallets/[id]` | Detalle de billetera | Saldo, editar/eliminar (soft-delete), reporte con filtros por período y rango de fechas |
+| `/transactions` | Transacciones | Historial paginado, crear transacción, tabla/acordeón con fee |
+| `/exchanges` | Exchanges | Historial paginado, crear exchange, tabla/acordeón, **exportar CSV** |
+| `/rates` | Tasas diarias | CRUD de tasas BCV/paralelo, **sincronizar hoy** desde Dolarapi |
+| `/reports` | Reportes | Resumen, rendimiento mensual, por categoría, balances de billeteras, stats de exchanges, **exportar JSON** |
+
+### Formularios globales (Fab "+")
+
+- **Transacción**: tipo (gasto/ingreso), monto, comisión opcional, billetera, categoría, descripción. Reutilizado también en `/transactions`.
+- **Exchange**: billetera origen/destino, montos, comisión opcional, descripción; muestra cálculo de tasa y total a descontar.
+
+## 💱 Sistema de Exchanges
+
+1. **Transacciones separadas**: Cada exchange genera transacciones reales:
+   - Débito `exchange_out` (expense) en la billetera origen.
+   - Crédito `exchange_in` (income) en la billetera destino.
+   - Si hay comisión, una transacción `fee` aparte.
+2. **Tasa calculada**: `rate = toAmount / fromAmount` (la comisión NO afecta la tasa).
+3. **Validación de fondos**: verifica que la billetera origen tenga `fromAmount + fee`, y que origen ≠ destino.
+4. **Registro de metadata**: se guarda un registro en la tabla `exchanges` con débito/crédito, montos, tasa y fee.
 
 ## 🚀 Despliegue
 
 ### Opción 1: Producción (Docker Compose — recomendado)
 
-Levanta los servicios desde imágenes autónomas (sin montar el código fuente del host).
+Levanta los servicios desde imágenes autónomas (build multi-stage con `node:18-alpine`, sin montar el código del host).
 
 ```bash
 # 1. Clonar
-cd /tu/directorio
-git clone <tu-repo> finance-system
-cd finance-system
+git clone <tu-repo> finance-system && cd finance-system
 
-# 2. Construir y levantar
-#    (usa Docker Compose v2, con espacio: 'docker compose')
+# 2. Construir y levantar (Compose v2 → usa dos palabras: docker compose)
 docker compose up --build -d
 
-# 3. Verificar estado
-#    backend debe estar 'healthy' (el frontend espera a que lo esté)
+# 3. Verificar estado (backend debe estar 'healthy'; el frontend espera a que lo esté)
 docker compose ps
 
 # 4. Acceder
 #    Dashboard:   http://localhost:3000
-#    API (proxy): http://localhost:3000/api   ← la API se expone por el frontend
+#    API (proxy): http://localhost:3000/api
 #    API directa: http://localhost:3002/api
 ```
 
-**Detener / limpiar:**
+Detener / limpiar:
 
 ```bash
 docker compose down            # detiene (conserva la DB en backend/data)
 docker compose down -v         # detiene (borra volúmenes anónimos; el bind backend/data queda)
 ```
 
-> ℹ️ La base SQLite vive en `backend/data/finance.db` (bind mount). Haz **backup** de esa carpeta.
-> ℹ️ **No** necesitas crear `.env` ni `chmod` de data: el backend crea el esquema al arrancar.
+### Opción 2: Desarrollo (hot reload — sin rebuildear)
 
----
-
-### Opción 2: Desarrollo (hot reload — probar cambios sin rebuildear)
-
-Tu flujo para iterar: editas el código en el host y el contenedor lo refleja al instante, sin
-`docker compose build` a cada rato. Usa el override `docker-compose.dev.yml`. **NO** es para producción.
+Usa el override `docker-compose.dev.yml` para iterar sin `docker compose build`. **NO** es para producción.
 
 ```bash
-# Levantar con override de dev (backend --watch + frontend next dev)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-# Detener (Ctrl+C) / limpiar contenedores dev:
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
-**Qué hace el override:**
-
-| Servicio | Como corre | Efecto |
+| Servicio | Cómo corre | Efecto |
 |---|---|---|
-| `backend` | `node --watch` + bind `./backend` | recarga la API al editar `backend/` |
+| `backend` | `node --watch exchange-server.js` + bind `./backend` | recarga la API al editar `backend/` |
 | `frontend` | `next dev` + bind `./frontend` | hot reload del dashboard al editar `frontend/` |
 
-> ⚠️ Los `node_modules` y `.next` se conservan **del contenedor** (volúmenes anónimos), no del
-> host — importante porque `sqlite3` es nativo y no portable entre plataformas.
-> ℹ️ En dev, el rewrite de Next apunta al backend por `API_UPSTREAM=http://backend:3002`
-> (el proxy sigue funcionando dentro de la red Docker).
-
----
+> ⚠️ Los `node_modules` y `.next` se conservan **del contenedor** (volúmenes anónimos), no del host — `sqlite3` es nativo y no portable.
+> ℹ️ En dev, el rewrite de Next apunta al backend por `API_UPSTREAM=http://backend:3002`.
 
 ### Opción 3: Desarrollo local (sin Docker)
 
@@ -110,7 +165,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 # 1. Backend (terminal 1)
 cd backend
 npm install
-node exchange-server.js
+node exchange-server.js        # o: npm run dev (nodemon)
 
 # 2. Frontend (terminal 2)
 cd frontend
@@ -122,243 +177,79 @@ npm run dev
 #    Frontend: http://localhost:3000
 ```
 
-> ℹ️ En local, el rewrite de Next apunta a `http://localhost:3002` (default cuando NO hay
-> `API_UPSTREAM` y `NODE_ENV=development`).
+> ℹ️ En local, el rewrite de Next apunta a `http://localhost:3002` (default cuando no hay `API_UPSTREAM` y `NODE_ENV=development`).
 
-## 📱 Mobile-First Design
+### Archivos de despliegue
 
-### Características móviles:
+- **`Dockerfile`**: build multi-stage con targets `backend` (Express, `node exchange-server.js`) y `frontend` (Next.js, `npm run build` / `npm start`).
+- **`docker-compose.yml`**: producción — servicios `backend` (3002, healthcheck) y `frontend` (3000, depende del healthcheck del backend), red `finance-network`, bind `./backend/data`.
+- **`docker-compose.dev.yml`**: override de desarrollo con bind mounts + `node --watch` / `next dev`.
+- **`docker/Dockerfile.backend`**: alternativa NestJS (compila `dist/main.js`, puerto 3001) — no es la imagen usada en producción actual.
 
-1. **Responsive completo**:
-   - 320px (iPhone SE) → 1920px (4K)
-   - Breakpoints optimizados: xs: 0px, sm: 600px, md: 900px, lg: 1200px
-   - Contenido se adapta progresivamente
-
-2. **Listas en acordeón (móvil)**:
-   - En pantallas < 600px, las tablas (transacciones, exchanges, tasas, reportes y detalle de billetera) se muestran como **tarjetas expandibles**
-   - La cabecera colapsada muestra lo esencial (fecha/nombre + monto)
-   - Al tocar una tarjeta se despliega el resto de los datos (billetera, fee, descripción, acciones)
-   - El diseño es idéntico al de las "últimas transacciones" del dashboard
-   - En escritorio se conservan las **tablas completas**
-
-3. **Touch-friendly**:
-   - Botones mínimos 48x48px en móvil
-   - Espaciado táctil adecuado
-   - Inputs altos para dedos
-
-4. **Mobile UI**:
-   - Bottom navigation en móvil
-   - AppBar fija + barra colapsable de tasas del día (solo escritorio)
-   - Safe areas para notches
-
-## 🤖 Skill OpenClaw
-
-### Comandos disponibles:
-
-```bash
-# Estado del sistema
-/finance-app status
-
-# Listar billeteras
-/finance-app wallets
-
-# Balance total
-/finance-app balance
-
-# Registrar transacción
-/finance-app add expense 1200 food "Efectivo VES" "Perro caliente"
-/finance-app add income 500 salary "Cuenta Bancaria USD" "Salario"
-
-# Hacer exchange (nuevo sistema con transacciones separadas)
-/finance-app xchg 100 "Crypto Wallet" 60000 "Efectivo VES" 635 "Cambio Binance"
-/finance-app xchg 100 "Crypto Wallet" 60000 "Efectivo VES" "Cambio sin spread"
-```
-
-### Configurar el skill:
-
-```bash
-# Para Docker Compose
-export FINANCE_API_URL=http://localhost:3002/api
-
-# Para desarrollo local
-export FINANCE_API_URL=http://localhost:3002/api
-```
-
-## 💱 Sistema de Exchanges
-
-### Características únicas:
-
-1. **Transacciones separadas**: Cada exchange genera 2 transacciones automáticas:
-   - `exchange_out` (débito en billetera origen)
-   - `exchange_in` (crédito en billetera destino)
-
-2. **Validación de fondos**: Verifica fondos suficientes antes del exchange
-
-3. **Spread opcional**: Calcula spread solo si se provee `marketRate`
-
-4. **Sin suposiciones**: No asume tasas de mercado por defecto
-
-### Ejemplo de flujo:
-
-```javascript
-// 1. Exchange request
-POST /api/exchanges
-{
-  "fromWalletId": 5,      // Crypto Wallet (USD)
-  "toWalletId": 4,        // Efectivo VES
-  "fromAmount": 100,
-  "toAmount": 60000,
-  "marketRate": 635       // Opcional para spread
-}
-
-// 2. Sistema crea:
-//    - Transacción 1: -100 USD (exchange_out)
-//    - Transacción 2: +60000 VES (exchange_in)
-//    - Metadata: tasa = 600, spread = 5.51%
-```
-
-## 📊 Dashboard Web (Mobile-First)
-
-### Características móviles:
-
-1. **Layout responsive**:
-   - Una columna en móvil, dos en tablet+
-   - Cards apiladas verticalmente en móvil
-   - Grid progresivo (1 → 2 → 3 columnas)
-
-2. **Listados en acordeón**:
-   - Últimas transacciones, historial, exchanges, tasas, reportes y detalle de billetera
-   - Diseño de tarjetas expandibles en móvil; tablas completas en escritorio
-   - La fila de comisión (fee) solo se muestra cuando existe
-
-3. **Filtros por período**:
-   - Presets: Hoy, Semana, Mes, 3 meses, Año, Todo
-   - "Rango personalizado" activa los selectores de fecha desde/hasta
-   - Los selectores solo aparecen en modo custom (evita fechas innecesarias)
-
-4. **Typography responsivo**:
-   - Font sizes que escalan con viewport
-   - Line heights optimizados para móvil
-   - Contrastes AAA para legibilidad
-
-### URLs:
-
-- **Dashboard**: http://localhost:3000
-- **API Backend**: http://localhost:3002/api
-- **Health check**: http://localhost:3002/api/health
-
-## 🗃️ Base de Datos
-
-- **SQLite**: Base de datos embebida, sin configuración externa
-- **Persistencia**: Datos guardados en `backend/data/finance.db`
-- **Backup automático**: Volumen Docker para persistencia
-
-## 🔧 Desarrollo
-
-### Estructura del proyecto:
-
-```
-finance-system/
-├── backend/                    # API Backend (NestJS + SQLite)
-│   ├── src/                    # Código fuente (módulos: wallets, transactions, reports)
-│   ├── data/                   # SQLite database
-│   └── package.json
-├── frontend/                   # Dashboard NextJS 15 (Mobile-First)
-│   ├── app/                    # App Router (NextJS)
-│   │   ├── layout.tsx          # Layout mobile-first
-│   │   ├── page.tsx            # Dashboard responsivo
-│   │   ├── components/        # Componentes (acordeones, formularios, layout)
-│   │   ├── transactions/      # Historial de transacciones (acordeón en móvil)
-│   │   ├── wallets/           # Billeteras + detalle (filtros por fecha)
-│   │   ├── exchanges/         # Exchanges (acordeón en móvil)
-│   │   ├── rates/             # Tasas diarias (acordeón en móvil)
-│   │   └── reports/           # Reportes (tablas → acordeón en móvil)
-│   └── package.json
-├── skills/                     # Skill OpenClaw
-│   └── finance-app/           # Skill files
-├── docker-compose.yml         # Orquestación Docker (producción)
-├── docker-compose.dev.yml     # Override de desarrollo (hot reload)
-├── Dockerfile                # Build multi-stage
-└── README.md               # Esta documentación
-```
-
-### Variables de entorno:
+## 🔧 Variables de entorno
 
 El backend **no necesita `.env`**: usa defaults en `exchange-server.js` (puerto 3002, DB en `backend/data/finance.db`) y crea el esquema al arrancar.
 
-```bash
-# Backend (opcional, solo si algún día se lee process.env)
-PORT=3002
-NODE_ENV=production
+| Variable | Dónde | Descripción |
+|---|---|---|
+| `NODE_ENV` | Compose (backend/frontend) | `production` en prod, `development` en dev-Docker |
+| `PORT` | Compose (backend) | Puerto del backend, `3002` |
+| `NEXT_PUBLIC_API_URL` | Compose (frontend) | `http://backend:3002/api` (proxy) |
+| `API_UPSTREAM` | Frontend (dev-Docker) | Override del rewrite de Next para apuntar al backend por nombre de red |
 
-# Frontend
-# API_UPSTREAM: override del rewrite de Next (solo necesario en dev-Docker para
-# apuntar al backend por nombre de red; en prod ya resuelve a backend:3002)
-API_UPSTREAM=http://backend:3002
+## 📁 Estructura del proyecto
+
+```
+finance-system/
+├── backend/                        # API Backend (Express 5 + SQLite)
+│   ├── exchange-server.js          # Servidor principal (puerto 3002)
+│   ├── src/                        # Código NestJS experimental (no corre en prod)
+│   ├── data/                       # Base de datos SQLite (bind mount en Docker)
+│   ├── __tests__/                  # Tests de validación (Jest + supertest)
+│   └── package.json
+├── frontend/                       # Dashboard Next.js 15 (Mobile-First)
+│   ├── app/                        # App Router
+│   │   ├── layout.tsx              # Layout global (ThemeProvider, Navegación, Fab)
+│   │   ├── page.tsx                # Dashboard
+│   │   ├── components/            # BalanceCard, WalletList, formularios, acordeones, Navigation
+│   │   ├── lib/api.ts             # Cliente API + tipos
+│   │   ├── lib/hooks/             # useWallets
+│   │   ├── services/financeApi.ts # Cliente API alternativo
+│   │   ├── transactions/          # Transacciones
+│   │   ├── wallets/               # Billeteras + detalle /wallets/[id]
+│   │   ├── exchanges/             # Exchanges
+│   │   ├── rates/                 # Tasas diarias
+│   │   └── reports/               # Reportes
+│   ├── next.config.js             # Rewrites /api/* → backend
+│   └── package.json
+├── scripts/                        # seed-db.ts, run-server.sh, start-dev.sh
+├── docker/                         # Dockerfile.backend (NestJS alternativo)
+├── docker-compose.yml              # Producción
+├── docker-compose.dev.yml          # Override de desarrollo
+├── Dockerfile                      # Build multi-stage (backend + frontend)
+└── README.md                       # Esta documentación
 ```
 
-## 🐳 Docker Compose Detalles
+## 🚨 Notas importantes
 
-### Archivos:
+1. **Exchanges son transacciones**: cada exchange genera transacciones reales (débito/crédito/fee) en el historial.
+2. **Comisión opcional**: el fee se descuenta aparte del monto y se registra como transacción `fee` separada; la fila de fee solo se muestra cuando es > 0.
+3. **Moneda automática**: las transacciones obtienen la moneda de la billetera seleccionada.
+4. **Tasas diarias**: se sincronizan desde Dolarapi al cargar la página (`/api/daily-rates/today`) o manualmente desde la sección Tasas, y se pueden editar/crear a mano.
+5. **Soft-delete de billeteras**: al "eliminar" una billetera se marca `isActive = 0` y queda disponible para reactivar.
+6. **Mobile-first**: tablas → acordeones < 600px, bottom nav < 900px.
 
-- **`docker-compose.yml`** — producción: servicios desde imágenes autónomas (build multi-stage, sin binds del código fuente)
-- **`docker-compose.dev.yml`** — override de desarrollo: añade hot reload (binds + `node --watch` / `next dev`)
+## ✅ Proyecto verificado contra el código
 
-### Servicios:
+Este README se generó/actualizó revisando directamente el código fuente (backend `exchange-server.js`, frontend App Router y componentes, archivos de Docker), por lo que stack, endpoints, páginas y comandos reflejan el estado real del repositorio en el branch `fix/mobile-responsive`.
 
-1. **backend**: API REST en Node.js (puerto 3002)
-2. **frontend**: Dashboard NextJS (puerto 3000)
-
-### Comandos útiles (producción):
-
-```bash
-# Iniciar todo (usa Compose v2, con espacio: 'docker compose')
-docker compose up --build -d
-
-# Ver logs
-docker compose logs -f
-
-# Detener todo
-docker compose down
-
-# Reconstruir imágenes
-docker compose build
-
-# Limpiar todo (incluyendo datos)
-docker compose down -v
-```
-
-### Comandos útiles (desarrollo):
-
-```bash
-# Iniciar con hot reload
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-# Detener
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down
-```
-
-### Volúmenes / persistencia:
-
-- `backend/data` (bind): base de datos SQLite persistente — **haz backup aquí**
-- `node_modules` / `.next` (anónimos, solo dev): conservan build del contenedor sobre el bind
-
-## 🚨 Notas Importantes
-
-1. **Exchanges son transacciones**: Cada exchange genera transacciones reales en el historial
-2. **Spread condicional**: Solo se calcula si el usuario provee `marketRate`
-3. **Currency automático**: Las transacciones obtienen la moneda automáticamente de la billetera
-4. **Sin tasas por defecto**: El sistema no asume tasas de mercado
-5. **Mobile-first**: Todo el sistema está optimizado para uso móvil; las tablas se vuelven acordeones en pantallas < 600px
-6. **Comisión opcional**: La fila de fee solo aparece cuando la transacción tiene comisión > 0
-
-## 📈 Roadmap Futuro
+## 📈 Roadmap futuro
 
 - [x] Reportes y estadísticas (dashboard)
 - [x] Tablas responsivas en móvil (acordeones)
 - [x] Filtros por rango de fechas en billeteras
-- [ ] Gráficos de gastos por categoría (Recharts/Chart.js)
-- [ ] Integración con APIs de tasas reales
+- [x] Tasas diarias con CRUD y sincronización desde API (Dolarapi)
+- [ ] Gráficos reales de gastos por categoría (Recharts/Chart.js) — hoy se simulan con MUI
 - [ ] Notificaciones push
 - [ ] Autenticación de usuarios
 - [ ] Multi-usuario compartido
