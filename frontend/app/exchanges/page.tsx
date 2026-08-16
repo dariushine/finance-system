@@ -114,7 +114,11 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
           {exchange.fee != null && exchange.fee > 0 && (
             <Box display="flex" justifyContent="space-between">
               <Typography variant="body2" color="text.secondary">Fee</Typography>
-              <Typography variant="body2">{exchange.fee.toFixed(2)} {exchange.fromCurrency || ''}</Typography>
+              <Chip
+                label={`${exchange.fee.toFixed(2)} ${exchange.fromCurrency || ''}`}
+                size="small"
+                color="warning"
+              />
             </Box>
           )}
           <Box display="flex" justifyContent="space-between">

@@ -159,9 +159,11 @@ const TransactionAccordionItem = memo(function TransactionAccordionItem({
           {showFee && hasFee && (
             <Box display="flex" justifyContent="space-between">
               <Typography variant="body2" color="text.secondary">Comisión</Typography>
-              <Typography variant="body2">
-                {formatCurrency(transaction.fee!, resolveCurrency)}
-              </Typography>
+              <Chip
+                label={formatCurrency(transaction.fee!, resolveCurrency)}
+                size="small"
+                color="warning"
+              />
             </Box>
           )}
           <Box display="flex" justifyContent="space-between">
