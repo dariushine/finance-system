@@ -8,7 +8,9 @@ Sistema completo de gestión de finanzas personales con billeteras múltiples (U
 - **💸 Transacciones**: Gastos e ingresos con categorías
 - **💱 Exchanges**: Cambios entre billeteras con transacciones separadas (débito/crédito automáticos)
 - **📊 Balance total**: En USD con conversión automática
-- **📱 Dashboard web**: NextJS + Material UI, mobile-friendly
+- **📱 Dashboard web**: NextJS 15 + Material UI, mobile-first
+- **🧩 Tablas responsivas tipo acordeón**: En móvil las listas se convierten en tarjetas expandibles; en escritorio se mantienen como tablas completas
+- **🗓️ Filtros por rango**: Selección de período preseteada o rango de fechas personalizado
 - **🤖 Skill OpenClaw**: Comandos para uso rápido
 - **🐳 Docker Compose**: Despliegue completo con un comando
 
@@ -132,21 +134,22 @@ npm run dev
    - Breakpoints optimizados: xs: 0px, sm: 600px, md: 900px, lg: 1200px
    - Contenido se adapta progresivamente
 
-2. **Touch-friendly**:
+2. **Listas en acordeón (móvil)**:
+   - En pantallas < 600px, las tablas (transacciones, exchanges, tasas, reportes y detalle de billetera) se muestran como **tarjetas expandibles**
+   - La cabecera colapsada muestra lo esencial (fecha/nombre + monto)
+   - Al tocar una tarjeta se despliega el resto de los datos (billetera, fee, descripción, acciones)
+   - El diseño es idéntico al de las "últimas transacciones" del dashboard
+   - En escritorio se conservan las **tablas completas**
+
+3. **Touch-friendly**:
    - Botones mínimos 48x48px en móvil
    - Espaciado táctil adecuado
    - Inputs altos para dedos
 
-3. **Mobile UI**:
+4. **Mobile UI**:
    - Bottom navigation en móvil
-   - AppBar fija optimizada
+   - AppBar fija + barra colapsable de tasas del día (solo escritorio)
    - Safe areas para notches
-   - PWA ready
-
-4. **Performance móvil**:
-   - Images optimizadas
-   - Font sizes responsivos
-   - Minimal JavaScript en carga
 
 ## 🤖 Skill OpenClaw
 
@@ -223,26 +226,20 @@ POST /api/exchanges
    - Cards apiladas verticalmente en móvil
    - Grid progresivo (1 → 2 → 3 columnas)
 
-2. **Componentes touch-friendly**:
-   - Botones grandes (min 48px)
-   - Inputs con spacing táctil
-   - Menús bottom navigation en móvil
+2. **Listados en acordeón**:
+   - Últimas transacciones, historial, exchanges, tasas, reportes y detalle de billetera
+   - Diseño de tarjetas expandibles en móvil; tablas completas en escritorio
+   - La fila de comisión (fee) solo se muestra cuando existe
 
-3. **Typography responsivo**:
+3. **Filtros por período**:
+   - Presets: Hoy, Semana, Mes, 3 meses, Año, Todo
+   - "Rango personalizado" activa los selectores de fecha desde/hasta
+   - Los selectores solo aparecen en modo custom (evita fechas innecesarias)
+
+4. **Typography responsivo**:
    - Font sizes que escalan con viewport
    - Line heights optimizados para móvil
    - Contrastes AAA para legibilidad
-
-4. **Performance**:
-   - Lazy loading de imágenes
-   - Critical CSS inline
-   - Font display swap
-
-### URLs:
-
-- **Dashboard**: http://localhost:3000
-- **API Backend**: http://localhost:3002/api
-- **Health check**: http://localhost:3002/api/health
 
 ### URLs:
 
@@ -262,21 +259,27 @@ POST /api/exchanges
 
 ```
 finance-system/
-├── backend/                    # API Backend
-│   ├── exchange-server.js  # Servidor principal
-│   ├── data/                  # SQLite database
+├── backend/                    # API Backend (NestJS + SQLite)
+│   ├── src/                    # Código fuente (módulos: wallets, transactions, reports)
+│   ├── data/                   # SQLite database
 │   └── package.json
-├── frontend/                  # Dashboard NextJS (Mobile-First)
-│   ├── app/                  # NextJS 13+ app directory
-│   │   ├── layout.tsx       # Layout mobile-first
-│   │   ├── page.tsx         # Homepage responsive
-│   │   └── components/      # Componentes touch-friendly
+├── frontend/                   # Dashboard NextJS 15 (Mobile-First)
+│   ├── app/                    # App Router (NextJS)
+│   │   ├── layout.tsx          # Layout mobile-first
+│   │   ├── page.tsx            # Dashboard responsivo
+│   │   ├── components/        # Componentes (acordeones, formularios, layout)
+│   │   ├── transactions/      # Historial de transacciones (acordeón en móvil)
+│   │   ├── wallets/           # Billeteras + detalle (filtros por fecha)
+│   │   ├── exchanges/         # Exchanges (acordeón en móvil)
+│   │   ├── rates/             # Tasas diarias (acordeón en móvil)
+│   │   └── reports/           # Reportes (tablas → acordeón en móvil)
 │   └── package.json
-├── skills/                   # Skill OpenClaw
-│   └── finance-app/         # Skill files
-├── docker-compose.yml       # Orquestación Docker
-├── Dockerfile              # Build multi-stage
-└── README.md              # Esta documentación
+├── skills/                     # Skill OpenClaw
+│   └── finance-app/           # Skill files
+├── docker-compose.yml         # Orquestación Docker (producción)
+├── docker-compose.dev.yml     # Override de desarrollo (hot reload)
+├── Dockerfile                # Build multi-stage
+└── README.md               # Esta documentación
 ```
 
 ### Variables de entorno:
@@ -346,12 +349,15 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 2. **Spread condicional**: Solo se calcula si el usuario provee `marketRate`
 3. **Currency automático**: Las transacciones obtienen la moneda automáticamente de la billetera
 4. **Sin tasas por defecto**: El sistema no asume tasas de mercado
-5. **Mobile-friendly**: Todo el sistema está optimizado para uso móvil
+5. **Mobile-first**: Todo el sistema está optimizado para uso móvil; las tablas se vuelven acordeones en pantallas < 600px
+6. **Comisión opcional**: La fila de fee solo aparece cuando la transacción tiene comisión > 0
 
 ## 📈 Roadmap Futuro
 
-- [ ] Gráficos de gastos por categoría
-- [ ] Reportes mensuales automáticos
+- [x] Reportes y estadísticas (dashboard)
+- [x] Tablas responsivas en móvil (acordeones)
+- [x] Filtros por rango de fechas en billeteras
+- [ ] Gráficos de gastos por categoría (Recharts/Chart.js)
 - [ ] Integración con APIs de tasas reales
 - [ ] Notificaciones push
 - [ ] Autenticación de usuarios
