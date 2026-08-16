@@ -702,6 +702,30 @@ app.get('/api/transactions', (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100);
   const offset = (page - 1) * limit;
 
+  // Rango de fechas (from/to opcionales; period presets) — igual que en el reporte de billetera
+  const { from, to, period } = req.query;
+  let fromDate = from;
+  let toDate = to;
+  if (!fromDate || !toDate) {
+    if (!period) {
+      // Sin filtro: mostrar todo el historial
+      fromDate = '1970-01-01';
+      toDate = '9999-12-31';
+    } else {
+      const now = new Date();
+      toDate = now.toISOString().split('T')[0];
+      if (period === 'day') fromDate = toDate;
+      else if (period === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); fromDate = d.toISOString().split('T')[0]; }
+      else if (period === 'month') { const d = new Date(now); d.setDate(1); fromDate = d.toISOString().split('T')[0]; }
+      else if (period === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); fromDate = d.toISOString().split('T')[0]; }
+      else if (period === 'year') { const d = new Date(now); d.setMonth(d.getMonth() - 12); fromDate = d.toISOString().split('T')[0]; }
+      else fromDate = '1970-01-01';
+    }
+  }
+
+  const conditions = ['t.date >= ?', 't.date <= ?'];
+  const params = [fromDate, toDate, limit, offset];
+
   const query = `
     SELECT
       t.id,
@@ -719,13 +743,14 @@ app.get('/api/transactions', (req, res) => {
     FROM transactions t
     JOIN wallets w ON w.id = t.wallet_id
     JOIN categories c ON c.id = t.category_id
+    WHERE ${conditions.join(' AND ')}
     ORDER BY t.created_at DESC, t.id DESC
     LIMIT ? OFFSET ?`;
 
-  db.all(query, [limit, offset], (err, rows) => {
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    db.get('SELECT COUNT(*) AS total FROM transactions', (countErr, result) => {
+    db.get(`SELECT COUNT(*) AS total FROM transactions t WHERE ${conditions.join(' AND ')}`, [fromDate, toDate], (countErr, result) => {
       if (countErr) return res.status(500).json({ error: countErr.message });
       res.json({ data: rows, total: result?.total || 0, page, limit });
     });
@@ -888,6 +913,30 @@ app.get('/api/exchanges', (req, res) => {
   const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100);
   const offset = (page - 1) * limit;
 
+  // Rango de fechas (from/to opcionales; period presets) — igual que en transacciones
+  const { from, to, period } = req.query;
+  let fromDate = from;
+  let toDate = to;
+  if (!fromDate || !toDate) {
+    if (!period) {
+      // Sin filtro: mostrar todo el historial
+      fromDate = '1970-01-01';
+      toDate = '9999-12-31';
+    } else {
+      const now = new Date();
+      toDate = now.toISOString().split('T')[0];
+      if (period === 'day') fromDate = toDate;
+      else if (period === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); fromDate = d.toISOString().split('T')[0]; }
+      else if (period === 'month') { const d = new Date(now); d.setDate(1); fromDate = d.toISOString().split('T')[0]; }
+      else if (period === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); fromDate = d.toISOString().split('T')[0]; }
+      else if (period === 'year') { const d = new Date(now); d.setMonth(d.getMonth() - 12); fromDate = d.toISOString().split('T')[0]; }
+      else fromDate = '1970-01-01';
+    }
+  }
+
+  const conditions = ['date(e.created_at) >= ?', 'date(e.created_at) <= ?'];
+  const params = [fromDate, toDate, limit, offset];
+
   const query = `
     SELECT
       e.id,
@@ -908,12 +957,13 @@ app.get('/api/exchanges', (req, res) => {
     FROM exchanges e
     JOIN wallets from_wallet ON from_wallet.id = e.from_wallet_id
     JOIN wallets to_wallet ON to_wallet.id = e.to_wallet_id
+    WHERE ${conditions.join(' AND ')}
     ORDER BY e.created_at DESC, e.id DESC
     LIMIT ? OFFSET ?`;
 
-  db.all(query, [limit, offset], (err, rows) => {
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.get('SELECT COUNT(*) AS total FROM exchanges', (countErr, result) => {
+    db.get(`SELECT COUNT(*) AS total FROM exchanges e WHERE ${conditions.join(' AND ')}`, [fromDate, toDate], (countErr, result) => {
       if (countErr) return res.status(500).json({ error: countErr.message });
       res.json({ data: rows || [], total: result?.total || 0, page, limit });
     });

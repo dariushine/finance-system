@@ -32,6 +32,9 @@ import {
   IconButton,
   Divider,
   Stack,
+  TablePagination,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   AccountBalance,
@@ -45,7 +48,9 @@ import {
   TrendingUp,
   TrendingDown,
   CalendarMonth,
+  Download,
 } from '@mui/icons-material';
+import TransactionAccordionList from '../../components/TransactionAccordionList';
 import {
   getWallet,
   getWalletReport,
@@ -75,6 +80,7 @@ const periods = [
   { value: '3m', label: 'Últimos 3 meses' },
   { value: 'year', label: 'Año' },
   { value: 'all', label: 'Todo' },
+  { value: 'custom', label: 'Rango personalizado' },
 ];
 
 const formatUsd = (n: number) =>
@@ -84,6 +90,8 @@ export default function WalletDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = Number(params.id);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
 
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,6 +106,10 @@ export default function WalletDetailPage() {
   const [period, setPeriod] = useState<string>('month');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+
+  // Paginación de transacciones
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false);
@@ -127,7 +139,12 @@ export default function WalletDetailPage() {
   const loadReport = useCallback(async () => {
     setReportLoading(true);
     try {
-      const data = await getWalletReport(id, { period, from: from || undefined, to: to || undefined });
+      const useCustom = period === 'custom' && !!from && !!to;
+      const data = await getWalletReport(id, {
+        period: useCustom ? 'custom' : period,
+        from: useCustom ? from : undefined,
+        to: useCustom ? to : undefined,
+      });
       setReport(data);
     } catch (e: any) {
       setError(e?.message || 'Error al cargar el reporte');
@@ -171,7 +188,40 @@ export default function WalletDetailPage() {
 
   const handleCustomRange = () => {
     if (!from || !to) return;
+    setPage(0);
     loadReport();
+  };
+
+  const handleChangePage = (_e: unknown, newPage: number) => setPage(newPage);
+
+  const handleChangeRowsPerPage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(e.target.value, 10));
+    setPage(0);
+  };
+
+  // Transacciones visibles en la página actual
+  const reportTransactions = report?.transactions || [];
+  const startIndex = page * rowsPerPage;
+  const pagedTransactions = reportTransactions.slice(startIndex, startIndex + rowsPerPage);
+
+  const exportCSV = () => {
+    const header = ['ID', 'Fecha', 'Tipo', 'Categoría', 'Descripción', 'Monto'];
+    const rows = reportTransactions.map((t) => [
+      t.id,
+      t.date,
+      t.type === 'income' ? 'Ingreso' : 'Egreso',
+      t.category,
+      t.description || '',
+      t.type === 'income' ? String(t.amount) : `-${t.amount}`,
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `billetera_${id}_transacciones_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const openEdit = () => {
@@ -373,35 +423,45 @@ export default function WalletDetailPage() {
               {summary && <Chip size="small" label={`${summary.transactionCount}`} />}
             </Box>
             <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
-              <FormControl size="small" sx={{ minWidth: 160 }}>
+              <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportCSV} disabled={reportTransactions.length === 0}>
+                Exportar
+              </Button>
+              <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 180 } }}>
                 <InputLabel>Período</InputLabel>
-                <Select value={period} label="Período" onChange={(e) => setPeriod(e.target.value as string)}>
+                <Select value={period} label="Período" onChange={(e) => {
+                  const v = e.target.value as string;
+                  setPeriod(v);
+                  setPage(0);
+                  if (v !== 'custom') { setFrom(''); setTo(''); }
+                }}>
                   {periods.map((p) => (
                     <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              <Box display="flex" gap={0.5} alignItems="center">
-                <TextField
-                  size="small"
-                  type="date"
-                  label="Desde"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                />
-                <TextField
-                  size="small"
-                  type="date"
-                  label="Hasta"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                />
-                <Button variant="contained" onClick={handleCustomRange} disabled={!from || !to}>
-                  Aplicar
-                </Button>
-              </Box>
+              {period === 'custom' && (
+                <Box display="flex" gap={0.5} alignItems="center" flexWrap="wrap">
+                  <TextField
+                    size="small"
+                    type="date"
+                    label="Desde"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                  <TextField
+                    size="small"
+                    type="date"
+                    label="Hasta"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                  <Button variant="contained" onClick={handleCustomRange} disabled={!from || !to}>
+                    Aplicar
+                  </Button>
+                </Box>
+              )}
             </Box>
           </Box>
 
@@ -410,6 +470,13 @@ export default function WalletDetailPage() {
           ) : !report || report.transactions.length === 0 ? (
             <Alert severity="info">No hay transacciones en este período.</Alert>
           ) : (
+            isMobile ? (
+              <TransactionAccordionList
+                transactions={pagedTransactions}
+                walletCurrencyFallback={wallet.currency}
+                showView={false}
+              />
+            ) : (
             <TableContainer component={Paper} variant="outlined">
               <Table size="small">
                 <TableHead>
@@ -422,7 +489,7 @@ export default function WalletDetailPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {report.transactions.map((t) => (
+                  {pagedTransactions.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell>{t.date}</TableCell>
                       <TableCell>
@@ -445,6 +512,19 @@ export default function WalletDetailPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+            )
+          )}
+          {reportTransactions.length > 0 && (
+            <TablePagination
+              component="div"
+              count={reportTransactions.length}
+              page={page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              labelRowsPerPage="Registros por página"
+            />
           )}
         </CardContent>
       </Card>

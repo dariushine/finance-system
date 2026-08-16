@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import {
   Box,
   Typography,
@@ -22,9 +22,17 @@ import {
   Alert,
   CircularProgress,
   IconButton,
+  Chip,
   Snackbar,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  useMediaQuery,
+  Divider,
+  Stack,
+  useTheme,
 } from '@mui/material';
-import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon, Refresh as RefreshIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 
 interface DailyRate {
@@ -36,7 +44,64 @@ interface DailyRate {
   created_at: string;
 }
 
+// --- Tarjeta móvil memorizada: solo se re-renderiza si SUS props cambian ---
+const RateAccordionItem = memo(function RateAccordionItem({
+  rate,
+  isOpen,
+  onToggle,
+  onEdit,
+  onRemove,
+}: {
+  rate: DailyRate;
+  isOpen: boolean;
+  onToggle: (id: number) => void;
+  onEdit: (rate: DailyRate) => void;
+  onRemove: (rate: DailyRate) => void;
+}) {
+  return (
+    <Accordion
+      expanded={isOpen}
+      onChange={() => onToggle(rate.id)}
+      disableGutters
+      sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+          <Stack spacing={0.25}>
+            <Typography variant="body2">{rate.date}</Typography>
+            <Typography variant="caption" color="text.secondary">{rate.source}</Typography>
+          </Stack>
+          <Chip label={`BCV ${rate.bcv.toFixed(2)}`} size="small" variant="outlined" />
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+        <Divider sx={{ mb: 1.5 }} />
+        <Stack spacing={1}>
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Paralelo</Typography>
+            <Typography variant="body2">{rate.paralelo.toFixed(2)}</Typography>
+          </Box>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="body2" color="text.secondary">Acciones</Typography>
+            <Box>
+              <IconButton size="small" onClick={() => onEdit(rate)}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" color="error" onClick={() => onRemove(rate)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          </Box>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+});
+
 export default function RatesPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
+  const [expanded, setExpanded] = useState<number | false>(false);
   const [rates, setRates] = useState<DailyRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +109,11 @@ export default function RatesPage() {
   const [editing, setEditing] = useState<DailyRate | null>(null);
   const [form, setForm] = useState({ date: '', bcv: '', paralelo: '' });
   const [snackbar, setSnackbar] = useState<string | null>(null);
+
+  // Handler ESTABLE: solo se re-renderiza la tarjeta que se abre/cierra.
+  const handleToggle = useCallback((id: number) => {
+    setExpanded((prev) => (prev === id ? false : id));
+  }, []);
 
   const loadRates = useCallback(async () => {
     try {
@@ -68,11 +138,11 @@ export default function RatesPage() {
     setOpenEditor(true);
   };
 
-  const openEdit = (rate: DailyRate) => {
+  const openEdit = useCallback((rate: DailyRate) => {
     setEditing(rate);
     setForm({ date: rate.date, bcv: String(rate.bcv), paralelo: String(rate.paralelo) });
     setOpenEditor(true);
-  };
+  }, []);
 
   const save = async () => {
     if (!form.date || !form.bcv || !form.paralelo) {
@@ -104,7 +174,7 @@ export default function RatesPage() {
     }
   };
 
-  const remove = async (rate: DailyRate) => {
+  const remove = useCallback(async (rate: DailyRate) => {
     if (!confirm(`¿Eliminar la tasa del ${rate.date}?`)) return;
     try {
       const res = await fetch(`${API_URL}/daily-rates/${rate.id}`, { method: 'DELETE' });
@@ -114,7 +184,7 @@ export default function RatesPage() {
     } catch (err) {
       setSnackbar(err instanceof Error ? err.message : 'Error al eliminar');
     }
-  };
+  }, [loadRates]);
 
   const syncToday = async () => {
     try {
@@ -135,7 +205,7 @@ export default function RatesPage() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
         <Box>
-          <Typography variant="h4" fontWeight="bold">Tasas Diarias</Typography>
+          <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>Tasas Diarias</Typography>
           <Typography variant="body1" color="text.secondary">
             Gestiona las tasas BCV y paralelo por día
           </Typography>
@@ -163,6 +233,20 @@ export default function RatesPage() {
               <Typography variant="body1" color="text.secondary">
                 No hay tasas registradas. Pulsa &quot;Sincronizar hoy&quot; o &quot;Nueva tasa&quot;.
               </Typography>
+            </Box>
+          ) : isMobile ? (
+            // MOBILE: acordeón por tasa
+            <Box>
+              {rates.map((rate) => (
+                <RateAccordionItem
+                  key={rate.id}
+                  rate={rate}
+                  isOpen={expanded === rate.id}
+                  onToggle={handleToggle}
+                  onEdit={openEdit}
+                  onRemove={remove}
+                />
+              ))}
             </Box>
           ) : (
             <TableContainer component={Paper} variant="outlined">
