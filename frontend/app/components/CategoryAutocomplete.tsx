@@ -34,7 +34,7 @@ export default function CategoryAutocomplete({
   disabled,
   allowCreate = true,
 }: CategoryAutocompleteProps) {
-  const { categories, loading, error } = useCategories(type);
+  const { categories, loading, error, refetch } = useCategories(type);
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
 
@@ -52,7 +52,13 @@ export default function CategoryAutocomplete({
   return (
     <Autocomplete
       open={open}
-      onOpen={() => setOpen(true)}
+      onOpen={() => {
+        // Refresca la lista cada vez que se abre: así aparecen las categorías
+        // creadas al vuelo o en /categories después del primer render (el formulario
+        // permanece montado en el Dialog del AddFab, así que no basta con el mount).
+        setOpen(true);
+        refetch();
+      }}
       onClose={() => setOpen(false)}
       loading={loading}
       value={selected}
