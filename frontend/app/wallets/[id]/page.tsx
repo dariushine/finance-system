@@ -101,15 +101,30 @@ export default function WalletDetailPage() {
   const [rateType, setRateType] = useState<'bcv' | 'paralelo'>('bcv');
 
   // Report
+  const listStateKey = `wallet-report-state-${id}`;
+  const savedList = (() => {
+    try {
+      const raw = sessionStorage.getItem(listStateKey);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  })();
   const [report, setReport] = useState<WalletReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
-  const [period, setPeriod] = useState<string>('month');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [period, setPeriod] = useState<string>(savedList?.period || 'month');
+  const [from, setFrom] = useState<string>(savedList?.from || '');
+  const [to, setTo] = useState<string>(savedList?.to || '');
 
   // Paginación de transacciones
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [page, setPage] = useState<number>(savedList && typeof savedList.page === 'number' ? savedList.page : 0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(savedList && typeof savedList.rowsPerPage === 'number' ? savedList.rowsPerPage : 10);
+
+  // Persistir período/filtros/paginación en sessionStorage (por billetera) para
+  // que al volver desde el detalle de una transacción se mantenga el estado.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(listStateKey, JSON.stringify({ period, from, to, page, rowsPerPage }));
+    } catch { /* ignorar */ }
+  }, [listStateKey, period, from, to, page, rowsPerPage]);
 
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false);
@@ -474,7 +489,7 @@ export default function WalletDetailPage() {
               <TransactionAccordionList
                 transactions={pagedTransactions}
                 walletCurrencyFallback={wallet.currency}
-                showView={false}
+                showView
               />
             ) : (
             <TableContainer component={Paper} variant="outlined">
@@ -490,7 +505,12 @@ export default function WalletDetailPage() {
                 </TableHead>
                 <TableBody>
                   {pagedTransactions.map((t) => (
-                    <TableRow key={t.id}>
+                    <TableRow
+                      key={t.id}
+                      hover
+                      onClick={() => router.push(`/transactions/${t.id}`)}
+                      sx={{ cursor: 'pointer' }}
+                    >
                       <TableCell>{t.date}</TableCell>
                       <TableCell>
                         <Chip

@@ -11,6 +11,7 @@ import TransactionForm from '../components/TransactionForm';
 import TransactionAccordionList from '../components/TransactionAccordionList';
 import DateRangeFilter from '../components/DateRangeFilter';
 import { API_URL } from '../lib/api';
+import { useRouter } from 'next/navigation';
 
 interface Transaction {
   id: number;
@@ -25,6 +26,7 @@ interface Transaction {
 }
 
 export default function TransactionsPage() {
+  const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -32,15 +34,37 @@ export default function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
 
-  // Paginación
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // Paginación (se restaura desde sessionStorage si se vino del detalle)
+  const listState = (() => {
+    try {
+      const raw = sessionStorage.getItem('transactions-list-state');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  })();
+  const [page, setPage] = useState<number>(listState && typeof listState.page === 'number' ? listState.page : 0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(listState && typeof listState.rowsPerPage === 'number' ? listState.rowsPerPage : 10);
 
   // Filtro por período / rango de fechas
-  const [period, setPeriod] = useState<string>('all');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [applied, setApplied] = useState<{ period: string; from: string; to: string }>({ period: 'all', from: '', to: '' });
+  const [period, setPeriod] = useState<string>(listState?.period || 'all');
+  const [from, setFrom] = useState<string>(listState?.from || '');
+  const [to, setTo] = useState<string>(listState?.to || '');
+  const [applied, setApplied] = useState<{ period: string; from: string; to: string }>(
+    listState?.applied || { period: 'all', from: '', to: '' }
+  );
+
+  // Persistir el estado actual (filtros + paginación) siempre que cambie,
+  // para que al volver a esta página (desde el detalle o con el botón atrás)
+  // se restaure exactamente donde estaba el usuario.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('transactions-list-state', JSON.stringify({ period, applied, page, rowsPerPage, from, to }));
+    } catch { /* ignorar */ }
+  }, [period, applied, page, rowsPerPage, from, to]);
+
+  // Ir al detalle (el estado ya queda persistido por el efecto anterior).
+  const goToDetail = (txId: number) => {
+    router.push(`/transactions/${txId}`);
+  };
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -153,7 +177,7 @@ export default function TransactionsPage() {
             <TransactionAccordionList
               transactions={pagedTransactions}
               showFee
-              showView={false}
+              showView
             />
           ) : (
             <TableContainer>
@@ -164,7 +188,7 @@ export default function TransactionsPage() {
                 </TableRow></TableHead>
                 <TableBody>
                   {pagedTransactions.map((transaction) => (
-                    <TableRow key={transaction.id} hover>
+                    <TableRow key={transaction.id} hover onClick={() => goToDetail(transaction.id)} sx={{ cursor: 'pointer' }}>
                       <TableCell>{new Date(transaction.date).toLocaleDateString('es-VE')}</TableCell>
                       <TableCell><Chip label={transaction.category} size="small" variant="outlined" /></TableCell>
                       <TableCell>{transaction.walletName || '—'}</TableCell>

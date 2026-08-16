@@ -538,25 +538,27 @@ app.post('/api/wallets', (req, res) => {
   );
 });
 
-// Actualizar una billetera (campos editables)
+// Actualizar una billetera (campos editables: metadata únicamente)
+// El balance NO se puede editar aquí: solo cambia vía transacciones/exchanges
+// (createTransaction/createExchange actualizan wallets.balance). Tampoco se
+// permite cambiar type ni currency: son fijos tras la creación.
 app.put('/api/wallets/:id', (req, res) => {
-  const { name, alias, balance, description, icon, color, type, currency } = req.body;
+  const { name, alias, description, icon, color } = req.body;
   db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [req.params.id], (err, wallet) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada' });
 
     const newName = name !== undefined ? name : wallet.name;
     const newAlias = alias !== undefined ? alias : wallet.alias;
-    const newBalance = balance !== undefined ? Number(balance) : wallet.balance;
     const newDescription = description !== undefined ? description : wallet.description;
     const newIcon = icon !== undefined ? icon : wallet.icon;
     const newColor = color !== undefined ? color : wallet.color;
-    // Moneda y tipo: solo se pueden cambiar si no hay transacciones asociadas (se valida aquí)
-    // Por simplicidad y seguridad, permitimos cambiar descripción/nombre/alias/icono/color/balance
+    // Se BORRA el balance de la query de actualización: aunque el cliente mande
+    // un campo balance/type/currency en el body, se ignora.
 
     db.run(
-      `UPDATE wallets SET name = ?, alias = ?, balance = ?, description = ?, icon = ?, color = ? WHERE id = ?`,
-      [newName, newAlias, newBalance, newDescription, newIcon, newColor, req.params.id],
+      `UPDATE wallets SET name = ?, alias = ?, description = ?, icon = ?, color = ? WHERE id = ?`,
+      [newName, newAlias, newDescription, newIcon, newColor, req.params.id],
       function (updErr) {
         if (updErr) return res.status(400).json({ error: updErr.message });
         db.get('SELECT * FROM wallets WHERE id = ?', [req.params.id], (e, row) => {
@@ -764,6 +766,7 @@ app.get('/api/transactions/:id', (req, res) => {
       t.wallet_id AS walletId,
       w.name AS walletName,
       w.currency AS walletCurrency,
+      w.balance AS walletBalance,
       c.name AS category,
       t.type,
       t.amount,
@@ -780,7 +783,78 @@ app.get('/api/transactions/:id', (req, res) => {
     (err, transaction) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!transaction) return res.status(404).json({ error: 'Transacción no encontrada' });
-      res.json(transaction);
+
+      // Saldo "después de aplicar la transacción", calculado sobre la marcha
+      // (running sum sobre las transacciones de la billetera). No se almacena
+      // en la entidad: se deriva del orden real, evitando desincronización si
+      // se editan/borran/reordenan transacciones.
+      //
+      // La billetera puede tener un saldo inicial que no está representado
+      // como transacción, así que anclamos el running sum al saldo actual:
+      //   balance_after = wallet.balance - total_net + running_sum_hasta_esta
+      db.get(
+        `SELECT running, total_net FROM (
+           SELECT
+             t.id,
+             SUM(
+               CASE
+                 WHEN t.type = 'income'  THEN COALESCE(t.amount, 0)
+                 WHEN t.type = 'expense' THEN -COALESCE(t.amount, 0)
+                 ELSE 0
+               END
+             ) OVER (ORDER BY t.date, t.created_at, t.id) AS running,
+             (SELECT SUM(
+                CASE
+                  WHEN type = 'income'  THEN COALESCE(amount, 0)
+                  WHEN type = 'expense' THEN -COALESCE(amount, 0)
+                  ELSE 0
+                END)
+              FROM transactions WHERE wallet_id = ?) AS total_net
+           FROM transactions t
+           WHERE t.wallet_id = ?
+         ) WHERE id = ?`,
+        [transaction.walletId, transaction.walletId, req.params.id],
+        (balErr, balRow) => {
+          // Transacciones hijas (fees de la comisión, por ejemplo)
+          db.all(
+            `SELECT
+               t.id,
+               t.wallet_id AS walletId,
+               w.name AS walletName,
+               w.currency AS walletCurrency,
+               c.name AS category,
+               t.type,
+               t.amount,
+               t.description,
+               t.date,
+               t.fee,
+               t.parent_transaction_id AS parentTransactionId,
+               t.created_at AS createdAt
+             FROM transactions t
+             JOIN wallets w ON w.id = t.wallet_id
+             JOIN categories c ON c.id = t.category_id
+             WHERE t.parent_transaction_id = ?
+             ORDER BY t.id ASC`,
+            [req.params.id],
+            (childErr, children) => {
+              if (balErr) return res.status(500).json({ error: balErr.message });
+              if (childErr) return res.status(500).json({ error: childErr.message });
+              const { walletBalance: _wb, ...txRest } = transaction;
+              let balanceAfter = null;
+              if (balRow && balRow.running != null) {
+                const walletBalance = Number(transaction.walletBalance) || 0;
+                const totalNet = Number(balRow.total_net) || 0;
+                balanceAfter = walletBalance - totalNet + Number(balRow.running);
+              }
+              res.json({
+                ...txRest,
+                balanceAfter: balanceAfter != null ? parseFloat(balanceAfter.toFixed(2)) : null,
+                children: children || [],
+              });
+            }
+          );
+        }
+      );
     }
   );
 });
