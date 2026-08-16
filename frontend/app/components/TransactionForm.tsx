@@ -7,6 +7,8 @@ import {
 } from '@mui/material';
 import { Add, Remove, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
+import CategoryAutocomplete from './CategoryAutocomplete';
+import type { Category } from '../lib/api';
 
 interface TransactionFormProps {
   onSuccess?: () => void;
@@ -31,15 +33,9 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
 
   const { wallets, loading: walletsLoading, error: walletsError } = useWallets();
 
-  const categories = {
-    expense: ['food', 'transport', 'housing', 'utilities', 'entertainment', 'health', 'shopping', 'other_expense'],
-    income: ['salary', 'freelance', 'investment', 'gift', 'other_income'],
-  };
+  // Categoría seleccionada (objeto). El nombre se envía al backend, que lo crea si falta.
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
-  const categoryLabel = (category: string) => category
-    .replace('_expense', '')
-    .replace('_income', '')
-    .replace(/^./, (letter) => letter.toUpperCase());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +45,10 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
 
     if (!walletObj || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setError('Selecciona una billetera e introduce un monto mayor que cero.');
+      return;
+    }
+    if (!selectedCategory || !selectedCategory.name) {
+      setError('Escribe o selecciona una categoría.');
       return;
     }
 
@@ -62,7 +62,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           walletId: walletObj?.id,
-          categoryName: category,
+          categoryName: selectedCategory?.name || category,
           type,
           amount: parsedAmount,
           fee: parsedFee > 0 ? parsedFee : undefined,
@@ -85,6 +85,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       setFee('');
       setWallet('');
       setCategory('');
+      setSelectedCategory(null);
       setDescription('');
       setDate(todayISODate);
       setTime('');
@@ -216,21 +217,16 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               </Select>
             </FormControl>
 
-            <FormControl fullWidth required>
-              <InputLabel>Categoría</InputLabel>
-              <Select
-                value={category}
-                label="Categoría"
-                onChange={(e) => setCategory(e.target.value)}
-                disabled={loading || walletsLoading}
-              >
-                {categories[type].map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <CategoryAutocomplete
+              type={type}
+              value={selectedCategory ? String(selectedCategory.id) : null}
+              onChange={(cat) => {
+                setSelectedCategory(cat);
+                setCategory(cat ? cat.name : '');
+              }}
+              disabled={loading}
+              allowCreate
+            />
 
             <TextField
               label="Descripción"
