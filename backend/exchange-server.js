@@ -298,88 +298,19 @@ async function getTodayRate() {
   }
 }
 
-// Sincroniza las columnas denormalizadas de comisión (fee):
-// - exchanges.fee      = suma de transacciones tipo 'fee' con
-//                        parent_transaction_id = exchange.debit_transaction_id
-// - transactions.fee   = suma de transacciones tipo 'fee' con
-//                        parent_transaction_id = transacción padre
-// Usa triggers SQL (AFTER INSERT/UPDATE/DELETE sobre transactions) para que el
-// total quede siempre consistente con el detalle, sin depender del código.
+// Sincroniza las columnas denormalizadas de comisión (fee). En runtime, la
+// actualización se hace explícitamente dentro de la misma transacción SQL que
+// crea la transacción 'fee' (ver createTransaction): así el total se mantiene
+// consistente con el detalle sin depender de triggers, que son difíciles de
+// depurar y esconden lógica. Esta función solo hace un backfill al arrancar
+// (por si hay datos previos o se cae a mitad de una sync).
 function ensureExchangesFeeSync() {
-  const createTriggers = () => {
-    // Recalcula el fee del padre y de los exchanges cuyo débito es ese padre.
-    // Una transacción fee (parent_transaction_id != NULL) alimenta:
-    //   - transactions.fee  de su padre
-    //   - exchanges.fee     del exchange cuyo debit_transaction_id = ese padre
-    db.exec(`
-      DROP TRIGGER IF EXISTS trg_sync_fee_after_insert;
-      DROP TRIGGER IF EXISTS trg_sync_fee_after_delete;
-      DROP TRIGGER IF EXISTS trg_sync_fee_after_update;
-
-      CREATE TRIGGER IF NOT EXISTS trg_sync_fee_after_insert
-      AFTER INSERT ON transactions
-      FOR EACH ROW
-      WHEN NEW.parent_transaction_id IS NOT NULL
-      BEGIN
-        UPDATE transactions SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
-           JOIN categories c ON c.id = t.category_id
-           WHERE t.parent_transaction_id = NEW.parent_transaction_id AND c.name = 'fee')
-          WHERE id = NEW.parent_transaction_id;
-        UPDATE exchanges SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
-           JOIN categories c ON c.id = t.category_id
-           WHERE t.parent_transaction_id = NEW.parent_transaction_id AND c.name = 'fee')
-          WHERE debit_transaction_id = NEW.parent_transaction_id;
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS trg_sync_fee_after_delete
-      AFTER DELETE ON transactions
-      FOR EACH ROW
-      WHEN OLD.parent_transaction_id IS NOT NULL
-      BEGIN
-        UPDATE transactions SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
-           JOIN categories c ON c.id = t.category_id
-           WHERE t.parent_transaction_id = OLD.parent_transaction_id AND c.name = 'fee')
-          WHERE id = OLD.parent_transaction_id;
-        UPDATE exchanges SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
-           JOIN categories c ON c.id = t.category_id
-           WHERE t.parent_transaction_id = OLD.parent_transaction_id AND c.name = 'fee')
-          WHERE debit_transaction_id = OLD.parent_transaction_id;
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS trg_sync_fee_after_update
-      AFTER UPDATE OF amount, parent_transaction_id ON transactions
-      FOR EACH ROW
-      BEGIN
-        -- Recalcular el padre viejo y los exchanges de ese padre
-        UPDATE transactions SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
-           JOIN categories c ON c.id = t.category_id
-           WHERE t.parent_transaction_id = OLD.parent_transaction_id AND c.name = 'fee')
-          WHERE id = OLD.parent_transaction_id;
-        UPDATE exchanges SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
-           JOIN categories c ON c.id = t.category_id
-           WHERE t.parent_transaction_id = OLD.parent_transaction_id AND c.name = 'fee')
-          WHERE debit_transaction_id = OLD.parent_transaction_id;
-        -- Recalcular el padre nuevo
-        UPDATE transactions SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
-           JOIN categories c ON c.id = t.category_id
-           WHERE t.parent_transaction_id = NEW.parent_transaction_id AND c.name = 'fee')
-          WHERE id = NEW.parent_transaction_id;
-        UPDATE exchanges SET fee =
-          (SELECT COALESCE(SUM(amount), 0) FROM transactions t
-           JOIN categories c ON c.id = t.category_id
-           WHERE t.parent_transaction_id = NEW.parent_transaction_id AND c.name = 'fee')
-          WHERE debit_transaction_id = NEW.parent_transaction_id;
-      END;
-    `);
-  };
-
+  // Eliminar triggers si existieran de versiones anteriores.
+  db.exec(`
+    DROP TRIGGER IF EXISTS trg_sync_fee_after_insert;
+    DROP TRIGGER IF EXISTS trg_sync_fee_after_delete;
+    DROP TRIGGER IF EXISTS trg_sync_fee_after_update;
+  `);
   const backfill = () => {
     // Recalcular fee de cada transacción padre
     db.run(`
@@ -400,7 +331,6 @@ function ensureExchangesFeeSync() {
     `);
   };
 
-  createTriggers();
   backfill();
 }
 
@@ -499,7 +429,39 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                             db.run('ROLLBACK');
                             return reject(err2);
                           }
-                          finish(this.lastID);
+                          const feeTransactionId = this.lastID;
+
+                          // Recalcular transactions.fee del padre (suma de fees)
+                          db.run(
+                            `UPDATE transactions SET fee =
+                               (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
+                                JOIN categories c ON c.id = t.category_id
+                                WHERE t.parent_transaction_id = ? AND c.name = 'fee')
+                              WHERE id = ?`,
+                            [transactionId, transactionId],
+                            (feeUpErr) => {
+                              if (feeUpErr) {
+                                db.run('ROLLBACK');
+                                return reject(feeUpErr);
+                              }
+                              // Recalcular exchanges.fee si este padre es el débito de un exchange
+                              db.run(
+                                `UPDATE exchanges SET fee =
+                                   (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
+                                    JOIN categories c ON c.id = t.category_id
+                                    WHERE t.parent_transaction_id = ? AND c.name = 'fee')
+                                  WHERE debit_transaction_id = ?`,
+                                [transactionId, transactionId],
+                                (exUpErr) => {
+                                  if (exUpErr) {
+                                    db.run('ROLLBACK');
+                                    return reject(exUpErr);
+                                  }
+                                  finish(feeTransactionId);
+                                }
+                              );
+                            }
+                          );
                         }
                       );
                     });
