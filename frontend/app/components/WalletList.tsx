@@ -26,7 +26,7 @@ const PER_PAGE = 6;
 
 export default function WalletList() {
   const router = useRouter();
-  const gridRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const { wallets, loading, error } = useWallets();
   const [page, setPage] = useState(1);
 
@@ -34,13 +34,14 @@ export default function WalletList() {
   const currentPage = Math.min(page, pageCount);
   const shown = wallets.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
 
-  // Al cambiar de página: volver al tope de las billeteras para que el
-  // scroll no quede en el panel de abajo (últimas transacciones).
+  // Al cambiar de página: volver al tope del panel de billeteras. Se hace con
+  // pequeña espera para que el nuevo contenido ya se haya renderizado y la
+  // altura del DOM no cambie después (evita que el scroll regrese abajo).
   const handlePageChange = (_: unknown, value: number) => {
     setPage(value);
-    requestAnimationFrame(() => {
-      gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    window.setTimeout(() => {
+      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
   };
 
   if (loading) {
@@ -67,7 +68,7 @@ export default function WalletList() {
   const gotoWallet = (id: number) => router.push(`/wallets/${id}`);
 
   return (
-    <Card>
+    <Card ref={cardRef}>
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
@@ -80,9 +81,8 @@ export default function WalletList() {
           />
         </Box>
 
-        <Box ref={gridRef}>
-          <Grid container spacing={2} alignItems="flex-start">
-          {shown.map((wallet) => (
+        <Box>
+          <Grid container spacing={2} alignItems="flex-start">          {shown.map((wallet) => (
             <Grid item xs={12} sm={6} md={4} key={wallet.id}>
               <Card variant="outlined" sx={{ height: '100%' }}>
                 <CardActionArea onClick={() => gotoWallet(wallet.id)} sx={{ height: '100%' }}>
