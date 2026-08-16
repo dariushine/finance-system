@@ -226,7 +226,7 @@ export async function getTransaction(id: number | string): Promise<TransactionDe
 // Editar una transacción (descripción, monto, fecha, categoría)
 export async function updateTransaction(
   id: number | string,
-  data: { description?: string; amount?: number; date?: string; categoryName?: string }
+  data: { description?: string; amount?: number; date?: string; time?: string; categoryName?: string }
 ): Promise<any> {
   const response = await fetch(`${API_URL}/transactions/${id}`, {
     method: 'PUT',
@@ -249,7 +249,7 @@ async function deleteTransaction(id: number | string): Promise<any> {
 // Agregar una comisión (fee) a una transacción
 export async function addTransactionFee(
   id: number | string,
-  data: { amount: number; date?: string }
+  data: { amount: number; date?: string; time?: string }
 ): Promise<any> {
   const response = await fetch(`${API_URL}/transactions/${id}/fee`, {
     method: 'POST',
@@ -264,7 +264,7 @@ export async function addTransactionFee(
 // Crear una transacción asociada (hija)
 export async function createAssociatedTransaction(
   id: number | string,
-  data: { amount: number; type: 'income' | 'expense'; categoryName: string; description?: string; date?: string }
+  data: { amount: number; type: 'income' | 'expense'; categoryName: string; description?: string; date?: string; time?: string }
 ): Promise<any> {
   const response = await fetch(`${API_URL}/transactions/${id}/associate`, {
     method: 'POST',

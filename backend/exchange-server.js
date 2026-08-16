@@ -991,6 +991,7 @@ function getTransactionRow(id) {
        t.amount,
        t.description,
        t.date,
+       t.time,
        t.fee,
        t.parent_transaction_id AS parentId,
        t.deleted AS deleted,
@@ -1009,9 +1010,24 @@ function getTransactionRow(id) {
 // Fecha mínima entre los hijos (no borrados) de una transacción.
 function getMinChildDate(parentId) {
   return getDb(
-    `SELECT MIN(date) AS minDate FROM transactions WHERE parent_transaction_id = ? AND deleted = 0`,
+    `SELECT MIN(date) AS minDate, MIN(
+       CASE
+         WHEN time IS NOT NULL AND time != '' THEN date || 'T' || time
+         ELSE date || 'T23:59:59'
+       END
+     ) AS minDateTime FROM transactions WHERE parent_transaction_id = ? AND deleted = 0`,
     [parentId]
   );
+}
+
+// Convierte una fecha/hora a un string comparable lexicográficamente.
+// `time` puede ser HH:MM, HH:MM:SS, vacío o null. Si falta, se usa 23:59:59
+// (el final del día) para que una transacción sin hora se considere después de
+// cualquier otra con hora ese mismo día.
+function dtKey(date, time) {
+  const t = (typeof time === 'string' && time !== '') ? time : '23:59:59';
+  const normalized = t.length === 5 ? `${t}:00` : t;
+  return `${date}T${normalized}`;
 }
 
 // Comunica la categoría fee/exchange por nombre según tipo de categoría usada.
@@ -1072,25 +1088,35 @@ app.put('/api/transactions/:id', async (req, res) => {
       return res.status(400).json({ error: 'Esta transacción pertenece a un exchange. Edítala desde el panel de exchange (feature futuro).' });
     }
 
-    const { description, amount, date, categoryName } = req.body;
+    const { description, amount, date, time, categoryName } = req.body;
 
-    // Fecha
+    // Fecha + hora
     let newDate = t.date;
+    let newTime = t.time || null;
     if (date != null && date !== '') {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
       }
       newDate = date;
     }
+    if (time != null && time !== '') {
+      if (!isValidTime(time)) {
+        return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+      }
+      newTime = time.length === 5 ? `${time}:00` : time;
+    } else if (time === '') {
+      newTime = null;
+    }
     if (t.parentId != null) {
       const parent = await getTransactionRow(t.parentId);
-      if (parent && newDate < parent.date) {
-        return res.status(400).json({ error: `La fecha no puede ser anterior a la de su transacción padre (${parent.date}).` });
+      if (parent && dtKey(newDate, newTime) < dtKey(parent.date, parent.time)) {
+        return res.status(400).json({ error: `La fecha/hora no puede ser anterior a la de su transacción padre (${parent.date}${parent.time ? ' ' + parent.time : ''}).` });
       }
     }
     const minChild = await getMinChildDate(id);
-    if (minChild && minChild.minDate != null && newDate > minChild.minDate) {
-      return res.status(400).json({ error: `La fecha no puede ser posterior a la de sus transacciones asociadas (${minChild.minDate}).` });
+    if (minChild && minChild.minDateTime != null && dtKey(newDate, newTime) > minChild.minDateTime) {
+      const childLabel = minChild.minDate != null ? `${minChild.minDate}` : '';
+      return res.status(400).json({ error: `La fecha/hora no puede ser posterior a la de sus transacciones asociadas (${childLabel}).` });
     }
 
     // Monto
@@ -1128,7 +1154,7 @@ app.put('/api/transactions/:id', async (req, res) => {
       await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) + delta, t.walletId]);
     }
 
-    await runDb('UPDATE transactions SET description = ?, amount = ?, date = ?, category_id = ? WHERE id = ?', [newDescription, newAmount, newDate, newCategoryId, id]);
+    await runDb('UPDATE transactions SET description = ?, amount = ?, date = ?, time = ?, category_id = ? WHERE id = ?', [newDescription, newAmount, newDate, newTime, newCategoryId, id]);
 
     // Si es un fee, re-sincronizar el fee del padre / exchange
     if (t.category === 'fee' && t.parentId != null) {
@@ -1193,21 +1219,30 @@ app.post('/api/transactions/:id/fee', async (req, res) => {
       return res.status(400).json({ error: 'Esta transacción pertenece a un exchange. No puedes agregarle comisión desde aquí.' });
     }
 
-    const { amount, date } = req.body;
+    const { amount, date, time } = req.body;
     const feeAmount = Number(amount);
     if (!Number.isFinite(feeAmount) || feeAmount <= 0) {
       return res.status(400).json({ error: 'El monto de la comisión debe ser mayor a 0' });
     }
 
     let feeDate = t.date;
+    let feeTime = null;
     if (date != null && date !== '') {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
       }
       feeDate = date;
     }
-    if (feeDate < t.date) {
-      return res.status(400).json({ error: `La fecha de la comisión no puede ser anterior a la de su transacción (${t.date}).` });
+    if (time != null && time !== '') {
+      if (!isValidTime(time)) {
+        return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+      }
+      feeTime = time.length === 5 ? `${time}:00` : time;
+    } else if (time === '') {
+      feeTime = null;
+    }
+    if (dtKey(feeDate, feeTime) < dtKey(t.date, t.time)) {
+      return res.status(400).json({ error: `La fecha/hora de la comisión no puede ser anterior a la de su transacción (${t.date}${t.time ? ' ' + t.time : ''}).` });
     }
 
     const feeCat = await getDb("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1", []);
@@ -1219,9 +1254,9 @@ app.post('/api/transactions/:id/fee', async (req, res) => {
 
     await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) - feeAmount, t.walletId]);
     const ins = await runDb(
-      `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id)
-       VALUES (?, ?, 'expense', ?, ?, ?, 1.0, ?, 0, ?)`,
-      [t.walletId, feeCat.id, feeAmount, `Comisión: ${t.description || t.category}`, feeDate, feeAmount, id]
+      `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
+       VALUES (?, ?, 'expense', ?, ?, ?, ?, 1.0, ?, 0, ?)`,
+      [t.walletId, feeCat.id, feeAmount, `Comisión: ${t.description || t.category}`, feeDate, feeTime, feeAmount, id]
     );
 
     await syncParentFee(id);
@@ -1249,7 +1284,7 @@ app.post('/api/transactions/:id/associate', async (req, res) => {
       return res.status(400).json({ error: 'Esta transacción pertenece a un exchange. No puedes crearle transacciones asociadas desde aquí.' });
     }
 
-    const { amount, type, categoryName, description, date } = req.body;
+    const { amount, type, categoryName, description, date, time } = req.body;
     const parsedAmount = Number(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
@@ -1264,14 +1299,23 @@ app.post('/api/transactions/:id/associate', async (req, res) => {
     if (!cat) return res.status(400).json({ error: `Categoría inválida para tipo ${type}` });
 
     let assocDate = t.date;
+    let assocTime = null;
     if (date != null && date !== '') {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
       }
       assocDate = date;
     }
-    if (assocDate < t.date) {
-      return res.status(400).json({ error: `La fecha de la transacción asociada no puede ser anterior a la de su padre (${t.date}).` });
+    if (time != null && time !== '') {
+      if (!isValidTime(time)) {
+        return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+      }
+      assocTime = time.length === 5 ? `${time}:00` : time;
+    } else if (time === '') {
+      assocTime = null;
+    }
+    if (dtKey(assocDate, assocTime) < dtKey(t.date, t.time)) {
+      return res.status(400).json({ error: `La fecha/hora de la transacción asociada no puede ser anterior a la de su padre (${t.date}${t.time ? ' ' + t.time : ''}).` });
     }
 
     const effect = balanceEffect(type, parsedAmount);
@@ -1281,9 +1325,9 @@ app.post('/api/transactions/:id/associate', async (req, res) => {
     await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) + effect, t.walletId]);
 
     const ins = await runDb(
-      `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id)
-       VALUES (?, ?, ?, ?, ?, ?, 1.0, ?, 0, ?)`,
-      [t.walletId, cat.id, type, parsedAmount, description || '', assocDate, parsedAmount, id]
+      `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, ?, 0, ?)`,
+      [t.walletId, cat.id, type, parsedAmount, description || '', assocDate, assocTime, parsedAmount, id]
     );
 
     res.json({ success: true, message: 'Transacción asociada creada', associateId: ins.lastID });

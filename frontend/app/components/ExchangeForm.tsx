@@ -230,22 +230,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   {/* Tasa de mercado: eliminada. El spread se compara contra la tasa diaria
                       (BCV/paralelo) que ya vive en la entidad daily_rates. */}
                   <TextField
-                    label="Comisión (fee)"
-                    type="number"
-                    value={fee}
-                    onChange={(e) => setFee(e.target.value)}
-                    placeholder="Ej: 3.75"
-                    disabled={loading}
-                    onWheel={(e) => e.currentTarget.blur()}
-                    helperText="Comisión pagada en la moneda de origen"
-                    InputProps={{
-                      endAdornment: fromWalletId ? (
-                        wallets.find(w => w.id === fromWalletId)?.currency || ''
-                      ) : ''
-                    }}
-                  />
-
-                  <TextField
                     label="Fecha"
                     type="date"
                     value={date}
@@ -269,6 +253,22 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     fullWidth
                     InputLabelProps={{ shrink: true }}
                     helperText="Si la dejas vacía se usa la hora actual"
+                  />
+
+                  <TextField
+                    label="Comisión (fee)"
+                    type="number"
+                    value={fee}
+                    onChange={(e) => setFee(e.target.value)}
+                    placeholder="Ej: 3.75"
+                    disabled={loading}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    helperText="Comisión pagada en la moneda de origen"
+                    InputProps={{
+                      endAdornment: fromWalletId ? (
+                        wallets.find(w => w.id === fromWalletId)?.currency || ''
+                      ) : ''
+                    }}
                   />
                 </Box>
               </Collapse>

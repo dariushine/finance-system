@@ -111,16 +111,17 @@ export default function TransactionDetailPage() {
   const [assocOpen, setAssocOpen] = useState(false);
 
   // Form editar
-  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '' });
+  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', time: '' });
   const [editCategory, setEditCategory] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Form fee
   const [feeAmount, setFeeAmount] = useState('');
   const [feeDate, setFeeDate] = useState('');
+  const [feeTime, setFeeTime] = useState('');
 
   // Form asociada
-  const [assocForm, setAssocForm] = useState({ amount: '', type: 'expense' as 'income' | 'expense', categoryName: '', description: '', date: '' });
+  const [assocForm, setAssocForm] = useState({ amount: '', type: 'expense' as 'income' | 'expense', categoryName: '', description: '', date: '', time: '' });
 
   // Feedback
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
@@ -169,6 +170,7 @@ export default function TransactionDetailPage() {
       description: tx.description || '',
       amount: String(tx.amount),
       date: tx.date || todayISODate(),
+      time: tx.time ? tx.time.slice(0, 5) : '',
     });
     setEditCategory(tx.category);
     setEditOpen(true);
@@ -182,6 +184,7 @@ export default function TransactionDetailPage() {
       const amount = Number(editForm.amount);
       if (Number.isFinite(amount) && amount > 0) payload.amount = amount;
       if (editForm.date) payload.date = editForm.date;
+      payload.time = editForm.time || undefined;
       // Categoría editable solo en no-fee y no-exchange
       if (!isFee && editCategory !== tx.category && !SYSTEM_CATEGORIES.includes(editCategory)) {
         payload.categoryName = editCategory;
@@ -224,6 +227,7 @@ export default function TransactionDetailPage() {
     if (isFee) { notice('No puedes agregar comisión a una comisión (fee).', 'warning'); return; }
     setFeeAmount('');
     setFeeDate(tx.date || todayISODate());
+    setFeeTime(tx.time ? tx.time.slice(0, 5) : '');
     setFeeOpen(true);
   };
 
@@ -233,7 +237,7 @@ export default function TransactionDetailPage() {
     try {
       const amount = Number(feeAmount);
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto de la comisión debe ser mayor a 0');
-      const res = await addTransactionFee(id, { amount, date: feeDate || undefined });
+      const res = await addTransactionFee(id, { amount, date: feeDate || undefined, time: feeTime || undefined });
       if (!res?.success) throw new Error(res?.error || 'Error al agregar comisión');
       notice('Comisión agregada');
       setFeeOpen(false);
@@ -250,7 +254,7 @@ export default function TransactionDetailPage() {
     if (!tx) return;
     if (blockIfExchange()) return;
     if (isFee) { notice('No puedes crear transacciones asociadas a una comisión (fee).', 'warning'); return; }
-    setAssocForm({ amount: '', type: 'expense', categoryName: '', description: '', date: tx.date || todayISODate() });
+    setAssocForm({ amount: '', type: 'expense', categoryName: '', description: '', date: tx.date || todayISODate(), time: tx.time ? tx.time.slice(0, 5) : '' });
     setAssocOpen(true);
   };
 
@@ -267,6 +271,7 @@ export default function TransactionDetailPage() {
         categoryName: assocForm.categoryName,
         description: assocForm.description || undefined,
         date: assocForm.date || undefined,
+        time: assocForm.time || undefined,
       });
       if (!res?.success) throw new Error(res?.error || 'Error al crear asociada');
       notice('Transacción asociada creada');
@@ -561,6 +566,15 @@ export default function TransactionDetailPage() {
               InputLabelProps={{ shrink: true }}
               helperText="No puede ser anterior a su padre ni posterior a sus asociadas"
             />
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={editForm.time}
+              onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Se aplica la misma regla de fecha a la hora"
+            />
             <FormControl fullWidth disabled={isFee}>
               <InputLabel>Categoría</InputLabel>
               <Select
@@ -638,6 +652,15 @@ export default function TransactionDetailPage() {
               InputLabelProps={{ shrink: true }}
               helperText="Por defecto la de la transacción; no puede ser anterior"
             />
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={feeTime}
+              onChange={(e) => setFeeTime(e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Por defecto la de la transacción; no puede ser anterior"
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -700,6 +723,15 @@ export default function TransactionDetailPage() {
               type="date"
               value={assocForm.date}
               onChange={(e) => setAssocForm({ ...assocForm, date: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Por defecto la de la transacción; no puede ser anterior"
+            />
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={assocForm.time}
+              onChange={(e) => setAssocForm({ ...assocForm, time: e.target.value })}
               fullWidth
               InputLabelProps={{ shrink: true }}
               helperText="Por defecto la de la transacción; no puede ser anterior"
