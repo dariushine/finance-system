@@ -376,6 +376,63 @@ function getRateForDate(date, type) {
   });
 }
 
+// Busca una categoría activa por nombre+tipo. Si no existe, la crea de forma
+// idempotente (nueva categoría con color por tipo). Devuelve la fila (id, name...).
+// Evita crear categorías del sistema (fee, exchange_out, exchange_in): si se pide
+// una de estas y no existe, se rechaza el error para no corromper los flujos.
+function getOrCreateCategory(categoryName, type) {
+  return new Promise((resolve, reject) => {
+    const name = String(categoryName || '').trim();
+    if (!name) return reject(new Error('Nombre de categoría vacío'));
+    if (!type || (type !== 'income' && type !== 'expense')) {
+      return reject(new Error('type debe ser income o expense'));
+    }
+    db.get('SELECT * FROM categories WHERE name = ? AND type = ?', [name, type], (err, row) => {
+      if (err) return reject(err);
+      if (row) {
+        // Existe (incluida una de sistema como exchange_out/fee): devolverla tal cual.
+        // Si estaba desactivada, reactivar para poder usarla.
+        if (!row.isActive && !isSystemCategoryName(row.name)) {
+          db.run('UPDATE categories SET isActive = 1 WHERE id = ?', [row.id], (upErr) => {
+            if (upErr) return reject(upErr);
+            resolve({ ...row, isActive: 1 });
+          });
+        } else {
+          resolve(row);
+        }
+        return;
+      }
+      // No existe: crear una nueva, pero nunca una de sistema (solo se crean vía exchange).
+      if (isSystemCategoryName(name)) {
+        return reject(new Error(`No puedes crear la categoría de sistema '${name}'`));
+      }
+      const color = type === 'income' ? '#2ecc71' : '#e74c3c';
+      db.run(
+        'INSERT INTO categories (name, type, color) VALUES (?, ?, ?)',
+        [name, type, color],
+        function (insErr) {
+          if (insErr) {
+            // Carrera (concurrente): reintentar lectura.
+            if (/UNIQUE/.test(String(insErr.message))) {
+              db.get('SELECT * FROM categories WHERE name = ? AND type = ?', [name, type], (e2, r2) => {
+                if (e2) return reject(e2);
+                resolve(r2);
+              });
+            } else {
+              reject(insErr);
+            }
+            return;
+          }
+          db.get('SELECT * FROM categories WHERE id = ?', [this.lastID], (e3, r3) => {
+            if (e3) return reject(e3);
+            resolve(r3);
+          });
+        }
+      );
+    });
+  });
+}
+
 function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date, time) {
   return new Promise((resolve, reject) => {
     const commission = Number(fee) || 0;
@@ -397,12 +454,8 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
         if (err) return reject(err);
         if (!wallet) return reject(new Error('Wallet no encontrada'));
         
-        // 2. Obtener categoría
-        db.get('SELECT * FROM categories WHERE name = ? AND type = ? AND isActive = 1', 
-          [categoryName, type], (err, category) => {
-            if (err) return reject(err);
-            if (!category) return reject(new Error('Categoría no encontrada'));
-            
+        // 2. Obtener categoría (si no existe, se crea automáticamente)
+        getOrCreateCategory(categoryName, type).then((category) => {
             // 3. Validar fondos para gastos: monto + comisión (la comisión es EXTRA al monto)
             const total = amount + commission;
             if (type === 'expense' && wallet.balance < total) {
@@ -512,7 +565,7 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                 }
               }
             );
-          });
+          }).catch((err) => reject(err));
       });
     });
   });
@@ -527,6 +580,124 @@ app.get('/api/health', (req, res) => {
     version: '4.0.0',
     features: ['wallets', 'transactions', 'exchanges', 'balance'],
     note: 'Exchanges con transacciones separadas (débito/crédito)'
+  });
+});
+
+// ---- Categorías ----
+// Listar categorías. ?type=income|expense filtra por tipo; por defecto solo activas.
+// ?includingInactive=1 incluye también las desactivadas (para la pantalla de config).
+app.get('/api/categories', (req, res) => {
+  const { type, includingInactive } = req.query;
+  let sql = 'SELECT * FROM categories';
+  const conds = [];
+  const params = [];
+  if (type === 'income' || type === 'expense') {
+    conds.push('type = ?');
+    params.push(type);
+  }
+  if (includingInactive !== '1') {
+    conds.push('isActive = 1');
+  }
+  if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
+  sql += ' ORDER BY type, name';
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// Crear una categoría.
+app.post('/api/categories', (req, res) => {
+  const { name, type, color, icon } = req.body || {};
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return res.status(400).json({ error: 'El nombre es requerido' });
+  if (type !== 'income' && type !== 'expense') {
+    return res.status(400).json({ error: 'type debe ser income o expense' });
+  }
+  if (isSystemCategoryName(trimmed)) {
+    return res.status(400).json({ error: `'${trimmed}' es una categoría del sistema y no se puede crear manualmente.` });
+  }
+  const finalColor = color || (type === 'income' ? '#2ecc71' : '#e74c3c');
+  db.run(
+    'INSERT INTO categories (name, type, color, icon) VALUES (?, ?, ?, ?)',
+    [trimmed, type, finalColor, icon || null],
+    function (err) {
+      if (err) return res.status(400).json({ error: err.message });
+      db.get('SELECT * FROM categories WHERE id = ?', [this.lastID], (e, row) => {
+        if (e) return res.status(500).json({ error: e.message });
+        res.status(201).json(row);
+      });
+    }
+  );
+});
+
+// Editar una categoría (nombre, color, icono). Se bloquea en categorías del sistema.
+app.put('/api/categories/:id', (req, res) => {
+  const id = Number(req.params.id);
+  db.get('SELECT * FROM categories WHERE id = ?', [id], (err, cat) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!cat) return res.status(404).json({ error: 'Categoría no encontrada' });
+    if (isSystemCategoryName(cat.name)) {
+      return res.status(400).json({ error: `'${cat.name}' es una categoría del sistema y no se puede editar.` });
+    }
+    const { name, color, icon, type } = req.body || {};
+    const newName = name !== undefined && String(name).trim() !== '' ? String(name).trim() : cat.name;
+    if (type !== undefined && type !== 'income' && type !== 'expense') {
+      return res.status(400).json({ error: 'type debe ser income o expense' });
+    }
+    if (newName !== cat.name && isSystemCategoryName(newName)) {
+      return res.status(400).json({ error: `'${newName}' es una categoría del sistema y no se puede usar.` });
+    }
+    const newColor = color !== undefined ? color : cat.color;
+    const newIcon = icon !== undefined ? icon : cat.icon;
+    const newType = type !== undefined ? type : cat.type;
+    db.run(
+      'UPDATE categories SET name = ?, color = ?, icon = ?, type = ? WHERE id = ?',
+      [newName, newColor, newIcon, newType, id],
+      function (updErr) {
+        if (updErr) return res.status(400).json({ error: updErr.message });
+        db.get('SELECT * FROM categories WHERE id = ?', [id], (e, row) => {
+          if (e) return res.status(500).json({ error: e.message });
+          res.json(row);
+        });
+      }
+    );
+  });
+});
+
+// Soft-delete / reactivar categoría.
+// DELETE marca isActive=0 (no borra físicamente: conserva el historial).
+app.delete('/api/categories/:id', (req, res) => {
+  const id = Number(req.params.id);
+  db.get('SELECT * FROM categories WHERE id = ?', [id], (err, cat) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!cat) return res.status(404).json({ error: 'Categoría no encontrada' });
+    if (isSystemCategoryName(cat.name)) {
+      return res.status(400).json({ error: `'${cat.name}' es una categoría del sistema y no se puede desactivar.` });
+    }
+    db.run('UPDATE categories SET isActive = 0 WHERE id = ?', [id], (e) => {
+      if (e) return res.status(500).json({ error: e.message });
+      res.json({ success: true, message: 'Categoría desactivada' });
+    });
+  });
+});
+
+// Reactivar (deshacer soft-delete)
+app.put('/api/categories/:id/reactivate', (req, res) => {
+  const id = Number(req.params.id);
+  db.get('SELECT * FROM categories WHERE id = ?', [id], (err, cat) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!cat) return res.status(404).json({ error: 'Categoría no encontrada' });
+    if (isSystemCategoryName(cat.name)) {
+      return res.status(400).json({ error: `'${cat.name}' es una categoría del sistema y no se puede reactivar.` });
+    }
+    db.run('UPDATE categories SET isActive = 1 WHERE id = ?', [id], (e) => {
+      if (e) return res.status(500).json({ error: e.message });
+      db.get('SELECT * FROM categories WHERE id = ?', [id], (e2, row) => {
+        if (e2) return res.status(500).json({ error: e2.message });
+        res.json(row);
+      });
+    });
   });
 });
 
@@ -1147,8 +1318,8 @@ app.put('/api/transactions/:id', async (req, res) => {
       if (isSystemCategoryName(categoryName)) {
         return res.status(400).json({ error: 'No puedes asignar categorías del sistema (fee, exchange).' });
       }
-      const cat = await getDb('SELECT id FROM categories WHERE name = ? AND type = ? AND isActive = 1', [categoryName, t.type]);
-      if (!cat) return res.status(400).json({ error: `Categoría inválida para tipo ${t.type}` });
+      // Si no existe, se crea automáticamente (getOrCreateCategory).
+      const cat = await getOrCreateCategory(categoryName, t.type);
       newCategoryId = cat.id;
     }
 
@@ -1302,8 +1473,8 @@ app.post('/api/transactions/:id/associate', async (req, res) => {
     if (isSystemCategoryName(categoryName)) {
       return res.status(400).json({ error: 'No puedes usar categorías del sistema (fee, exchange).' });
     }
-    const cat = await getDb('SELECT id FROM categories WHERE name = ? AND type = ? AND isActive = 1', [categoryName, type]);
-    if (!cat) return res.status(400).json({ error: `Categoría inválida para tipo ${type}` });
+    // Si no existe, se crea automáticamente (getOrCreateCategory).
+    const cat = await getOrCreateCategory(categoryName, type);
 
     let assocDate = t.date;
     let assocTime = null;

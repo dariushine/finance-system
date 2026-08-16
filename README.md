@@ -50,7 +50,12 @@ Lista verificada de endpoints reales del backend (`backend/exchange-server.js`):
 | DELETE | `/api/wallets/:id` | Soft-delete (marca `isActive = 0`) |
 | PUT | `/api/wallets/:id/reactivate` | Reactivar billetera eliminada |
 | GET | `/api/wallets/:id/report?from=&to=&period=` | Reporte de billetera: balance, ingresos/egresos, transacciones con rango de fechas |
-| POST | `/api/transactions` | Crear transacción (walletId, categoryName, type, amount, opcional fee) |
+| GET | `/api/categories?type=income|expense&includingInactive=1` | Listar categorías (por defecto solo activas; `includingInactive=1` incluye desactivadas) |
+| POST | `/api/categories` | Crear categoría (name, type, opcional color/icon; las de sistema están bloqueadas) |
+| PUT | `/api/categories/:id` | Editar categoría (nombre, color, icono, type) |
+| DELETE | `/api/categories/:id` | Soft-delete (marca `isActive = 0`, conserva historial) |
+| PUT | `/api/categories/:id/reactivate` | Reactivar categoría desactivada |
+| POST | `/api/transactions` | Crear transacción (walletId, categoryName, type, amount, opcional fee). Si la categoría no existe, se crea automáticamente |
 | GET | `/api/transactions?page=&limit=` | Listar transacciones (paginadas, con joins de wallet y categoría) |
 | GET | `/api/transactions/:id` | Obtener transacción |
 | POST | `/api/exchanges` | Crear exchange (fromWalletId, toWalletId, fromAmount, toAmount, opcional fee) |
@@ -96,11 +101,12 @@ El backend crea automáticamente el esquema al arrancar y hace migraciones menor
 | `/transactions` | Transacciones | Historial paginado, crear transacción, tabla/acordeón con fee |
 | `/exchanges` | Exchanges | Historial paginado, crear exchange, tabla/acordeón, **exportar CSV** |
 | `/rates` | Tasas diarias | CRUD de tasas BCV/paralelo, **sincronizar hoy** desde Dolarapi |
+| `/categories` | Categorías | Crear, editar, desactivar y reactivar categorías (por tipo Gasto/Ingreso); las de sistema están ocultas y bloqueadas |
 | `/reports` | Reportes | Resumen, rendimiento mensual, por categoría, balances de billeteras, stats de exchanges, **exportar JSON** |
 
 ### Formularios globales (Fab "+")
 
-- **Transacción**: tipo (gasto/ingreso), monto, comisión opcional, billetera, categoría, descripción. Reutilizado también en `/transactions`.
+- **Transacción**: tipo (gasto/ingreso), monto, comisión opcional, billetera, categoría (autocompletado con búsqueda y **creación al vuelo** si no existe), descripción. Reutilizado también en `/transactions`.
 - **Exchange**: billetera origen/destino, montos, comisión opcional, descripción; muestra cálculo de tasa y total a descontar.
 
 ## 💱 Sistema de Exchanges

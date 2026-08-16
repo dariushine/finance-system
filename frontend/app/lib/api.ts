@@ -375,15 +375,60 @@ export interface Category {
   name: string;
   type: 'expense' | 'income';
   color?: string;
+  icon?: string | null;
+  isActive?: boolean;
 }
 
-export async function getCategories(category_type?: 'expense' | 'income'): Promise<Category[]> {
+export interface CategoryInput {
+  name: string;
+  type: 'expense' | 'income';
+  color?: string;
+  icon?: string;
+}
+
+export async function getCategories(category_type?: 'expense' | 'income', opts?: { includingInactive?: boolean }): Promise<Category[]> {
   const params = new URLSearchParams();
   if (category_type) params.append('type', category_type);
-  
+  if (opts?.includingInactive) params.append('includingInactive', '1');
   const response = await fetch(`${API_URL}/categories?${params.toString()}`);
   if (!response.ok) throw new Error('Failed to get categories');
   return response.json();
+}
+
+export async function createCategory(data: CategoryInput): Promise<Category> {
+  const response = await fetch(`${API_URL}/categories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo crear la categoría');
+  return body;
+}
+
+export async function updateCategory(id: number | string, data: Partial<CategoryInput>): Promise<Category> {
+  const response = await fetch(`${API_URL}/categories/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo actualizar la categoría');
+  return body;
+}
+
+export async function deleteCategory(id: number | string): Promise<any> {
+  const response = await fetch(`${API_URL}/categories/${id}`, { method: 'DELETE' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo desactivar la categoría');
+  return body;
+}
+
+export async function reactivateCategory(id: number | string): Promise<Category> {
+  const response = await fetch(`${API_URL}/categories/${id}/reactivate`, { method: 'PUT' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo reactivar la categoría');
+  return body;
 }
 
 // Balance API

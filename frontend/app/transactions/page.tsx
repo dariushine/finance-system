@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, Table, TableBody, TableCell, TableContainer, TableHead,
+  Alert, Box, Button, Card, CardContent, Chip, CircularProgress,
+  Table, TableBody, TableCell, TableContainer, TableHead,
   TablePagination, TableRow, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
-import { Add, Download } from '@mui/icons-material';
-import TransactionForm from '../components/TransactionForm';
+import { Download } from '@mui/icons-material';
 import TransactionAccordionList from '../components/TransactionAccordionList';
 import DateRangeFilter from '../components/DateRangeFilter';
 import { API_URL } from '../lib/api';
@@ -33,7 +32,6 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
 
   // Paginación (se restaura desde sessionStorage si se vino del detalle)
   const listState = (() => {
@@ -155,7 +153,6 @@ export default function TransactionsPage() {
         </Box>
         <Box display="flex" gap={1} flexWrap="wrap">
           <Button variant="outlined" startIcon={<Download />} onClick={exportCSV}>Exportar</Button>
-          <Button variant="contained" startIcon={<Add />} onClick={() => setFormOpen(true)}>Nueva transacción</Button>
         </Box>
       </Box>
 
@@ -224,12 +221,6 @@ export default function TransactionsPage() {
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Nueva transacción</DialogTitle>
-        <DialogContent><TransactionForm onSuccess={() => { setFormOpen(false); loadTransactions(); }} /></DialogContent>
-        <DialogActions><Button onClick={() => setFormOpen(false)}>Cancelar</Button></DialogActions>
-      </Dialog>
     </Box>
   );
 }
