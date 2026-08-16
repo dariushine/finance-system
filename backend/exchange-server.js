@@ -65,9 +65,11 @@ db.serialize(() => {
     exchange_rate DECIMAL(10,4) DEFAULT 1.0,
     converted_amount DECIMAL(10,2) NOT NULL,
     fee DECIMAL(10,2) DEFAULT 0,
+    parent_transaction_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (wallet_id) REFERENCES wallets(id),
-    FOREIGN KEY (category_id) REFERENCES categories(id)
+    FOREIGN KEY (category_id) REFERENCES categories(id),
+    FOREIGN KEY (parent_transaction_id) REFERENCES transactions(id)
   )`);
   
   // Exchanges (NUEVA - para metadata)
@@ -132,6 +134,10 @@ db.serialize(() => {
     const names = (cols || []).map((c) => c.name);
     if (!names.includes('fee')) {
       db.run(`ALTER TABLE transactions ADD COLUMN fee DECIMAL(10,2) DEFAULT 0`);
+    }
+    if (!names.includes('parent_transaction_id')) {
+      db.run(`ALTER TABLE transactions ADD COLUMN parent_transaction_id INTEGER`);
+      console.log('✅ transactions: agregada columna parent_transaction_id');
     }
   });
   
@@ -325,9 +331,9 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
 
             // 5a. Transacción principal con el monto original (sin comisión)
             db.run(
-              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [walletId, category.id, type, amount, description || '', date, 1.0, amount, 0],
+              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [walletId, category.id, type, amount, description || '', date, 1.0, amount, 0, null],
               function(err) {
                 if (err) {
                   db.run('ROLLBACK');
@@ -364,11 +370,11 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                     ['fee', type], (fErr, feeCategory) => {
                       const fc = (!fErr && feeCategory) ? feeCategory : category;
                       db.run(
-                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, exchange_rate, converted_amount, fee, parent_transaction_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [walletId, fc.id, type, commission,
                          `Comisión: ${description || category.name}`,
-                         date, 1.0, commission, 0],
+                         date, 1.0, commission, 0, transactionId],
                         function(err2) {
                           if (err2) {
                             db.run('ROLLBACK');
@@ -620,6 +626,7 @@ app.get('/api/transactions', (req, res) => {
       t.amount,
       t.description,
       t.date,
+      t.parent_transaction_id AS parentTransactionId,
       t.created_at AS createdAt
     FROM transactions t
     JOIN wallets w ON w.id = t.wallet_id
@@ -649,6 +656,7 @@ app.get('/api/transactions/:id', (req, res) => {
       t.amount,
       t.description,
       t.date,
+      t.parent_transaction_id AS parentTransactionId,
       t.created_at AS createdAt
     FROM transactions t
     JOIN wallets w ON w.id = t.wallet_id
@@ -798,6 +806,8 @@ app.get('/api/exchanges', (req, res) => {
       e.from_amount AS fromAmount,
       e.to_amount AS toAmount,
       e.rate,
+      e.debit_transaction_id AS debitTransactionId,
+      e.credit_transaction_id AS creditTransactionId,
       e.description,
       e.created_at AS createdAt,
       from_wallet.name AS fromWalletName,
