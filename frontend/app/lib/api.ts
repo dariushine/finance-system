@@ -75,6 +75,27 @@ export interface Exchange {
   time?: string | null;
 }
 
+// Detalle de un exchange (GET /api/exchanges/:id)
+export interface ExchangeDetail {
+  id: number;
+  fromWalletId: number;
+  toWalletId: number;
+  fromAmount: number;
+  toAmount: number;
+  rate: number;
+  fee?: number | null;
+  description?: string;
+  createdAt?: string;
+  debitTransactionId: number;
+  creditTransactionId: number;
+  date?: string;
+  time?: string | null;
+  fromWalletName?: string;
+  toWalletName?: string;
+  fromCurrency?: string;
+  toCurrency?: string;
+}
+
 // Wallets API
 export async function getWallets(): Promise<Wallet[]> {
   const response = await fetch(`${API_URL}/wallets`);
@@ -277,6 +298,16 @@ export async function createAssociatedTransaction(
 }
 
 export { deleteTransaction };
+
+// Obtener detalle de un exchange (GET /api/exchanges/:id)
+export async function getExchange(id: number | string): Promise<ExchangeDetail> {
+  const response = await fetch(`${API_URL}/exchanges/${id}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'No se pudo cargar el exchange');
+  }
+  return response.json();
+}
 
 // POST transaction API
 export async function postTransaction(data: Transaction): Promise<Transaction> {

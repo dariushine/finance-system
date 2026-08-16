@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, memo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Box,
   Typography,
@@ -15,8 +16,6 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  IconButton,
-  Tooltip,
   Button,
   Dialog,
   DialogTitle,
@@ -97,10 +96,12 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
   exchange,
   isOpen,
   onToggle,
+  onView,
 }: {
   exchange: Exchange;
   isOpen: boolean;
   onToggle: (id: number) => void;
+  onView: (id: number) => void;
 }) {
   return (
     <Accordion
@@ -110,27 +111,29 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
       sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
     >
       <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
-        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
-          <Stack spacing={0.25}>
-            <Typography variant="body2" color="text.secondary">{formatExchangeDate(exchange)}</Typography>
-            <Typography variant="body2">{exchange.fromWalletName || `Wallet ${exchange.fromWalletId}`}</Typography>
-          </Stack>
-          <Typography variant="body2" fontWeight="bold" color="success.main">
-            +{formatCurrency(exchange.toAmount, exchange.toCurrency)}
-          </Typography>
+        <Box width="100%" pr={1}>
+          {/* Fila superior: fecha a la izquierda, residbetter resumen a la derecha */}
+          <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+            <Typography variant="caption" color="text.secondary">{formatExchangeDate(exchange)}</Typography>
+            <Typography variant="caption" fontStyle="italic" noWrap>
+              {exchange.fromWalletName || `Wallet ${exchange.fromWalletId}`} → {exchange.toWalletName || `Wallet ${exchange.toWalletId}`}
+            </Typography>
+          </Box>
+          {/* Fila principal: la transición de montos */}
+          <Box display="flex" alignItems="center" justifyContent="space-between" gap={1} mt={0.5}>
+            <Typography variant="body2" color="error.main" fontWeight="bold" noWrap>
+              -{formatCurrency(exchange.fromAmount, exchange.fromCurrency)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">→</Typography>
+            <Typography variant="body2" color="success.main" fontWeight="bold" noWrap>
+              +{formatCurrency(exchange.toAmount, exchange.toCurrency)}
+            </Typography>
+          </Box>
         </Box>
       </AccordionSummary>
       <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
         <Divider sx={{ mb: 1.5 }} />
         <Stack spacing={1}>
-          <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Hacia</Typography>
-            <Typography variant="body2">{exchange.toWalletName || `Wallet ${exchange.toWalletId}`}</Typography>
-          </Box>
-          <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Enviado</Typography>
-            <Typography variant="body2" color="error.main">-{formatCurrency(exchange.fromAmount, exchange.fromCurrency)}</Typography>
-          </Box>
           <Box display="flex" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Tasa</Typography>
             <Chip label={exchange.rate.toFixed(4)} size="small" color="primary" />
@@ -149,6 +152,18 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
             <Typography variant="body2" color="text.secondary">Descripción</Typography>
             <Typography variant="body2" textAlign="right">{exchange.description || '—'}</Typography>
           </Box>
+          <Box display="flex" justifyContent="flex-end" pt={1}>
+            <Button
+              size="small"
+              startIcon={<ViewIcon fontSize="small" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onView(exchange.id);
+              }}
+            >
+              Ver detalle
+            </Button>
+          </Box>
         </Stack>
       </AccordionDetails>
     </Accordion>
@@ -157,6 +172,7 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
 
 export default function ExchangesPage() {
   const theme = useTheme();
+  const router = useRouter();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
@@ -362,6 +378,7 @@ export default function ExchangesPage() {
                   exchange={exchange}
                   isOpen={expanded === exchange.id}
                   onToggle={handleToggle}
+                  onView={(id) => router.push(`/exchanges/${id}`)}
                 />
               ))}
             </Box>
@@ -376,14 +393,13 @@ export default function ExchangesPage() {
                   <TableCell>To Amount</TableCell>
                   <TableCell>Fee</TableCell>
                   <TableCell>Descripción</TableCell>
-                  <TableCell align="right">Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {exchanges
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((exchange) => (
-                    <TableRow key={exchange.id} hover>
+                    <TableRow key={exchange.id} hover onClick={() => router.push(`/exchanges/${exchange.id}`)} sx={{ cursor: 'pointer' }}>
                       <TableCell>
                         <Typography variant="body2">
                           {exchange.date ? exchange.date.split('-').reverse().join('/') : new Date(exchange.createdAt).toLocaleDateString('es-VE')}
@@ -433,13 +449,6 @@ export default function ExchangesPage() {
                         <Typography variant="body2" noWrap maxWidth={150}>
                           {exchange.description || '-'}
                         </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="Ver detalles">
-                          <IconButton size="small">
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
                       </TableCell>
                     </TableRow>
                 ))}
