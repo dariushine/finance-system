@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, memo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Box,
   Typography,
@@ -97,10 +98,12 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
   exchange,
   isOpen,
   onToggle,
+  onView,
 }: {
   exchange: Exchange;
   isOpen: boolean;
   onToggle: (id: number) => void;
+  onView: (id: number) => void;
 }) {
   return (
     <Accordion
@@ -149,6 +152,18 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
             <Typography variant="body2" color="text.secondary">Descripción</Typography>
             <Typography variant="body2" textAlign="right">{exchange.description || '—'}</Typography>
           </Box>
+          <Box display="flex" justifyContent="flex-end" pt={1}>
+            <Button
+              size="small"
+              startIcon={<ViewIcon fontSize="small" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onView(exchange.id);
+              }}
+            >
+              Ver detalle
+            </Button>
+          </Box>
         </Stack>
       </AccordionDetails>
     </Accordion>
@@ -157,6 +172,7 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
 
 export default function ExchangesPage() {
   const theme = useTheme();
+  const router = useRouter();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
@@ -362,6 +378,7 @@ export default function ExchangesPage() {
                   exchange={exchange}
                   isOpen={expanded === exchange.id}
                   onToggle={handleToggle}
+                  onView={(id) => router.push(`/exchanges/${id}`)}
                 />
               ))}
             </Box>
@@ -436,7 +453,7 @@ export default function ExchangesPage() {
                       </TableCell>
                       <TableCell align="right">
                         <Tooltip title="Ver detalles">
-                          <IconButton size="small">
+                          <IconButton size="small" onClick={() => router.push(`/exchanges/${exchange.id}`)}>
                             <ViewIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>

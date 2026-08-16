@@ -1539,6 +1539,45 @@ app.get('/api/exchanges', (req, res) => {
   });
 });
 
+// Detalle de un exchange (GET /api/exchanges/:id)
+app.get('/api/exchanges/:id', (req, res) => {
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'ID inválido' });
+  }
+
+  const query = `
+    SELECT
+      e.id,
+      e.from_wallet_id AS fromWalletId,
+      e.to_wallet_id AS toWalletId,
+      e.from_amount AS fromAmount,
+      e.to_amount AS toAmount,
+      e.rate,
+      e.fee,
+      e.description,
+      e.created_at AS createdAt,
+      e.debit_transaction_id AS debitTransactionId,
+      e.credit_transaction_id AS creditTransactionId,
+      dt.date AS date,
+      dt.time AS time,
+      fw.name AS fromWalletName,
+      tw.name AS toWalletName,
+      fw.currency AS fromCurrency,
+      tw.currency AS toCurrency
+    FROM exchanges e
+    JOIN wallets fw ON fw.id = e.from_wallet_id
+    JOIN wallets tw ON tw.id = e.to_wallet_id
+    LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
+    WHERE e.id = ?`;
+
+  db.get(query, [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Exchange no encontrado' });
+    res.json(row);
+  });
+});
+
 app.get('/api/balance', (req, res) => {
   db.all('SELECT * FROM wallets WHERE isActive = 1', (err, wallets) => {
     if (err) return res.status(500).json({ error: err.message });
