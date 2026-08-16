@@ -186,69 +186,81 @@ export default function Navigation() {
     <>
       {/* Barra superior (solo escritorio): tasas del día + flecha para ocultar/mostrar */}
       {!isMobile && (
-        <AppBar
-          position="fixed"
-          sx={{
-            zIndex: theme.zIndex.drawer + 1,
-            width: `calc(100% - ${sidebarWidth}px)`,
-            ml: `${sidebarWidth}px`,
-            transition: theme.transitions.create(['width', 'margin-left'], {
-              easing: theme.transitions.easing.sharp,
-              duration: theme.transitions.duration.enteringScreen,
-            }),
-          }}
-        >
-          <Toolbar>
-            {appBarOpen ? (
-              <>
-                <DashboardIcon sx={{ mr: 1 }} />
-                <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                  Sistema de Finanzas
-                </Typography>
+        appBarOpen ? (
+          <AppBar
+            position="fixed"
+            sx={{
+              zIndex: theme.zIndex.drawer + 1,
+              width: `calc(100% - ${sidebarWidth}px)`,
+              ml: `${sidebarWidth}px`,
+              borderRadius: 0, // sin bordes redondeados: conecta bien con la barra lateral
+              transition: theme.transitions.create(['width', 'margin-left'], {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
+            }}
+          >
+            <Toolbar>
+              <DashboardIcon sx={{ mr: 1 }} />
+              <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                Sistema de Finanzas
+              </Typography>
 
-                {rates ? (
-                  <Box display="flex" gap={1}>
-                    <Chip
-                      size="small"
-                      label={`BCV: ${rates.bcv.toFixed(2)}`}
-                      sx={{ color: 'white' }}
-                    />
-                    <Chip
-                      size="small"
-                      label={`Paralelo: ${rates.paralelo.toFixed(2)}`}
-                      variant="outlined"
-                      sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }}
-                    />
-                  </Box>
-                ) : (
+              {rates ? (
+                <Box display="flex" gap={1}>
                   <Chip
                     size="small"
-                    label="Tasas —"
-                    sx={{ color: 'white' }}
+                    label={`BCV: ${rates.bcv.toFixed(2)}`}
+                    sx={{ color: 'text.primary', bgcolor: 'action.hover' }}
                   />
-                )}
+                  <Chip
+                    size="small"
+                    label={`Paralelo: ${rates.paralelo.toFixed(2)}`}
+                    variant="outlined"
+                    sx={{ color: 'text.primary' }}
+                  />
+                </Box>
+              ) : (
+                <Chip size="small" label="Tasas —" sx={{ color: 'text.primary' }} />
+              )}
 
-                <Tooltip title="Ocultar tasas">
-                  <IconButton
-                    color="inherit"
-                    onClick={() => setAppBarOpen(false)}
-                    sx={{ ml: 1 }}
-                  >
-                    <AppBarCollapseIcon />
-                  </IconButton>
-                </Tooltip>
-              </>
-            ) : (
-              <Box display="flex" justifyContent="flex-end" width="100%">
-                <Tooltip title="Mostrar tasas">
-                  <IconButton color="inherit" onClick={() => setAppBarOpen(true)}>
-                    <AppBarExpandIcon />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            )}
-          </Toolbar>
-        </AppBar>
+              <Tooltip title="Ocultar tasas">
+                <IconButton color="inherit" onClick={() => setAppBarOpen(false)} sx={{ ml: 1 }}>
+                  <AppBarCollapseIcon />
+                </IconButton>
+              </Tooltip>
+            </Toolbar>
+          </AppBar>
+        ) : (
+          /* Colapsado: se oculta todo el panel y queda solo un botón cuadrado
+             con la flecha hacia abajo, centrado debajo donde estaba el panel. */
+          <Box
+            sx={{
+              position: 'fixed',
+              top: 12,
+              zIndex: theme.zIndex.drawer + 1,
+              left: `calc(${sidebarWidth}px + (100% - ${sidebarWidth}px) / 2)`,
+              transform: 'translateX(-50%)',
+            }}
+          >
+            <Tooltip title="Mostrar tasas">
+              <IconButton
+                onClick={() => setAppBarOpen(true)}
+                aria-label="Mostrar tasas"
+                sx={{
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  bgcolor: 'background.paper',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+              >
+                <AppBarExpandIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )
       )}
 
       {/* Drawer móvil */}
