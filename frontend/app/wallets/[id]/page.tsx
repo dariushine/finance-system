@@ -32,6 +32,11 @@ import {
   IconButton,
   Divider,
   Stack,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   AccountBalance,
@@ -45,6 +50,7 @@ import {
   TrendingUp,
   TrendingDown,
   CalendarMonth,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import {
   getWallet,
@@ -84,6 +90,9 @@ export default function WalletDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = Number(params.id);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [txExpanded, setTxExpanded] = useState<number | false>(false);
 
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -410,6 +419,53 @@ export default function WalletDetailPage() {
           ) : !report || report.transactions.length === 0 ? (
             <Alert severity="info">No hay transacciones en este período.</Alert>
           ) : (
+            isMobile ? (
+              // MOBILE: acordeón por transacción
+              <Box>
+                {report.transactions.map((t) => {
+                  const isOpen = txExpanded === t.id;
+                  const isIncome = t.type === 'income';
+                  return (
+                    <Accordion
+                      key={t.id}
+                      expanded={isOpen}
+                      onChange={() => setTxExpanded(isOpen ? false : t.id)}
+                      disableGutters
+                      sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+                        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+                          <Stack spacing={0.25}>
+                            <Typography variant="body2" color="text.secondary">{t.date}</Typography>
+                            <Typography variant="body2">{t.category}</Typography>
+                          </Stack>
+                          <Typography variant="body1" fontWeight="bold" color={isIncome ? 'success.main' : 'error.main'}>
+                            {isIncome ? '+' : '-'}{Number(t.amount).toLocaleString('es-VE')} {wallet.currency}
+                          </Typography>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+                        <Divider sx={{ mb: 1.5 }} />
+                        <Stack spacing={1}>
+                          <Box display="flex" justifyContent="space-between">
+                            <Typography variant="body2" color="text.secondary">Tipo</Typography>
+                            <Chip size="small" label={t.type === 'income' ? 'Ingreso' : 'Egreso'} color={isIncome ? 'success' : 'error'} variant="outlined" />
+                          </Box>
+                          <Box display="flex" justifyContent="space-between">
+                            <Typography variant="body2" color="text.secondary">Categoría</Typography>
+                            <Typography variant="body2">{t.category}</Typography>
+                          </Box>
+                          <Box display="flex" justifyContent="space-between">
+                            <Typography variant="body2" color="text.secondary">Descripción</Typography>
+                            <Typography variant="body2" textAlign="right">{t.description || '—'}</Typography>
+                          </Box>
+                        </Stack>
+                      </AccordionDetails>
+                    </Accordion>
+                  );
+                })}
+              </Box>
+            ) : (
             <TableContainer component={Paper} variant="outlined">
               <Table size="small">
                 <TableHead>
@@ -445,6 +501,7 @@ export default function WalletDetailPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+            )
           )}
         </CardContent>
       </Card>

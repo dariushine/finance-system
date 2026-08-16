@@ -17,13 +17,21 @@ import {
   Box,
   Button,
   CircularProgress,
-  Alert
+  Alert,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  useMediaQuery,
+  Divider,
+  Stack,
+  useTheme,
 } from '@mui/material';
 import {
   TrendingUp as IncomeIcon,
   TrendingDown as ExpenseIcon,
   Visibility as ViewIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 
@@ -42,6 +50,9 @@ const MAX_ROWS = 5;
 
 export default function RecentTransactions() {
   const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [expanded, setExpanded] = useState<number | false>(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +98,7 @@ export default function RecentTransactions() {
     return new Intl.NumberFormat('es-VE', {
       style: 'currency',
       currency: currency,
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
     }).format(amount);
   };
 
@@ -125,7 +136,86 @@ export default function RecentTransactions() {
               No hay transacciones recientes
             </Typography>
           </Box>
+        ) : isMobile ? (
+          // MOBILE: acordeón por transacción
+          <Box>
+            {displayed.map((transaction) => {
+              const isIncome = transaction.type === 'income';
+              const isOpen = expanded === transaction.id;
+              return (
+                <Accordion
+                  key={transaction.id}
+                  expanded={isOpen}
+                  onChange={() => setExpanded(isOpen ? false : transaction.id)}
+                  disableGutters
+                  sx={{
+                    '&:before': { display: 'none' },
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    mb: 1,
+                    boxShadow: 'none',
+                  }}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{ px: 1.5, minHeight: 48 }}
+                  >
+                    <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+                      <Stack spacing={0.25}>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatDate(transaction.date)}
+                        </Typography>
+                        <Chip
+                          icon={getTypeIcon(transaction.type)}
+                          label={transaction.type === 'income' ? 'Ingreso' : 'Gasto'}
+                          color={getTypeColor(transaction.type)}
+                          size="small"
+                          sx={{ height: 22, '& .MuiChip-icon': { fontSize: 16 } }}
+                        />
+                      </Stack>
+                      <Typography
+                        variant="body1"
+                        fontWeight="bold"
+                        color={isIncome ? 'success.main' : 'error.main'}
+                      >
+                        {isIncome ? '+' : '-'}
+                        {formatCurrency(transaction.amount, transaction.walletCurrency)}
+                      </Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+                    <Divider sx={{ mb: 1.5 }} />
+                    <Stack spacing={1}>
+                      <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">Categoría</Typography>
+                        <Chip label={transaction.category || '—'} size="small" variant="outlined" />
+                      </Box>
+                      <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">Billetera</Typography>
+                        <Typography variant="body2">{transaction.walletName || '—'}</Typography>
+                      </Box>
+                      <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">Descripción</Typography>
+                        <Typography variant="body2" textAlign="right">{transaction.description || '—'}</Typography>
+                      </Box>
+                      <Box display="flex" justifyContent="flex-end">
+                        <Button
+                          size="small"
+                          startIcon={<ViewIcon />}
+                          onClick={() => router.push(`/transactions/${transaction.id}`)}
+                        >
+                          Ver detalles
+                        </Button>
+                      </Box>
+                    </Stack>
+                  </AccordionDetails>
+                </Accordion>
+              );
+            })}
+          </Box>
         ) : (
+          // DESKTOP: tabla completa
           <TableContainer>
             <Table size="small">
               <TableHead>

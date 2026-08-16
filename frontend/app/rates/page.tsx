@@ -22,9 +22,17 @@ import {
   Alert,
   CircularProgress,
   IconButton,
+  Chip,
   Snackbar,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  useMediaQuery,
+  Divider,
+  Stack,
+  useTheme,
 } from '@mui/material';
-import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon, Refresh as RefreshIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 
 interface DailyRate {
@@ -37,6 +45,9 @@ interface DailyRate {
 }
 
 export default function RatesPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [expanded, setExpanded] = useState<number | false>(false);
   const [rates, setRates] = useState<DailyRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +146,7 @@ export default function RatesPage() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
         <Box>
-          <Typography variant="h4" fontWeight="bold">Tasas Diarias</Typography>
+          <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>Tasas Diarias</Typography>
           <Typography variant="body1" color="text.secondary">
             Gestiona las tasas BCV y paralelo por día
           </Typography>
@@ -163,6 +174,52 @@ export default function RatesPage() {
               <Typography variant="body1" color="text.secondary">
                 No hay tasas registradas. Pulsa &quot;Sincronizar hoy&quot; o &quot;Nueva tasa&quot;.
               </Typography>
+            </Box>
+          ) : isMobile ? (
+            // MOBILE: acordeón por tasa
+            <Box>
+              {rates.map((rate) => {
+                const isOpen = expanded === rate.id;
+                return (
+                  <Accordion
+                    key={rate.id}
+                    expanded={isOpen}
+                    onChange={() => setExpanded(isOpen ? false : rate.id)}
+                    disableGutters
+                    sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+                      <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+                        <Stack spacing={0.25}>
+                          <Typography variant="body2">{rate.date}</Typography>
+                          <Typography variant="caption" color="text.secondary">{rate.source}</Typography>
+                        </Stack>
+                        <Chip label={`BCV ${rate.bcv.toFixed(2)}`} size="small" variant="outlined" />
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+                      <Divider sx={{ mb: 1.5 }} />
+                      <Stack spacing={1}>
+                        <Box display="flex" justifyContent="space-between">
+                          <Typography variant="body2" color="text.secondary">Paralelo</Typography>
+                          <Typography variant="body2">{rate.paralelo.toFixed(2)}</Typography>
+                        </Box>
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                          <Typography variant="body2" color="text.secondary">Acciones</Typography>
+                          <Box>
+                            <IconButton size="small" onClick={() => openEdit(rate)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" color="error" onClick={() => remove(rate)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        </Box>
+                      </Stack>
+                    </AccordionDetails>
+                  </Accordion>
+                );
+              })}
             </Box>
           ) : (
             <TableContainer component={Paper} variant="outlined">

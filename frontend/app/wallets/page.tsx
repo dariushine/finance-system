@@ -158,7 +158,7 @@ export default function WalletsPage() {
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" mb={1}>
         <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>Billeteras</Typography>
+          <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>Billeteras</Typography>
           <Typography variant="body1" color="text.secondary">
             Consulta el saldo de todas tus cuentas y billeteras.
           </Typography>

@@ -23,7 +23,14 @@ import {
   TableRow,
   Button,
   ToggleButton,
-  ToggleButtonGroup
+  ToggleButtonGroup,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  useMediaQuery,
+  Divider,
+  Stack,
+  useTheme,
 } from '@mui/material';
 import {
   BarChart as BarChartIcon,
@@ -33,7 +40,8 @@ import {
   AttachMoney as MoneyIcon,
   AccountBalance as BankIcon,
   Download as DownloadIcon,
-  CalendarMonth as CalendarIcon
+  CalendarMonth as CalendarIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 
@@ -73,6 +81,11 @@ interface ReportData {
 }
 
 export default function ReportsPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [monthlyExpanded, setMonthlyExpanded] = useState<number | false>(false);
+  const [categoryExpanded, setCategoryExpanded] = useState<number | false>(false);
+  const [walletExpanded, setWalletExpanded] = useState<number | false>(false);
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -197,9 +210,9 @@ export default function ReportsPage() {
   return (
     <Box>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
         <Box>
-          <Typography variant="h4" gutterBottom fontWeight="bold">
+          <Typography variant="h4" gutterBottom fontWeight="bold" sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
             Reportes
           </Typography>
           <Typography variant="body1" color="text.secondary">
@@ -355,6 +368,60 @@ export default function ReportsPage() {
               </Box>
 
               {data.monthlySummary.length > 0 ? (
+                isMobile ? (
+                  // MOBILE: acordeón por mes
+                  <Box>
+                    {data.monthlySummary.map((month, index) => {
+                      const isOpen = monthlyExpanded === index;
+                      return (
+                        <Accordion
+                          key={index}
+                          expanded={isOpen}
+                          onChange={() => setMonthlyExpanded(isOpen ? false : index)}
+                          disableGutters
+                          sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+                        >
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+                            <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+                              <Typography variant="body1" fontWeight="bold">{month.month}</Typography>
+                              <Typography variant="body2" fontWeight="bold" color={month.net >= 0 ? 'success.main' : 'error.main'}>
+                                {formatCurrency(month.net)}
+                              </Typography>
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+                            <Divider sx={{ mb: 1.5 }} />
+                            <Stack spacing={1}>
+                              <Box display="flex" justifyContent="space-between">
+                                <Typography variant="body2" color="text.secondary">Ingresos</Typography>
+                                <Typography variant="body2" color="success.main">{formatCurrency(month.income)}</Typography>
+                              </Box>
+                              <Box display="flex" justifyContent="space-between">
+                                <Typography variant="body2" color="text.secondary">Gastos</Typography>
+                                <Typography variant="body2" color="error.main">{formatCurrency(month.expense)}</Typography>
+                              </Box>
+                              <Box display="flex" justifyContent="space-between">
+                                <Typography variant="body2" color="text.secondary">Transacciones</Typography>
+                                <Chip label={month.transactionCount} size="small" />
+                              </Box>
+                              {index > 0 && data.monthlySummary[index - 1] && (
+                                <Box display="flex" justifyContent="space-between">
+                                  <Typography variant="body2" color="text.secondary">Tendencia</Typography>
+                                  <Chip
+                                    icon={month.net > data.monthlySummary[index - 1].net ? <TrendingUpIcon /> : <TrendingDownIcon />}
+                                    label={`${((month.net - data.monthlySummary[index - 1].net) / Math.abs(data.monthlySummary[index - 1].net || 1) * 100).toFixed(1)}%`}
+                                    size="small"
+                                    color={month.net > data.monthlySummary[index - 1].net ? 'success' : 'error'}
+                                  />
+                                </Box>
+                              )}
+                            </Stack>
+                          </AccordionDetails>
+                        </Accordion>
+                      );
+                    })}
+                  </Box>
+                ) : (
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
@@ -416,6 +483,7 @@ export default function ReportsPage() {
                     </TableBody>
                   </Table>
                 </TableContainer>
+                )
               ) : (
                 <Box textAlign="center" py={4}>
                   <Typography variant="body1" color="text.secondary">
@@ -436,6 +504,44 @@ export default function ReportsPage() {
               </Typography>
               
               {data.byCategory.length > 0 ? (
+                isMobile ? (
+                  // MOBILE: acordeón por categoría
+                  <Box>
+                    {data.byCategory.slice(0, 8).map((category, index) => {
+                      const isOpen = categoryExpanded === index;
+                      return (
+                        <Accordion
+                          key={index}
+                          expanded={isOpen}
+                          onChange={() => setCategoryExpanded(isOpen ? false : index)}
+                          disableGutters
+                          sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+                        >
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+                            <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+                              <Typography variant="body1">{category.category}</Typography>
+                              <Chip
+                                label={`${(category.total / data.summary.totalExpenses * 100).toFixed(1)}%`}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+                            <Divider sx={{ mb: 1.5 }} />
+                            <Stack spacing={1}>
+                              <Box display="flex" justifyContent="space-between">
+                                <Typography variant="body2" color="text.secondary">Monto</Typography>
+                                <Typography variant="body2">{formatCurrency(category.total)}</Typography>
+                              </Box>
+                            </Stack>
+                          </AccordionDetails>
+                        </Accordion>
+                      );
+                    })}
+                  </Box>
+                ) : (
                 <Box>
                   <TableContainer component={Paper} variant="outlined">
                     <Table size="small">
@@ -479,6 +585,7 @@ export default function ReportsPage() {
                     </Typography>
                   </Box>
                 </Box>
+                )
               ) : (
                 <Box textAlign="center" py={4}>
                   <Typography variant="body1" color="text.secondary">
@@ -501,6 +608,49 @@ export default function ReportsPage() {
               </Typography>
               
               {data.walletBalances.length > 0 ? (
+                isMobile ? (
+                  // MOBILE: acordeón por billetera
+                  <Box>
+                    {data.walletBalances.map((wallet, index) => {
+                      const isOpen = walletExpanded === index;
+                      return (
+                        <Accordion
+                          key={index}
+                          expanded={isOpen}
+                          onChange={() => setWalletExpanded(isOpen ? false : index)}
+                          disableGutters
+                          sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+                        >
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
+                            <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+                              <Typography variant="body1">{wallet.name}</Typography>
+                              <Typography variant="body2" fontWeight="bold" color={wallet.balance >= 0 ? 'success.main' : 'error.main'}>
+                                {formatCurrency(wallet.balance)}
+                              </Typography>
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+                            <Divider sx={{ mb: 1.5 }} />
+                            <Stack spacing={1}>
+                              <Box display="flex" justifyContent="space-between">
+                                <Typography variant="body2" color="text.secondary">Moneda</Typography>
+                                <Chip label={wallet.currency} size="small" variant="outlined" />
+                              </Box>
+                              <Box display="flex" justifyContent="space-between">
+                                <Typography variant="body2" color="text.secondary">Estado</Typography>
+                                <Chip
+                                  label={wallet.balance >= 0 ? 'Activa' : 'Negativa'}
+                                  size="small"
+                                  color={wallet.balance >= 0 ? 'success' : 'error'}
+                                />
+                              </Box>
+                            </Stack>
+                          </AccordionDetails>
+                        </Accordion>
+                      );
+                    })}
+                  </Box>
+                ) : (
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
@@ -547,6 +697,7 @@ export default function ReportsPage() {
                     </TableBody>
                   </Table>
                 </TableContainer>
+                )
               ) : (
                 <Box textAlign="center" py={2}>
                   <Typography variant="body1" color="text.secondary">
