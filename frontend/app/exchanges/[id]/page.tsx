@@ -11,8 +11,18 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  IconButton,
+  ListItemIcon,
+  Menu,
+  MenuItem,
+  Snackbar,
   Stack,
+  TextField,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -26,8 +36,18 @@ import {
   ChevronRight,
   SwapHoriz,
   Percent,
+  Edit as EditIcon,
+  DeleteOutline,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
-import { getExchange, getTransaction, ExchangeDetail, TransactionDetail } from '../../lib/api';
+import {
+  getExchange,
+  getTransaction,
+  updateExchange,
+  deleteExchange,
+  ExchangeDetail,
+  TransactionDetail,
+} from '../../lib/api';
 
 const formatTimeOnly = (time?: string | null) => {
   if (!time) return '';
@@ -55,6 +75,8 @@ const formatCurrency = (n: number, currency = 'USD') => {
   }
 };
 
+const todayISODate = () => new Date().toISOString().split('T')[0];
+
 export default function ExchangeDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -65,6 +87,23 @@ export default function ExchangeDetailPage() {
   const [transactions, setTransactions] = useState<TransactionDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Menú de acciones
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const closeMenu = () => setMenuAnchor(null);
+
+  // Diálogos
+  const [editOpen, setEditOpen] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Form editar
+  const [editForm, setEditForm] = useState({ fromAmount: '', toAmount: '', fee: '', description: '', date: '', time: '' });
+
+  // Feedback
+  const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
+    open: false, severity: 'success', message: '',
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,6 +133,71 @@ export default function ExchangeDetailPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const notice = (message: string, severity: 'success' | 'error' | 'warning' = 'success') =>
+    setSnackbar({ open: true, severity, message });
+
+  // --- Editar ---
+  const openEdit = () => {
+    if (!exchange) return;
+    setEditForm({
+      fromAmount: String(exchange.fromAmount),
+      toAmount: String(exchange.toAmount),
+      fee: exchange.fee ? String(exchange.fee) : '',
+      description: exchange.description || '',
+      date: exchange.date || todayISODate(),
+      time: exchange.time ? exchange.time.slice(0, 5) : '',
+    });
+    setEditOpen(true);
+  };
+
+  const closeEdit = () => { setEditOpen(false); };
+
+  const saveEdit = async () => {
+    if (!exchange) return;
+    setSaving(true);
+    try {
+      const payload: any = { description: editForm.description };
+      const from = Number(editForm.fromAmount);
+      const to = Number(editForm.toAmount);
+      if (!Number.isFinite(from) || from <= 0) throw new Error('El monto origen debe ser mayor a 0');
+      if (!Number.isFinite(to) || to <= 0) throw new Error('El monto destino debe ser mayor a 0');
+      payload.fromAmount = from;
+      payload.toAmount = to;
+      const fee = editForm.fee.trim() === '' ? 0 : Number(editForm.fee);
+      if (!Number.isFinite(fee) || fee < 0) throw new Error('La comisión no puede ser negativa');
+      payload.fee = fee;
+      if (editForm.date) payload.date = editForm.date;
+      payload.time = editForm.time || undefined;
+      const res = await updateExchange(exchange.id, payload);
+      if (!res?.success) throw new Error(res?.error || 'Error al editar el exchange');
+      notice('Exchange actualizado');
+      setEditOpen(false);
+      await load();
+    } catch (e: any) {
+      notice(e?.message || 'Error al editar el exchange', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --- Eliminar ---
+  const confirmDelete = async () => {
+    if (!exchange) return;
+    setSaving(true);
+    try {
+      const res = await deleteExchange(exchange.id);
+      if (!res?.success) throw new Error(res?.error || 'Error al eliminar el exchange');
+      notice('Exchange eliminado');
+      setDelOpen(false);
+      router.push('/exchanges');
+    } catch (e: any) {
+      notice(e?.message || 'Error al eliminar el exchange', 'error');
+      setDelOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -125,8 +229,34 @@ export default function ExchangeDetailPage() {
       </Button>
 
       {/* Header / monto recibido */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card sx={{ mb: 3, position: 'relative' }}>
+        {/* Menú de acciones (esquina superior derecha) */}
+        <Box display="flex" justifyContent="flex-end" px={2} pt={1}>
+          <IconButton
+            aria-label="Acciones de exchange"
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+            size="medium"
+          >
+            <MenuIcon />
+          </IconButton>
+          <Menu
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={closeMenu}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={() => { closeMenu(); openEdit(); }}>
+              <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+              Editar
+            </MenuItem>
+            <MenuItem onClick={() => { closeMenu(); setDelOpen(true); }}>
+              <ListItemIcon><DeleteOutline fontSize="small" color="error" /></ListItemIcon>
+              Eliminar
+            </MenuItem>
+          </Menu>
+        </Box>
+        <CardContent sx={{ pt: 0 }}>
           <Stack spacing={2} alignItems="center" textAlign="center">
             <Avatar
               sx={{
@@ -267,6 +397,101 @@ export default function ExchangeDetailPage() {
           </CardContent>
         </Card>
       </Box>
+
+      {/* Diálogo editar exchange */}
+      <Dialog open={editOpen} onClose={closeEdit} maxWidth="sm" fullWidth>
+        <DialogTitle>Editar exchange</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} pt={1}>
+            <Typography variant="body2" color="text.secondary">
+              Edita montos, comisión, descripción y fecha. Las billeteras se mantienen.
+            </Typography>
+            <TextField
+              label={`Monto enviado (${fromCurrency})`}
+              type="number"
+              value={editForm.fromAmount}
+              onChange={(e) => setEditForm({ ...editForm, fromAmount: e.target.value })}
+              fullWidth
+              autoFocus
+            />
+            <TextField
+              label={`Monto recibido (${toCurrency})`}
+              type="number"
+              value={editForm.toAmount}
+              onChange={(e) => setEditForm({ ...editForm, toAmount: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label={`Comisión (fee) (${fromCurrency})`}
+              type="number"
+              value={editForm.fee}
+              onChange={(e) => setEditForm({ ...editForm, fee: e.target.value })}
+              fullWidth
+              helperText="Pon 0 para eliminar la comisión existente"
+            />
+            <TextField
+              label="Fecha"
+              type="date"
+              value={editForm.date}
+              onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={editForm.time}
+              onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Descripción"
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              multiline
+              rows={2}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeEdit}>Cancelar</Button>
+          <Button variant="contained" onClick={saveEdit} disabled={saving}>
+            {saving ? 'Guardando...' : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo eliminar exchange */}
+      <Dialog open={delOpen} onClose={() => setDelOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Eliminar exchange</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Seguro que quieres eliminar este exchange de <b>{formatCurrency(exchange.fromAmount, fromCurrency)}</b> →{' '}
+            <b>{formatCurrency(exchange.toAmount, toCurrency)}</b>? Se eliminarán virtualmente las transacciones del
+            débito, crédito y sus comisiones, y se ajustarán los balances de las billeteras.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDelOpen(false)}>Cancelar</Button>
+          <Button variant="contained" color="error" onClick={confirmDelete} disabled={saving}>
+            {saving ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar de feedback */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

@@ -309,6 +309,29 @@ export async function getExchange(id: number | string): Promise<ExchangeDetail> 
   return response.json();
 }
 
+// Editar un exchange (montos, fee, fecha/hora, descripción). Billeteras fijas.
+export async function updateExchange(
+  id: number | string,
+  data: { fromAmount?: number; toAmount?: number; fee?: number; description?: string; date?: string; time?: string }
+): Promise<any> {
+  const response = await fetch(`${API_URL}/exchanges/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo editar el exchange');
+  return body;
+}
+
+// Eliminar virtualmente un exchange (soft-delete)
+export async function deleteExchange(id: number | string): Promise<any> {
+  const response = await fetch(`${API_URL}/exchanges/${id}`, { method: 'DELETE' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo eliminar el exchange');
+  return body;
+}
+
 // POST transaction API
 export async function postTransaction(data: Transaction): Promise<Transaction> {
   const response = await fetch(`${API_URL}/transactions`, {
