@@ -17,10 +17,6 @@ import {
   TableRow,
   TablePagination,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Alert,
   CircularProgress,
   Accordion,
@@ -32,13 +28,11 @@ import {
   useTheme,
 } from '@mui/material';
 import {
-  Add as AddIcon,
   Visibility as ViewIcon,
   Download as DownloadIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
-import ExchangeForm from '../components/ExchangeForm';
 import DateRangeFilter from '../components/DateRangeFilter';
 
 interface Exchange {
@@ -180,7 +174,6 @@ export default function ExchangesPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [openNewExchange, setOpenNewExchange] = useState(false);
 
   // Filtro por período / rango de fechas
   const [period, setPeriod] = useState<string>('all');
@@ -305,13 +298,6 @@ export default function ExchangesPage() {
           >
             Exportar
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setOpenNewExchange(true)}
-          >
-            Nuevo Exchange
-          </Button>
         </Box>
       </Box>
 
@@ -331,31 +317,6 @@ export default function ExchangesPage() {
           {error}
         </Alert>
       )}
-
-      {/* Exchange Form Dialog */}
-      <Dialog 
-        open={openNewExchange} 
-        onClose={() => setOpenNewExchange(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          Nuevo Exchange
-        </DialogTitle>
-        <DialogContent>
-          <ExchangeForm 
-            onSuccess={() => {
-              setOpenNewExchange(false);
-              loadExchanges();
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenNewExchange(false)}>
-            Cancelar
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* All Exchanges Table */}
       <Card>
