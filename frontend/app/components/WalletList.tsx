@@ -34,14 +34,22 @@ export default function WalletList() {
   const currentPage = Math.min(page, pageCount);
   const shown = wallets.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
 
-  // Al cambiar de página: volver al tope del panel de billeteras. Se hace con
-  // pequeña espera para que el nuevo contenido ya se haya renderizado y la
-  // altura del DOM no cambie después (evita que el scroll regrese abajo).
+  // Rastrear página previa para hacer scroll solo cuando el usuario cambia de
+  // página (no al montar). El useEffect corre DESPUÉS de que React actualizó el
+  // DOM, así la altura ya es la definitiva y el scroll se hace al tope del panel.
+  const prevPageRef = useRef(currentPage);
+  useEffect(() => {
+    if (prevPageRef.current !== currentPage) {
+      prevPageRef.current = currentPage;
+      const id = window.setTimeout(() => {
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+      return () => window.clearTimeout(id);
+    }
+  }, [currentPage]);
+
   const handlePageChange = (_: unknown, value: number) => {
     setPage(value);
-    window.setTimeout(() => {
-      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 80);
   };
 
   if (loading) {
