@@ -387,14 +387,12 @@ function getOrCreateCategory(categoryName, type) {
     if (!type || (type !== 'income' && type !== 'expense')) {
       return reject(new Error('type debe ser income o expense'));
     }
-    if (isSystemCategoryName(name)) {
-      return reject(new Error(`No puedes crear la categoría de sistema '${name}'`));
-    }
     db.get('SELECT * FROM categories WHERE name = ? AND type = ?', [name, type], (err, row) => {
       if (err) return reject(err);
       if (row) {
-        // Existe pero desactivada: reactivar para poder usarla.
-        if (!row.isActive) {
+        // Existe (incluida una de sistema como exchange_out/fee): devolverla tal cual.
+        // Si estaba desactivada, reactivar para poder usarla.
+        if (!row.isActive && !isSystemCategoryName(row.name)) {
           db.run('UPDATE categories SET isActive = 1 WHERE id = ?', [row.id], (upErr) => {
             if (upErr) return reject(upErr);
             resolve({ ...row, isActive: 1 });
@@ -403,6 +401,10 @@ function getOrCreateCategory(categoryName, type) {
           resolve(row);
         }
         return;
+      }
+      // No existe: crear una nueva, pero nunca una de sistema (solo se crean vía exchange).
+      if (isSystemCategoryName(name)) {
+        return reject(new Error(`No puedes crear la categoría de sistema '${name}'`));
       }
       const color = type === 'income' ? '#2ecc71' : '#e74c3c';
       db.run(
