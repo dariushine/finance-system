@@ -7,6 +7,7 @@ import {
 } from '@mui/material';
 import { AccountBalance, AttachMoney, CreditCard, Savings, ShowChart, ChevronRight } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
+import { useRef } from 'react';
 import { useWallets } from '../lib/hooks';
 import theme from '../theme';
 
@@ -25,12 +26,22 @@ const PER_PAGE = 6;
 
 export default function WalletList() {
   const router = useRouter();
+  const gridRef = useRef<HTMLDivElement>(null);
   const { wallets, loading, error } = useWallets();
   const [page, setPage] = useState(1);
 
   const pageCount = Math.max(1, Math.ceil(wallets.length / PER_PAGE));
   const currentPage = Math.min(page, pageCount);
   const shown = wallets.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
+
+  // Al cambiar de página: volver al tope de las billeteras para que el
+  // scroll no quede en el panel de abajo (últimas transacciones).
+  const handlePageChange = (_: unknown, value: number) => {
+    setPage(value);
+    requestAnimationFrame(() => {
+      gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   if (loading) {
     return (
@@ -69,7 +80,8 @@ export default function WalletList() {
           />
         </Box>
 
-        <Grid container spacing={2}>
+        <Box ref={gridRef}>
+          <Grid container spacing={2} alignItems="flex-start">
           {shown.map((wallet) => (
             <Grid item xs={12} sm={6} md={4} key={wallet.id}>
               <Card variant="outlined" sx={{ height: '100%' }}>
@@ -83,9 +95,18 @@ export default function WalletList() {
                         <Typography variant="subtitle2" fontWeight="bold" noWrap>
                           {wallet.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {wallet.type} · {wallet.currency}
-                        </Typography>
+                        {wallet.alias ? (
+                          <Chip
+                            label={wallet.alias}
+                            size="small"
+                            variant="outlined"
+                            sx={{ mt: 0.5, height: 20, fontSize: '0.7rem' }}
+                          />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            {wallet.type} · {wallet.currency}
+                          </Typography>
+                        )}
                       </Box>
                     </Box>
                     <Typography variant="h5" fontWeight="bold" color="primary">
@@ -110,6 +131,7 @@ export default function WalletList() {
             </Grid>
           ))}
         </Grid>
+        </Box>
 
         {wallets.length === 0 && (
           <Alert severity="info" sx={{ mt: 2 }}>No hay billeteras configuradas. Agrega una para comenzar.</Alert>
