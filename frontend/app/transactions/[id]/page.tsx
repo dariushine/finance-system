@@ -11,8 +11,21 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  IconButton,
+  ListItemIcon,
+  Menu,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Snackbar,
   Stack,
+  TextField,
   Typography,
   useTheme,
   Tooltip,
@@ -28,8 +41,20 @@ import {
   Tag,
   ChevronRight,
   InfoOutlined,
+  Edit as EditIcon,
+  DeleteOutline,
+  Add as AddIcon,
+  Link as LinkIcon,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
-import { getTransaction, TransactionDetail } from '../../lib/api';
+import {
+  getTransaction,
+  updateTransaction,
+  deleteTransaction,
+  addTransactionFee,
+  createAssociatedTransaction,
+  TransactionDetail,
+} from '../../lib/api';
 import { parseLocalDate } from '../../lib/dates';
 
 const formatDate = (dateString?: string) => {
@@ -63,6 +88,12 @@ const formatCurrency = (n: number, currency = 'USD') => {
   }
 };
 
+const todayISODate = () => new Date().toISOString().split('T')[0];
+
+const EXPENSE_CATEGORIES = ['food', 'transport', 'housing', 'utilities', 'entertainment', 'health', 'shopping', 'other_expense'];
+const INCOME_CATEGORIES = ['salary', 'freelance', 'investment', 'gift', 'other_income'];
+const SYSTEM_CATEGORIES = ['fee', 'exchange_out', 'exchange_in'];
+
 export default function TransactionDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -72,6 +103,34 @@ export default function TransactionDetailPage() {
   const [tx, setTx] = useState<TransactionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Diálogos
+  const [editOpen, setEditOpen] = useState(false);
+  const [feeOpen, setFeeOpen] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
+  const [assocOpen, setAssocOpen] = useState(false);
+
+  // Form editar
+  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', time: '' });
+  const [editCategory, setEditCategory] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Form fee
+  const [feeAmount, setFeeAmount] = useState('');
+  const [feeDate, setFeeDate] = useState('');
+  const [feeTime, setFeeTime] = useState('');
+
+  // Form asociada
+  const [assocForm, setAssocForm] = useState({ amount: '', type: 'expense' as 'income' | 'expense', categoryName: '', description: '', date: '', time: '' });
+
+  // Feedback
+  const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
+    open: false, severity: 'success', message: '',
+  });
+
+  // Menú hamburguesa de acciones
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const closeMenu = () => setMenuAnchor(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,6 +146,143 @@ export default function TransactionDetailPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const notice = (message: string, severity: 'success' | 'error' | 'warning' = 'success') =>
+    setSnackbar({ open: true, severity, message });
+
+  const isFee = tx ? tx.category === 'fee' : false;
+  const isExchange = tx ? !!tx.isExchangeMember : false;
+
+  // Un fee no puede tener comisión ni asociadas; el exchange es inmutable.
+  const blockIfExchange = () => {
+    if (isExchange) {
+      notice('Esta transacción pertenece a un exchange. Edítala desde el panel de exchange (feature futuro).', 'warning');
+      return true;
+    }
+    return false;
+  };
+
+  // --- Editar ---
+  const openEdit = () => {
+    if (!tx) return;
+    if (blockIfExchange()) return;
+    setEditForm({
+      description: tx.description || '',
+      amount: String(tx.amount),
+      date: tx.date || todayISODate(),
+      time: tx.time ? tx.time.slice(0, 5) : '',
+    });
+    setEditCategory(tx.category);
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!tx) return;
+    setSaving(true);
+    try {
+      const payload: any = { description: editForm.description };
+      const amount = Number(editForm.amount);
+      if (Number.isFinite(amount) && amount > 0) payload.amount = amount;
+      if (editForm.date) payload.date = editForm.date;
+      payload.time = editForm.time || undefined;
+      // Categoría editable solo en no-fee y no-exchange
+      if (!isFee && editCategory !== tx.category && !SYSTEM_CATEGORIES.includes(editCategory)) {
+        payload.categoryName = editCategory;
+      }
+      const res = await updateTransaction(id, payload);
+      if (!res?.success) throw new Error(res?.error || 'Error al editar');
+      notice('Transacción actualizada');
+      setEditOpen(false);
+      await load();
+    } catch (e: any) {
+      notice(e?.message || 'Error al editar', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --- Eliminar ---
+  const confirmDelete = async () => {
+    if (!tx) return;
+    if (blockIfExchange()) { setDelOpen(false); return; }
+    setSaving(true);
+    try {
+      const res = await deleteTransaction(id);
+      if (!res?.success) throw new Error(res?.error || 'Error al eliminar');
+      notice('Transacción eliminada');
+      setDelOpen(false);
+      router.push('/transactions');
+    } catch (e: any) {
+      notice(e?.message || 'Error al eliminar', 'error');
+      setDelOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --- Agregar comisión ---
+  const openFee = () => {
+    if (!tx) return;
+    if (blockIfExchange()) return;
+    if (isFee) { notice('No puedes agregar comisión a una comisión (fee).', 'warning'); return; }
+    setFeeAmount('');
+    setFeeDate(tx.date || todayISODate());
+    setFeeTime(tx.time ? tx.time.slice(0, 5) : '');
+    setFeeOpen(true);
+  };
+
+  const saveFee = async () => {
+    if (!tx) return;
+    setSaving(true);
+    try {
+      const amount = Number(feeAmount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto de la comisión debe ser mayor a 0');
+      const res = await addTransactionFee(id, { amount, date: feeDate || undefined, time: feeTime || undefined });
+      if (!res?.success) throw new Error(res?.error || 'Error al agregar comisión');
+      notice('Comisión agregada');
+      setFeeOpen(false);
+      await load();
+    } catch (e: any) {
+      notice(e?.message || 'Error al agregar comisión', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --- Crear asociada ---
+  const openAssoc = () => {
+    if (!tx) return;
+    if (blockIfExchange()) return;
+    if (isFee) { notice('No puedes crear transacciones asociadas a una comisión (fee).', 'warning'); return; }
+    setAssocForm({ amount: '', type: 'expense', categoryName: '', description: '', date: tx.date || todayISODate(), time: tx.time ? tx.time.slice(0, 5) : '' });
+    setAssocOpen(true);
+  };
+
+  const saveAssoc = async () => {
+    if (!tx) return;
+    setSaving(true);
+    try {
+      const amount = Number(assocForm.amount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto debe ser mayor a 0');
+      if (SYSTEM_CATEGORIES.includes(assocForm.categoryName)) throw new Error('No puedes usar categorías del sistema (fee, exchange).');
+      const res = await createAssociatedTransaction(id, {
+        amount,
+        type: assocForm.type,
+        categoryName: assocForm.categoryName,
+        description: assocForm.description || undefined,
+        date: assocForm.date || undefined,
+        time: assocForm.time || undefined,
+      });
+      if (!res?.success) throw new Error(res?.error || 'Error al crear asociada');
+      notice('Transacción asociada creada');
+      setAssocOpen(false);
+      await load();
+    } catch (e: any) {
+      notice(e?.message || 'Error al crear asociada', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -119,8 +315,43 @@ export default function TransactionDetailPage() {
       </Button>
 
       {/* Header / monto principal */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card sx={{ mb: 3, position: 'relative' }}>
+        {/* Menú de acciones (esquina superior derecha) */}
+        <Box display="flex" justifyContent="flex-end" px={2} pt={1}>
+          <IconButton
+            aria-label="Acciones de transacción"
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+            size="medium"
+          >
+            <MenuIcon />
+          </IconButton>
+          <Menu
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={closeMenu}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={() => { closeMenu(); openEdit(); }}>
+              <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+              Editar
+            </MenuItem>
+            <MenuItem onClick={() => { closeMenu(); if (!blockIfExchange()) setDelOpen(true); }}>
+              <ListItemIcon><DeleteOutline fontSize="small" color="error" /></ListItemIcon>
+              Eliminar
+            </MenuItem>
+            <MenuItem onClick={() => { closeMenu(); openFee(); }}>
+              <ListItemIcon><ReceiptLong fontSize="small" /></ListItemIcon>
+              Agregar comisión
+            </MenuItem>
+            <MenuItem onClick={() => { closeMenu(); openAssoc(); }}>
+              <ListItemIcon><LinkIcon fontSize="small" /></ListItemIcon>
+              Crear asociada
+            </MenuItem>
+          </Menu>
+        </Box>
+
+        <CardContent sx={{ pt: 0 }}>
           <Stack spacing={2} alignItems="center" textAlign="center">
             <Avatar
               sx={{
@@ -164,15 +395,17 @@ export default function TransactionDetailPage() {
                   <Typography variant="body1" fontWeight="medium">{tx.walletName}</Typography>
                 </Box>
               )}
+              {/* Comisión debajo de la billetera */}
+              {(tx.fee ?? 0) > 0 && (
+                <Chip
+                  icon={<ReceiptLong />}
+                  label={`Comisión ${formatCurrency(tx.fee!, currency)}`}
+                  color="warning"
+                  variant="outlined"
+                  sx={{ display: 'flex', width: 'fit-content', mx: 'auto', mt: 1 }}
+                />
+              )}
             </Box>
-            {(tx.fee ?? 0) > 0 && (
-              <Chip
-                icon={<ReceiptLong />}
-                label={`Comisión ${formatCurrency(tx.fee!, currency)}`}
-                color="warning"
-                variant="outlined"
-              />
-            )}
           </Stack>
         </CardContent>
       </Card>
@@ -302,6 +535,228 @@ export default function TransactionDetailPage() {
           </CardContent>
         </Card>
       </Box>
+
+      {/* Diálogo editar */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Editar transacción</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} pt={1}>
+            <TextField
+              label="Descripción"
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              multiline
+              rows={2}
+              fullWidth
+            />
+            <TextField
+              label="Monto"
+              type="number"
+              value={editForm.amount}
+              onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+              fullWidth
+              InputProps={{ endAdornment: <span>{currency}</span> }}
+            />
+            <TextField
+              label="Fecha"
+              type="date"
+              value={editForm.date}
+              onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="No puede ser anterior a su padre ni posterior a sus asociadas"
+            />
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={editForm.time}
+              onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Se aplica la misma regla de fecha a la hora"
+            />
+            <FormControl fullWidth disabled={isFee}>
+              <InputLabel>Categoría</InputLabel>
+              <Select
+                value={editCategory}
+                label="Categoría"
+                onChange={(e) => setEditCategory(e.target.value as string)}
+              >
+                {(tx.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)
+                  .filter((c) => !SYSTEM_CATEGORIES.includes(c))
+                  .map((c) => (
+                    <MenuItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+            {isFee && (
+              <Typography variant="caption" color="text.secondary">
+                La categoría de una comisión (fee) no se puede cambiar.
+              </Typography>
+            )}
+            {isExchange && (
+              <Typography variant="caption" color="text.secondary">
+                Transacciones de exchange: immutables desde aquí.
+              </Typography>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveEdit} disabled={saving}>
+            {saving ? 'Guardando...' : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo eliminar */}
+      <Dialog open={delOpen} onClose={() => setDelOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Eliminar transacción</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Seguro que quieres eliminar esta transacción de <b>{formatCurrency(tx.amount, currency)}</b>?
+            Se eliminará virtualmente (no se borra de la base) y el balance de la billetera se ajustará.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDelOpen(false)}>Cancelar</Button>
+          <Button variant="contained" color="error" onClick={confirmDelete} disabled={saving}>
+            {saving ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo agregar comisión */}
+      <Dialog open={feeOpen} onClose={() => setFeeOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Agregar comisión</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} pt={1}>
+            <Typography variant="body2" color="text.secondary">
+              Se creará una nueva transacción de tipo comisión (fee). Si la transacción ya tiene una comisión, se agrega otra adicional.
+            </Typography>
+            <TextField
+              label="Monto de la comisión"
+              type="number"
+              value={feeAmount}
+              onChange={(e) => setFeeAmount(e.target.value)}
+              fullWidth
+              autoFocus
+              InputProps={{ endAdornment: <span>{currency}</span> }}
+            />
+            <TextField
+              label="Fecha (opcional)"
+              type="date"
+              value={feeDate}
+              onChange={(e) => setFeeDate(e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Por defecto la de la transacción; no puede ser anterior"
+            />
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={feeTime}
+              onChange={(e) => setFeeTime(e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Por defecto la de la transacción; no puede ser anterior"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFeeOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveFee} disabled={saving}>
+            {saving ? 'Agregando...' : 'Agregar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo crear asociada */}
+      <Dialog open={assocOpen} onClose={() => setAssocOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Crear transacción asociada</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} pt={1}>
+            <TextField
+              label="Monto"
+              type="number"
+              value={assocForm.amount}
+              onChange={(e) => setAssocForm({ ...assocForm, amount: e.target.value })}
+              fullWidth
+              autoFocus
+              InputProps={{ endAdornment: <span>{currency}</span> }}
+            />
+            <FormControl fullWidth>
+              <InputLabel>Tipo</InputLabel>
+              <Select
+                value={assocForm.type}
+                label="Tipo"
+                onChange={(e) => setAssocForm({ ...assocForm, type: e.target.value as 'income' | 'expense', categoryName: '' })}
+              >
+                <MenuItem value="expense">Gasto</MenuItem>
+                <MenuItem value="income">Ingreso</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Categoría</InputLabel>
+              <Select
+                value={assocForm.categoryName}
+                label="Categoría"
+                onChange={(e) => setAssocForm({ ...assocForm, categoryName: e.target.value as string })}
+              >
+                {(assocForm.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)
+                  .filter((c) => !SYSTEM_CATEGORIES.includes(c))
+                  .map((c) => (
+                    <MenuItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Descripción"
+              value={assocForm.description}
+              onChange={(e) => setAssocForm({ ...assocForm, description: e.target.value })}
+              multiline
+              rows={2}
+              fullWidth
+            />
+            <TextField
+              label="Fecha (opcional)"
+              type="date"
+              value={assocForm.date}
+              onChange={(e) => setAssocForm({ ...assocForm, date: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Por defecto la de la transacción; no puede ser anterior"
+            />
+            <TextField
+              label="Hora (opcional)"
+              type="time"
+              value={assocForm.time}
+              onChange={(e) => setAssocForm({ ...assocForm, time: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              helperText="Por defecto la de la transacción; no puede ser anterior"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAssocOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveAssoc} disabled={saving || !assocForm.categoryName}>
+            {saving ? 'Creando...' : 'Crear'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar de feedback */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

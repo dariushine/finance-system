@@ -48,6 +48,10 @@ export interface TransactionDetail {
   balanceAfter?: number | null;
   /** Transacciones hijas (ej: fees de comisión) */
   children?: TransactionDetail[];
+  /** true si esta transacción (o su cadena de padres) pertenece a un exchange */
+  isExchangeMember?: boolean;
+  /** id del exchange al que pertenece, si aplica */
+  exchangeId?: number | null;
 }
 
 // Exchange API  
@@ -218,6 +222,61 @@ export async function getTransaction(id: number | string): Promise<TransactionDe
   }
   return response.json();
 }
+
+// Editar una transacción (descripción, monto, fecha, categoría)
+export async function updateTransaction(
+  id: number | string,
+  data: { description?: string; amount?: number; date?: string; time?: string; categoryName?: string }
+): Promise<any> {
+  const response = await fetch(`${API_URL}/transactions/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo editar la transacción');
+  return body;
+}
+
+// Eliminar virtualmente una transacción
+async function deleteTransaction(id: number | string): Promise<any> {
+  const response = await fetch(`${API_URL}/transactions/${id}`, { method: 'DELETE' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo eliminar la transacción');
+  return body;
+}
+
+// Agregar una comisión (fee) a una transacción
+export async function addTransactionFee(
+  id: number | string,
+  data: { amount: number; date?: string; time?: string }
+): Promise<any> {
+  const response = await fetch(`${API_URL}/transactions/${id}/fee`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo agregar la comisión');
+  return body;
+}
+
+// Crear una transacción asociada (hija)
+export async function createAssociatedTransaction(
+  id: number | string,
+  data: { amount: number; type: 'income' | 'expense'; categoryName: string; description?: string; date?: string; time?: string }
+): Promise<any> {
+  const response = await fetch(`${API_URL}/transactions/${id}/associate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo crear la transacción asociada');
+  return body;
+}
+
+export { deleteTransaction };
 
 // POST transaction API
 export async function postTransaction(data: Transaction): Promise<Transaction> {

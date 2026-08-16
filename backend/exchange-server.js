@@ -154,6 +154,10 @@ db.serialize(() => {
       db.run(`ALTER TABLE transactions ADD COLUMN time TEXT`);
       console.log('✅ transactions: agregada columna time (HH:MM:SS)');
     }
+    if (!names.includes('deleted')) {
+      db.run(`ALTER TABLE transactions ADD COLUMN deleted INTEGER DEFAULT 0`);
+      console.log('✅ transactions: agregada columna deleted (soft-delete)');
+    }
     // Sincronizar exchanges.fee con las transacciones fee (crea triggers + backfill)
     ensureExchangesFeeSync();
   });
@@ -673,7 +677,7 @@ app.get('/api/wallets/:id/report', (req, res) => {
          t.created_at AS createdAt
        FROM transactions t
        JOIN categories c ON c.id = t.category_id
-       WHERE t.wallet_id = ? AND t.date >= ? AND t.date <= ?
+       WHERE t.wallet_id = ? AND t.deleted = 0 AND t.date >= ? AND t.date <= ?
        ORDER BY t.date DESC, t.time DESC, t.created_at DESC, t.id DESC`,
       [walletId, fromDate, toDate],
       (err, rows) => {
@@ -760,7 +764,7 @@ app.get('/api/transactions', (req, res) => {
     }
   }
 
-  const conditions = ['t.date >= ?', 't.date <= ?'];
+  const conditions = ['t.deleted = 0', 't.date >= ?', 't.date <= ?'];
   const params = [fromDate, toDate, limit, offset];
 
   const query = `
@@ -815,7 +819,7 @@ app.get('/api/transactions/:id', (req, res) => {
     FROM transactions t
     JOIN wallets w ON w.id = t.wallet_id
     JOIN categories c ON c.id = t.category_id
-    WHERE t.id = ?`,
+    WHERE t.id = ? AND t.deleted = 0`,
     [req.params.id],
     (err, transaction) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -846,9 +850,9 @@ app.get('/api/transactions/:id', (req, res) => {
                   WHEN type = 'expense' THEN -COALESCE(amount, 0)
                   ELSE 0
                 END)
-              FROM transactions WHERE wallet_id = ?) AS total_net
+              FROM transactions WHERE wallet_id = ? AND deleted = 0) AS total_net
            FROM transactions t
-           WHERE t.wallet_id = ?
+           WHERE t.wallet_id = ? AND t.deleted = 0
          ) WHERE id = ?`,
         [transaction.walletId, transaction.walletId, req.params.id],
         (balErr, balRow) => {
@@ -871,7 +875,7 @@ app.get('/api/transactions/:id', (req, res) => {
              FROM transactions t
              JOIN wallets w ON w.id = t.wallet_id
              JOIN categories c ON c.id = t.category_id
-             WHERE t.parent_transaction_id = ?
+             WHERE t.parent_transaction_id = ? AND t.deleted = 0
              ORDER BY t.id ASC`,
             [req.params.id],
             (childErr, children) => {
@@ -884,10 +888,19 @@ app.get('/api/transactions/:id', (req, res) => {
                 const totalNet = Number(balRow.total_net) || 0;
                 balanceAfter = walletBalance - totalNet + Number(balRow.running);
               }
-              res.json({
-                ...txRest,
-                balanceAfter: balanceAfter != null ? parseFloat(balanceAfter.toFixed(2)) : null,
-                children: children || [],
+              // Determinar si esta transacción pertenece a un exchange:
+              // puede ser débito, crédito O un fee/cualquier hijo de esas
+              // (recorremos la cadena de parent_transaction_id hasta la raíz).
+              resolveExchangeForTransaction(req.params.id).then((info) => {
+                res.json({
+                  ...txRest,
+                  balanceAfter: balanceAfter != null ? parseFloat(balanceAfter.toFixed(2)) : null,
+                  children: children || [],
+                  exchangeId: info ? info.exchangeId : null,
+                  isExchangeMember: !!info,
+                });
+              }).catch((exErr) => {
+                res.status(500).json({ error: exErr.message });
               });
             }
           );
@@ -895,6 +908,432 @@ app.get('/api/transactions/:id', (req, res) => {
       );
     }
   );
+});
+
+// Sigue la cadena de parent_transaction_id hacia arriba hasta la raíz de la
+// transacción. Devuelve [{id, category}...] de ancestros (sin incluir la raíz
+// consultada). Usada para saber si una transacción pertenece a un exchange.
+function getParentChain(transactionId) {
+  return new Promise((resolve, reject) => {
+    const chain = [];
+    const visit = (id, depth) => {
+      if (depth > 50) return resolve(chain); // tope de seguridad
+      db.get(
+        `SELECT id, parent_transaction_id AS parentId, category_id FROM transactions WHERE id = ?`,
+        [id],
+        (err, row) => {
+          if (err) return reject(err);
+          if (!row) return resolve(chain);
+          chain.push({ id: row.id, categoryId: row.category_id, parentId: row.parentId });
+          if (row.parentId == null) return resolve(chain);
+          visit(row.parentId, depth + 1);
+        }
+      );
+    };
+    visit(transactionId, 0);
+  });
+}
+
+// Resuelve si una transacción (o cualquiera de sus ancestros) es un miembro
+// directo de un exchange (débito o crédito). Devuelve { exchangeId } o null.
+function resolveExchangeForTransaction(transactionId) {
+  return new Promise((resolve, reject) => {
+    getParentChain(transactionId).then((chain) => {
+      // La cadena incluye la propia transacción + ancestros; buscar el primer
+      // eslabón que sea débito/crédito de un exchange.
+      const ids = chain.map((c) => c.id);
+      if (ids.length === 0) return resolve(null);
+      const placeholders = ids.map(() => '?').join(',');
+      db.get(
+        `SELECT id, debit_transaction_id AS debitId, credit_transaction_id AS creditId
+         FROM exchanges
+         WHERE debit_transaction_id IN (${placeholders}) OR credit_transaction_id IN (${placeholders})
+         LIMIT 1`,
+        [...ids, ...ids],
+        (err, row) => {
+          if (err) return reject(err);
+          if (!row) return resolve(null);
+          resolve({ exchangeId: row.id });
+        }
+      );
+    }).catch(reject);
+  });
+}
+
+// === Helpers promisificados para editar/eliminar ===
+function runDb(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) return reject(err);
+      resolve({ lastID: this.lastID, changes: this.changes });
+    });
+  });
+}
+function getDb(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
+  });
+}
+function allDb(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+  });
+}
+
+// Obtiene una transacción con datos de billetera y categoría (incluso si está borrada).
+function getTransactionRow(id) {
+  return getDb(
+    `SELECT
+       t.id,
+       t.wallet_id AS walletId,
+       t.category_id AS categoryId,
+       t.type,
+       t.amount,
+       t.description,
+       t.date,
+       t.time,
+       t.fee,
+       t.parent_transaction_id AS parentId,
+       t.deleted AS deleted,
+       w.name AS walletName,
+       w.currency AS currency,
+       w.balance AS walletBalance,
+       c.name AS category
+     FROM transactions t
+     JOIN wallets w ON w.id = t.wallet_id
+     JOIN categories c ON c.id = t.category_id
+     WHERE t.id = ?`,
+    [id]
+  );
+}
+
+// Fecha mínima entre los hijos (no borrados) de una transacción.
+function getMinChildDate(parentId) {
+  return getDb(
+    `SELECT MIN(date) AS minDate, MIN(
+       CASE
+         WHEN time IS NOT NULL AND time != '' THEN date || 'T' || time
+         ELSE date || 'T23:59:59'
+       END
+     ) AS minDateTime FROM transactions WHERE parent_transaction_id = ? AND deleted = 0`,
+    [parentId]
+  );
+}
+
+// Convierte una fecha/hora a un string comparable lexicográficamente.
+// `time` puede ser HH:MM, HH:MM:SS, vacío o null. Si falta, se usa 23:59:59
+// (el final del día) para que una transacción sin hora se considere después de
+// cualquier otra con hora ese mismo día.
+function dtKey(date, time) {
+  const t = (typeof time === 'string' && time !== '') ? time : '23:59:59';
+  const normalized = t.length === 5 ? `${t}:00` : t;
+  return `${date}T${normalized}`;
+}
+
+// Comunica la categoría fee/exchange por nombre según tipo de categoría usada.
+function isSystemCategoryName(name) {
+  return ['fee', 'exchange_out', 'exchange_in'].includes(String(name));
+}
+
+// Recalcula transactions.fee del padre y exchanges.fee si el padre es débito,
+// a partir de la suma de sus transacciones hijas categoría fee.
+function syncParentFee(parentId) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      await runDb(
+        `UPDATE transactions SET fee = COALESCE((
+           SELECT SUM(t.amount) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = transactions.id AND c.name = 'fee' AND t.deleted = 0
+         ), 0)
+         WHERE id = ?`,
+        [parentId]
+      );
+      await runDb(
+        `UPDATE exchanges SET fee = COALESCE((
+           SELECT SUM(t.amount) FROM transactions t
+           JOIN categories c ON c.id = t.category_id
+           WHERE t.parent_transaction_id = exchanges.debit_transaction_id AND c.name = 'fee' AND t.deleted = 0
+         ), 0)
+         WHERE debit_transaction_id = ?`,
+        [parentId]
+      );
+      resolve();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+// Efecto de una transacción sobre el balance de la billetera.
+function balanceEffect(type, amount) {
+  return type === 'income' ? Number(amount) : -Number(amount);
+}
+
+// === Endpoints de acciones en el detalle de transacción ===
+
+// PUT /api/transactions/:id — editar descripción, monto, fecha y categoría.
+// Reglas: bloqueado en transacciones de exchange (débito/crédito/fees).
+// En un fee: se edita su monto/descripción/fecha, pero NO la categoría.
+// Fecha: no menor a la del padre (si tiene) y no mayor a la mínima de sus hijos.
+// Al cambiar el monto se recalcula el balance de la billetera.
+app.put('/api/transactions/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const t = await getTransactionRow(id);
+    if (!t || t.deleted) return res.status(404).json({ error: 'Transacción no encontrada' });
+
+    const exInfo = await resolveExchangeForTransaction(id);
+    if (exInfo) {
+      return res.status(400).json({ error: 'Esta transacción pertenece a un exchange. Edítala desde el panel de exchange (feature futuro).' });
+    }
+
+    const { description, amount, date, time, categoryName } = req.body;
+
+    // Fecha + hora
+    let newDate = t.date;
+    let newTime = t.time || null;
+    if (date != null && date !== '') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
+      }
+      newDate = date;
+    }
+    if (time != null && time !== '') {
+      if (!isValidTime(time)) {
+        return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+      }
+      newTime = time.length === 5 ? `${time}:00` : time;
+    } else if (time === '') {
+      newTime = null;
+    }
+    if (t.parentId != null) {
+      const parent = await getTransactionRow(t.parentId);
+      if (parent && dtKey(newDate, newTime) < dtKey(parent.date, parent.time)) {
+        return res.status(400).json({ error: `La fecha/hora no puede ser anterior a la de su transacción padre (${parent.date}${parent.time ? ' ' + parent.time : ''}).` });
+      }
+    }
+    const minChild = await getMinChildDate(id);
+    if (minChild && minChild.minDateTime != null && dtKey(newDate, newTime) > minChild.minDateTime) {
+      const childLabel = minChild.minDate != null ? `${minChild.minDate}` : '';
+      return res.status(400).json({ error: `La fecha/hora no puede ser posterior a la de sus transacciones asociadas (${childLabel}).` });
+    }
+
+    // Monto
+    let newAmount = Number(t.amount);
+    let amountChanged = false;
+    if (amount != null && amount !== '') {
+      const parsed = Number(amount);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+      }
+      newAmount = parsed;
+      amountChanged = newAmount !== Number(t.amount);
+    }
+
+    // Categoría: solo en no-fee y no-exchange
+    let newCategoryId = t.categoryId;
+    if (categoryName != null && categoryName !== '' && categoryName !== t.category) {
+      if (t.category === 'fee') {
+        return res.status(400).json({ error: 'La categoría de una comisión (fee) no se puede cambiar.' });
+      }
+      if (isSystemCategoryName(categoryName)) {
+        return res.status(400).json({ error: 'No puedes asignar categorías del sistema (fee, exchange).' });
+      }
+      const cat = await getDb('SELECT id FROM categories WHERE name = ? AND type = ? AND isActive = 1', [categoryName, t.type]);
+      if (!cat) return res.status(400).json({ error: `Categoría inválida para tipo ${t.type}` });
+      newCategoryId = cat.id;
+    }
+
+    const newDescription = description !== undefined ? (description || '') : t.description;
+
+    if (amountChanged) {
+      const oldEffect = balanceEffect(t.type, t.amount);
+      const newEffect = balanceEffect(t.type, newAmount);
+      const delta = newEffect - oldEffect;
+      await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) + delta, t.walletId]);
+    }
+
+    await runDb('UPDATE transactions SET description = ?, amount = ?, date = ?, time = ?, category_id = ? WHERE id = ?', [newDescription, newAmount, newDate, newTime, newCategoryId, id]);
+
+    // Si es un fee, re-sincronizar el fee del padre / exchange
+    if (t.category === 'fee' && t.parentId != null) {
+      await syncParentFee(t.parentId);
+    }
+
+    res.json({ success: true, message: 'Transacción actualizada' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/transactions/:id — eliminar virtualmente (soft-delete).
+// Reglas: bloqueado en transacciones de exchange. Si tiene asociadas,
+// pide eliminarlas primero. Revertir el balance al quitar la transacción.
+// Un fee se puede eliminar (re-sincroniza el fee del padre / exchange).
+app.delete('/api/transactions/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const t = await getTransactionRow(id);
+    if (!t || t.deleted) return res.status(404).json({ error: 'Transacción no encontrada' });
+
+    const exInfo = await resolveExchangeForTransaction(id);
+    if (exInfo) {
+      return res.status(400).json({ error: 'Esta transacción pertenece a un exchange. Elimínala desde el panel de exchange (feature futuro).' });
+    }
+
+    const child = await getDb('SELECT id FROM transactions WHERE parent_transaction_id = ? AND deleted = 0 LIMIT 1', [id]);
+    if (child) {
+      return res.status(400).json({ error: 'No se puede eliminar: primero elimina sus transacciones asociadas.' });
+    }
+
+    const effect = balanceEffect(t.type, t.amount);
+    await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) - effect, t.walletId]);
+    await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [id]);
+
+    if (t.category === 'fee' && t.parentId != null) {
+      await syncParentFee(t.parentId);
+    }
+
+    res.json({ success: true, message: 'Transacción eliminada (virtualmente)' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/transactions/:id/fee — agregar una comisión (fee).
+// SIEMPRE crea una fee NUEVA (no toca las existentes), con su misma cadena
+// de heredad. Reglas: bloqueado en fees y en transacciones de exchange.
+// Fecha opcional; por defecto la del padre y nunca menor a esta.
+app.post('/api/transactions/:id/fee', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const t = await getTransactionRow(id);
+    if (!t || t.deleted) return res.status(404).json({ error: 'Transacción no encontrada' });
+
+    if (t.category === 'fee') {
+      return res.status(400).json({ error: 'No puedes agregar comisión a una comisión (fee).' });
+    }
+    const exInfo = await resolveExchangeForTransaction(id);
+    if (exInfo) {
+      return res.status(400).json({ error: 'Esta transacción pertenece a un exchange. No puedes agregarle comisión desde aquí.' });
+    }
+
+    const { amount, date, time } = req.body;
+    const feeAmount = Number(amount);
+    if (!Number.isFinite(feeAmount) || feeAmount <= 0) {
+      return res.status(400).json({ error: 'El monto de la comisión debe ser mayor a 0' });
+    }
+
+    let feeDate = t.date;
+    let feeTime = null;
+    if (date != null && date !== '') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
+      }
+      feeDate = date;
+    }
+    if (time != null && time !== '') {
+      if (!isValidTime(time)) {
+        return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+      }
+      feeTime = time.length === 5 ? `${time}:00` : time;
+    } else if (time === '') {
+      feeTime = null;
+    }
+    if (dtKey(feeDate, feeTime) < dtKey(t.date, t.time)) {
+      return res.status(400).json({ error: `La fecha/hora de la comisión no puede ser anterior a la de su transacción (${t.date}${t.time ? ' ' + t.time : ''}).` });
+    }
+
+    const feeCat = await getDb("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1", []);
+    if (!feeCat) return res.status(400).json({ error: 'Categoría fee no disponible' });
+
+    if (Number(t.walletBalance) < feeAmount) {
+      return res.status(400).json({ error: `Fondos insuficientes. Balance actual: ${t.walletBalance} ${t.currency}, necesita ${feeAmount}` });
+    }
+
+    await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) - feeAmount, t.walletId]);
+    const ins = await runDb(
+      `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
+       VALUES (?, ?, 'expense', ?, ?, ?, ?, 1.0, ?, 0, ?)`,
+      [t.walletId, feeCat.id, feeAmount, `Comisión: ${t.description || t.category}`, feeDate, feeTime, feeAmount, id]
+    );
+
+    await syncParentFee(id);
+
+    res.json({ success: true, message: 'Comisión agregada', feeId: ins.lastID });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/transactions/:id/associate — crear una transacción asociada (hija).
+// Reglas: cualquier tipo excepto sistema (fee, exchange). Bloqueado en fees
+// y en transacciones de exchange. Recalc balance según tipo.
+app.post('/api/transactions/:id/associate', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const t = await getTransactionRow(id);
+    if (!t || t.deleted) return res.status(404).json({ error: 'Transacción no encontrada' });
+
+    if (t.category === 'fee') {
+      return res.status(400).json({ error: 'No puedes crear transacciones asociadas a una comisión (fee).' });
+    }
+    const exInfo = await resolveExchangeForTransaction(id);
+    if (exInfo) {
+      return res.status(400).json({ error: 'Esta transacción pertenece a un exchange. No puedes crearle transacciones asociadas desde aquí.' });
+    }
+
+    const { amount, type, categoryName, description, date, time } = req.body;
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+    }
+    if (type !== 'income' && type !== 'expense') {
+      return res.status(400).json({ error: 'type debe ser income o expense' });
+    }
+    if (isSystemCategoryName(categoryName)) {
+      return res.status(400).json({ error: 'No puedes usar categorías del sistema (fee, exchange).' });
+    }
+    const cat = await getDb('SELECT id FROM categories WHERE name = ? AND type = ? AND isActive = 1', [categoryName, type]);
+    if (!cat) return res.status(400).json({ error: `Categoría inválida para tipo ${type}` });
+
+    let assocDate = t.date;
+    let assocTime = null;
+    if (date != null && date !== '') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
+      }
+      assocDate = date;
+    }
+    if (time != null && time !== '') {
+      if (!isValidTime(time)) {
+        return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+      }
+      assocTime = time.length === 5 ? `${time}:00` : time;
+    } else if (time === '') {
+      assocTime = null;
+    }
+    if (dtKey(assocDate, assocTime) < dtKey(t.date, t.time)) {
+      return res.status(400).json({ error: `La fecha/hora de la transacción asociada no puede ser anterior a la de su padre (${t.date}${t.time ? ' ' + t.time : ''}).` });
+    }
+
+    const effect = balanceEffect(type, parsedAmount);
+    if (effect < 0 && Number(t.walletBalance) < parsedAmount) {
+      return res.status(400).json({ error: `Fondos insuficientes. Balance actual: ${t.walletBalance} ${t.currency}, necesita ${parsedAmount}` });
+    }
+    await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) + effect, t.walletId]);
+
+    const ins = await runDb(
+      `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, ?, 0, ?)`,
+      [t.walletId, cat.id, type, parsedAmount, description || '', assocDate, assocTime, parsedAmount, id]
+    );
+
+    res.json({ success: true, message: 'Transacción asociada creada', associateId: ins.lastID });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Exchanges con transacciones separadas
