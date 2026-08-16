@@ -67,6 +67,7 @@ export default function TransactionsPage() {
               transactions={transactions}
               showFee
               showView={false}
+              pageSize={10}
             />
           ) : (
             <TableContainer>

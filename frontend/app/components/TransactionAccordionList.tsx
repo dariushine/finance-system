@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Accordion,
   AccordionSummary,
@@ -39,6 +39,9 @@ interface Props {
   walletCurrencyFallback?: string;
   /** Muestra el botón "Ver detalles" (navega a /transactions/:id) */
   showView?: boolean;
+  /** Número de tarjetas montadas a la vez (paginación por "Ver más").
+   *  Evita el lag de animación al tener decenas/cientos de acordeones. */
+  pageSize?: number;
 }
 
 const formatDate = (dateString: string) => {
@@ -69,13 +72,22 @@ export default function TransactionAccordionList({
   showFee = false,
   walletCurrencyFallback,
   showView = true,
+  pageSize,
 }: Props) {
   const router = useRouter();
   const [expanded, setExpanded] = useState<number | false>(false);
+  const [visibleCount, setVisibleCount] = useState(pageSize ?? transactions.length);
+
+  // Si cambian los datos o el pageSize, reinicia la paginación
+  useEffect(() => {
+    setVisibleCount(pageSize ?? transactions.length);
+  }, [transactions, pageSize]);
+
+  const shown = transactions.slice(0, visibleCount);
 
   return (
     <Box>
-      {transactions.map((transaction) => {
+      {shown.map((transaction) => {
         const isIncome = transaction.type === 'income';
         const isOpen = expanded === transaction.id;
         const currency = transaction.walletCurrency || walletCurrencyFallback;
@@ -166,6 +178,16 @@ export default function TransactionAccordionList({
           </Accordion>
         );
       })}
+      {pageSize && visibleCount < transactions.length && (
+        <Box textAlign="center" mt={1}>
+          <Button
+            size="small"
+            onClick={() => setVisibleCount((c) => c + pageSize)}
+          >
+            Ver más ({transactions.length - visibleCount} restantes)
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }
