@@ -163,7 +163,7 @@ const MobileTransactionItem = memo(function MobileTransactionItem({
 export default function RecentTransactions() {
   const router = useRouter();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);

@@ -133,7 +133,7 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
 
 export default function ExchangesPage() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [loading, setLoading] = useState(true);

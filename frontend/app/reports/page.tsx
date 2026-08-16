@@ -243,7 +243,7 @@ const WalletAccordionItem = memo(function WalletAccordionItem({
 
 export default function ReportsPage() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [monthlyExpanded, setMonthlyExpanded] = useState<number | false>(false);
   const [categoryExpanded, setCategoryExpanded] = useState<number | false>(false);
   const [walletExpanded, setWalletExpanded] = useState<number | false>(false);

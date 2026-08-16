@@ -100,7 +100,7 @@ const RateAccordionItem = memo(function RateAccordionItem({
 
 export default function RatesPage() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [rates, setRates] = useState<DailyRate[]>([]);
   const [loading, setLoading] = useState(true);
