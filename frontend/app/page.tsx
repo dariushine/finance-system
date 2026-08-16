@@ -1,8 +1,6 @@
 import BalanceCard from './components/BalanceCard';
 import WalletList from './components/WalletList';
-import TransactionForm from './components/TransactionForm';
-import ExchangeForm from './components/ExchangeForm';
-import { Box, Typography, Grid } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 
 export default function Home() {
   return (
@@ -38,17 +36,6 @@ export default function Home() {
       <Box sx={{ mb: { xs: 3, sm: 4 } }}>
         <WalletList />
       </Box>
-
-      {/* Forms - Stack on mobile, side by side on tablet+ */}
-      <Grid container spacing={{ xs: 2, sm: 3, md: 4 }} sx={{ mb: { xs: 3, sm: 4 } }}>
-        <Grid item xs={12} md={6}>
-          <TransactionForm />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <ExchangeForm />
-        </Grid>
-      </Grid>
-
 
       {/* Features Footer - Mobile optimized */}
       <Box 
