@@ -9,6 +9,8 @@ import {
 import { Download } from '@mui/icons-material';
 import TransactionAccordionList from '../components/TransactionAccordionList';
 import DateRangeFilter from '../components/DateRangeFilter';
+import EmptyState from '../components/EmptyState';
+import { ReceiptLong as ReceiptIcon } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 import { formatLocalDate } from '../lib/dates';
 import { useRouter } from 'next/navigation';
@@ -171,7 +173,13 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent>
-          {loading ? <Box display="flex" justifyContent="center" py={5}><CircularProgress /></Box> : isMobile ? (
+          {loading ? <Box display="flex" justifyContent="center" py={5}><CircularProgress /></Box> : !transactions.length ? (
+            <EmptyState
+              icon={<ReceiptIcon sx={{ fontSize: 32, color: 'text.secondary' }} />}
+              title="No hay transacciones todavía"
+              description="Cuando registres un ingreso o un gasto, aparecerá aquí con su detalle."
+            />
+          ) : isMobile ? (
             <TransactionAccordionList
               transactions={pagedTransactions}
               showFee

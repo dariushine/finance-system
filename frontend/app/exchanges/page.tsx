@@ -34,6 +34,8 @@ import {
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 import DateRangeFilter from '../components/DateRangeFilter';
+import EmptyState from '../components/EmptyState';
+import { CurrencyExchange as ExchangeIcon } from '@mui/icons-material';
 
 interface Exchange {
   id: number;
@@ -331,18 +333,26 @@ export default function ExchangesPage() {
           </Box>
 
           {isMobile ? (
-            // MOBILE: acordeón por exchange
-            <Box>
-              {exchanges.map((exchange) => (
-                <ExchangeAccordionItem
-                  key={exchange.id}
-                  exchange={exchange}
-                  isOpen={expanded === exchange.id}
-                  onToggle={handleToggle}
-                  onView={(id) => router.push(`/exchanges/${id}`)}
-                />
-              ))}
-            </Box>
+            // MOBILE: acordeón por exchange (o estado vacío amigable si no hay registros)
+            exchanges.length === 0 ? (
+              <EmptyState
+                icon={<ExchangeIcon sx={{ fontSize: 32, color: 'text.secondary' }} />}
+                title="No hay exchanges todavía"
+                description="Cuando conviertas fondos entre billeteras o monedas, aparecerá aquí con su detalle."
+              />
+            ) : (
+              <Box>
+                {exchanges.map((exchange) => (
+                  <ExchangeAccordionItem
+                    key={exchange.id}
+                    exchange={exchange}
+                    isOpen={expanded === exchange.id}
+                    onToggle={handleToggle}
+                    onView={(id) => router.push(`/exchanges/${id}`)}
+                  />
+                ))}
+              </Box>
+            )
           ) : (
           <TableContainer component={Paper} variant="outlined">
             <Table>
