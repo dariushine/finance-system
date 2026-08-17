@@ -42,6 +42,7 @@ import {
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
+import { useNumberFormat } from '../lib/NumberFormat';
 
 // Simularemos gráficos con componentes MUI por ahora
 // En producción, usaríamos Recharts o Chart.js
@@ -80,15 +81,6 @@ interface ReportData {
   };
 }
 
-// --- Formateador a nivel de módulo (referencia estable) ---
-const formatCurrency = (amount: number, currency: string = 'USD') => {
-  return new Intl.NumberFormat('es-VE', {
-    style: 'currency',
-    currency: currency === 'VES' ? 'VES' : 'USD',
-    minimumFractionDigits: 2
-  }).format(amount);
-};
-
 // --- Tarjetas móviles memorizadas: solo se re-renderizan si SUS props cambian ---
 const MonthlyAccordionItem = memo(function MonthlyAccordionItem({
   month,
@@ -96,12 +88,14 @@ const MonthlyAccordionItem = memo(function MonthlyAccordionItem({
   isOpen,
   index,
   onToggle,
+  formatCurrency,
 }: {
   month: ReportData['monthlySummary'][number];
   prevNet?: number;
   isOpen: boolean;
   index: number;
   onToggle: (index: number) => void;
+  formatCurrency: (amount: number, currency?: string) => string;
 }) {
   return (
     <Accordion
@@ -156,12 +150,14 @@ const CategoryAccordionItem = memo(function CategoryAccordionItem({
   isOpen,
   index,
   onToggle,
+  formatCurrency,
 }: {
   category: ReportData['byCategory'][number];
   totalExpenses: number;
   isOpen: boolean;
   index: number;
   onToggle: (index: number) => void;
+  formatCurrency: (amount: number, currency?: string) => string;
 }) {
   return (
     <Accordion
@@ -196,8 +192,10 @@ const CategoryAccordionItem = memo(function CategoryAccordionItem({
 
 const WalletRow = memo(function WalletRow({
   wallet,
+  formatCurrency,
 }: {
   wallet: ReportData['walletBalances'][number];
+  formatCurrency: (amount: number, currency?: string) => string;
 }) {
   return (
     <Box
@@ -216,6 +214,7 @@ const WalletRow = memo(function WalletRow({
 
 export default function ReportsPage() {
   const theme = useTheme();
+  const { formatCurrency } = useNumberFormat();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [monthlyExpanded, setMonthlyExpanded] = useState<number | false>(false);
   const [categoryExpanded, setCategoryExpanded] = useState<number | false>(false);
@@ -484,6 +483,7 @@ export default function ReportsPage() {
                         isOpen={monthlyExpanded === index}
                         index={index}
                         onToggle={handleMonthlyToggle}
+                        formatCurrency={formatCurrency}
                       />
                     ))}
                   </Box>
@@ -581,6 +581,7 @@ export default function ReportsPage() {
                         isOpen={categoryExpanded === index}
                         index={index}
                         onToggle={handleCategoryToggle}
+                        formatCurrency={formatCurrency}
                       />
                     ))}
                   </Box>
@@ -656,7 +657,7 @@ export default function ReportsPage() {
                   // MOBILE: lista simple por billetera (sin acordeón, la moneda va en el monto)
                   <Box>
                     {data.walletBalances.map((wallet, index) => (
-                      <WalletRow key={index} wallet={wallet} />
+                      <WalletRow key={index} wallet={wallet} formatCurrency={formatCurrency} />
                     ))}
                   </Box>
                 ) : (

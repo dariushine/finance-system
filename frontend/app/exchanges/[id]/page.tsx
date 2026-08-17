@@ -48,6 +48,7 @@ import {
   ExchangeDetail,
   TransactionDetail,
 } from '../../lib/api';
+import { useNumberFormat } from '../../lib/NumberFormat';
 
 const formatTimeOnly = (time?: string | null) => {
   if (!time) return '';
@@ -67,18 +68,11 @@ const formatDate = (dateStr?: string) => {
   });
 };
 
-const formatCurrency = (n: number, currency = 'USD') => {
-  try {
-    return new Intl.NumberFormat('es-VE', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n);
-  } catch {
-    return `${n.toFixed(2)} ${currency}`;
-  }
-};
-
 const todayISODate = () => new Date().toISOString().split('T')[0];
 
 export default function ExchangeDetailPage() {
   const params = useParams<{ id: string }>();
+  const { formatCurrency } = useNumberFormat();
   const router = useRouter();
   const id = Number(params.id);
   const theme = useTheme();
@@ -535,6 +529,7 @@ function WalletLink({ id, name, fallback }: { id: number; name?: string; fallbac
 function ExchangeTxRow({ tx, onClick }: { tx: TransactionDetail; onClick: () => void }) {
   const isIncome = tx.type === 'income';
   const currency = tx.walletCurrency || 'USD';
+  const { formatCurrency } = useNumberFormat();
   return (
     <Card
       variant="outlined"

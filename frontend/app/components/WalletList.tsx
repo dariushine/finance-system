@@ -13,6 +13,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useWallets } from '../lib/hooks';
 import theme from '../theme';
 import BalanceReveal from './BalanceReveal';
+import { useNumberFormat } from '../lib/NumberFormat';
 
 const icons: Record<string, React.ReactNode> = {
   bank: <AccountBalance />,
@@ -22,14 +23,12 @@ const icons: Record<string, React.ReactNode> = {
   investment: <ShowChart />,
 };
 
-const formatUsd = (n: number) =>
-  new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n);
-
 const PER_PAGE = 6;
 
 export default function WalletList() {
   const router = useRouter();
   const theme = useTheme();
+  const { formatAmount, formatCurrency } = useNumberFormat();
   // En pantallas grandes (>= md, 3 columnas) no hace falta corregir el scroll;
   // solo en móvil (1 tarjeta por fila) el salto de altura molesta.
   const isSmallScreens = useMediaQuery(theme.breakpoints.down('md'));
@@ -129,12 +128,12 @@ export default function WalletList() {
                       </Box>
                     </Box>
                     <BalanceReveal
-                      display={`${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
+                      display={`${formatAmount(Number(wallet.balance))} ${wallet.currency}`}
                       variant="h5"
                       color="primary.main"
                       caption={
                         wallet.currency !== 'USD' && wallet.usdValue != null
-                          ? `≈ ${formatUsd(wallet.usdValue)} USD${wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}`
+                          ? `≈ ${formatCurrency(wallet.usdValue)} USD${wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}`
                           : 'Dólares estadounidenses'
                       }
                     />

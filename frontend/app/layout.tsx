@@ -8,6 +8,7 @@ import Navigation from './components/layout/Navigation';
 import AddFab from './components/AddFab';
 import RateFetcher from './components/RateFetcher';
 import theme from './theme';
+import { NumberFormatProvider } from './lib/NumberFormat';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -34,6 +35,7 @@ export default function RootLayout({
         <AppRouterCacheProvider>
           <ThemeProvider theme={theme}>
             <CssBaseline />
+            <NumberFormatProvider>
             <RateFetcher />
             <AddFab />
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -53,6 +55,7 @@ export default function RootLayout({
                 </Container>
               </Box>
             </Box>
+            </NumberFormatProvider>
           </ThemeProvider>
         </AppRouterCacheProvider>
       </body>

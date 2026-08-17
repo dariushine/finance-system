@@ -59,6 +59,7 @@ import {
 import { parseLocalDate } from '../../lib/dates';
 import CategoryAutocomplete from '../../components/CategoryAutocomplete';
 import type { Category } from '../../lib/api';
+import { useNumberFormat } from '../../lib/NumberFormat';
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '—';
@@ -83,19 +84,12 @@ const formatTimeOnly = (time?: string | null) => {
   return time.slice(0, 5); // HH:MM
 };
 
-const formatCurrency = (n: number, currency = 'USD') => {
-  try {
-    return new Intl.NumberFormat('es-VE', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n);
-  } catch {
-    return `${n.toFixed(2)} ${currency}`;
-  }
-};
-
 const todayISODate = () => new Date().toISOString().split('T')[0];
 
 const SYSTEM_CATEGORIES = ['fee', 'exchange_out', 'exchange_in'];
 
 export default function TransactionDetailPage() {
+  const { formatCurrency } = useNumberFormat();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = Number(params.id);
@@ -806,6 +800,7 @@ function TransactionChildRow({
   onClick: () => void;
 }) {
   const isIncome = child.type === 'income';
+  const { formatCurrency } = useNumberFormat();
   return (
     <Card
       variant="outlined"

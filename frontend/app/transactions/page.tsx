@@ -13,6 +13,7 @@ import EmptyState from '../components/EmptyState';
 import { ReceiptLong as ReceiptIcon } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 import { formatLocalDate } from '../lib/dates';
+import { useNumberFormat } from '../lib/NumberFormat';
 import { useRouter } from 'next/navigation';
 
 interface Transaction {
@@ -28,6 +29,7 @@ interface Transaction {
 }
 
 export default function TransactionsPage() {
+  const { formatAmount, formatNumber } = useNumberFormat();
   const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
@@ -200,11 +202,11 @@ export default function TransactionsPage() {
                       <TableCell>{transaction.walletName || '—'}</TableCell>
                       <TableCell><Chip label={transaction.type === 'income' ? 'Ingreso' : 'Gasto'} color={transaction.type === 'income' ? 'success' : 'error'} size="small" /></TableCell>
                       <TableCell align="right" sx={{ color: transaction.type === 'income' ? 'success.main' : 'error.main', fontWeight: 600 }}>
-                        {transaction.type === 'income' ? '+' : '-'}{transaction.amount.toLocaleString('es-VE')} {transaction.walletCurrency || ''}
+                        {transaction.type === 'income' ? '+' : '-'}{formatAmount(transaction.amount)} {transaction.walletCurrency || ''}
                       </TableCell>
                       <TableCell align="right">
                         {transaction.fee && transaction.fee > 0 ? (
-                          <Chip label={`${transaction.fee.toFixed(2)} ${transaction.walletCurrency || ''}`} size="small" color="warning" variant="outlined" />
+                          <Chip label={`${formatNumber(transaction.fee)} ${transaction.walletCurrency || ''}`} size="small" color="warning" variant="outlined" />
                         ) : '—'}
                       </TableCell>
                       <TableCell>{transaction.description || '—'}</TableCell>

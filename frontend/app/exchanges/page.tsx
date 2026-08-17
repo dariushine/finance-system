@@ -33,6 +33,7 @@ import {
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
+import { useNumberFormat } from '../lib/NumberFormat';
 import DateRangeFilter from '../components/DateRangeFilter';
 import EmptyState from '../components/EmptyState';
 import { CurrencyExchange as ExchangeIcon } from '@mui/icons-material';
@@ -56,16 +57,6 @@ interface Exchange {
   fromCurrency?: string;
   toCurrency?: string;
 }
-
-// --- Formateador a nivel de módulo (referencia estable) ---
-const formatCurrency = (amount: number, currency: string = 'USD') => {
-  return new Intl.NumberFormat('es-VE', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount);
-};
 
 // Muestra una hora cruda HH:MM o HH:MM:SS sin pasar por parseLocalDate.
 const formatTimeOnly = (time?: string | null) => {
@@ -93,11 +84,13 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
   isOpen,
   onToggle,
   onView,
+  formatCurrency,
 }: {
   exchange: Exchange;
   isOpen: boolean;
   onToggle: (id: number) => void;
   onView: (id: number) => void;
+  formatCurrency: (amount: number, currency?: string) => string;
 }) {
   return (
     <Accordion
@@ -169,6 +162,7 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
 export default function ExchangesPage() {
   const theme = useTheme();
   const router = useRouter();
+  const { formatCurrency } = useNumberFormat();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
@@ -349,6 +343,7 @@ export default function ExchangesPage() {
                     isOpen={expanded === exchange.id}
                     onToggle={handleToggle}
                     onView={(id) => router.push(`/exchanges/${id}`)}
+                    formatCurrency={formatCurrency}
                   />
                 ))}
               </Box>

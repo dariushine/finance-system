@@ -5,8 +5,10 @@ import { Card, CardContent, Typography, Box, CircularProgress } from '@mui/mater
 import { AttachMoney, TrendingUp, ErrorOutline } from '@mui/icons-material';
 import { financeApi, Stats } from '../services/financeApi';
 import BalanceReveal from './BalanceReveal';
+import { useNumberFormat } from '../lib/NumberFormat';
 
 export default function BalanceCard() {
+  const { formatAmount } = useNumberFormat();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export default function BalanceCard() {
               Balance Total
             </Typography>
             <BalanceReveal
-              display={`$${totalBalance.toLocaleString()} USD`}
+              display={`$${formatAmount(totalBalance)} USD`}
               variant="h4"
               color="white"
             />

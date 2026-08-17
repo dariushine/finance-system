@@ -19,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { parseLocalDate } from '../lib/dates';
+import { useNumberFormat } from '../lib/NumberFormat';
 
 export interface AccordionTransaction {
   id: number;
@@ -47,20 +48,6 @@ interface Props {
 // --- Formateadores memoizados a nivel de módulo (NO se reconstruyen por render) ---
 const dateFormatter = new Intl.DateTimeFormat('es-VE', { day: '2-digit', month: 'short' });
 
-const currencyFormatters: Record<string, Intl.NumberFormat> = {
-  USD: new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }),
-};
-const getCurrencyFormatter = (currency: string) => {
-  if (!currencyFormatters[currency]) {
-    currencyFormatters[currency] = new Intl.NumberFormat('es-VE', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 2,
-    });
-  }
-  return currencyFormatters[currency];
-};
-
 const formatDate = (dateString: string) => {
   const date = parseLocalDate(dateString);
   const now = Date.now();
@@ -76,9 +63,6 @@ const formatDate = (dateString: string) => {
   }
 };
 
-const formatCurrency = (amount: number, currency: string = 'USD') =>
-  getCurrencyFormatter(currency).format(amount);
-
 // --- Tarjeta individual, memorizada: solo se re-renderiza si SUS props cambian ---
 const TransactionAccordionItem = memo(function TransactionAccordionItem({
   transaction,
@@ -87,6 +71,7 @@ const TransactionAccordionItem = memo(function TransactionAccordionItem({
   showFee,
   currency,
   showView,
+  formatCurrency,
 }: {
   transaction: AccordionTransaction;
   isOpen: boolean;
@@ -94,6 +79,7 @@ const TransactionAccordionItem = memo(function TransactionAccordionItem({
   showFee: boolean;
   currency: string | undefined;
   showView: boolean;
+  formatCurrency: (amount: number, currency?: string) => string;
 }) {
   const router = useRouter();
   const isIncome = transaction.type === 'income';
@@ -196,6 +182,7 @@ export default function TransactionAccordionList({
 }: Props) {
   const [expanded, setExpanded] = useState<number | false>(false);
   const [visibleCount, setVisibleCount] = useState(pageSize ?? transactions.length);
+  const { formatCurrency } = useNumberFormat();
 
   // Handler ESTABLE: su referencia no cambia entre renders, así React.memo
   // de cada tarjeta solo re-renderiza la que se abre/cierra (no toda la lista).
@@ -221,6 +208,7 @@ export default function TransactionAccordionList({
           showFee={showFee && transaction.fee != null && transaction.fee > 0}
           currency={walletCurrencyFallback}
           showView={showView}
+          formatCurrency={formatCurrency}
         />
       ))}
       {pageSize && visibleCount < transactions.length && (

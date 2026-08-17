@@ -56,14 +56,7 @@ import {
 import { useWallets } from '../../lib/hooks';
 import CategoryAutocomplete from '../../components/CategoryAutocomplete';
 import RecurringPaymentForm from '../../components/RecurringPaymentForm';
-
-const formatCurrency = (amount: number, currency: string) => {
-  try {
-    return new Intl.NumberFormat('es-VE', { style: 'currency', currency, minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
-};
+import { useNumberFormat } from '../../lib/NumberFormat';
 
 const todayISODate = () => new Date().toISOString().split('T')[0];
 
@@ -82,6 +75,7 @@ export default function RecurringPaymentDetailPage() {
   const searchParams = useSearchParams();
   const id = Number(params.id);
   const theme = useTheme();
+  const { formatCurrency } = useNumberFormat();
 
   const [payment, setPayment] = useState<RecurringPayment | null>(null);
   const [loading, setLoading] = useState(true);

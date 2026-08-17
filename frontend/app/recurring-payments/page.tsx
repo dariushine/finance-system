@@ -34,18 +34,12 @@ import {
 } from '../lib/api';
 import RecurringPaymentForm from '../components/RecurringPaymentForm';
 import RecurringPaymentExecuteDialog from '../components/RecurringPaymentExecuteDialog';
-
-const formatCurrency = (amount: number, currency: string) => {
-  try {
-    return new Intl.NumberFormat('es-VE', { style: 'currency', currency, minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
-};
+import { useNumberFormat } from '../lib/NumberFormat';
 
 export default function RecurringPaymentsPage() {
   const router = useRouter();
   const theme = useTheme();
+  const { formatCurrency } = useNumberFormat();
   const [payments, setPayments] = useState<RecurringPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
