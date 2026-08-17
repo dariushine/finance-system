@@ -22,10 +22,12 @@ db.serialize(() => {
     icon TEXT,
     color TEXT,
     isActive BOOLEAN DEFAULT 1,
+    excludeFromTotal BOOLEAN DEFAULT 0,
+    hideInDashboard BOOLEAN DEFAULT 0,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  // Migración: añadir columna alias a DBs creadas antes de que existiera
+  // Migración: añadir columnas a DBs creadas antes de que existieran
   db.all(`PRAGMA table_info(wallets)`, (err, cols) => {
     if (err) return;
     const names = (cols || []).map((c) => c.name);
@@ -37,6 +39,12 @@ db.serialize(() => {
     }
     if (!names.includes('color')) {
       db.run(`ALTER TABLE wallets ADD COLUMN color TEXT`);
+    }
+    if (!names.includes('excludeFromTotal')) {
+      db.run(`ALTER TABLE wallets ADD COLUMN excludeFromTotal BOOLEAN DEFAULT 0`);
+    }
+    if (!names.includes('hideInDashboard')) {
+      db.run(`ALTER TABLE wallets ADD COLUMN hideInDashboard BOOLEAN DEFAULT 0`);
     }
   });
   

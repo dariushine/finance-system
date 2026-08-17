@@ -27,15 +27,17 @@ function getWalletById(id, active) {
 // Crea una billetera. Valida campos requeridos; balance controlado para evitar
 // valores inválidos. El balance inicial lo pone el usuario al crearla.
 function createWallet(data) {
-  const { name, alias, type, currency, balance, description, icon, color } = data;
+  const { name, alias, type, currency, balance, description, icon, color, excludeFromTotal, hideInDashboard } = data;
   if (!name || !type || !currency) {
     return Promise.reject(new Error('Faltan campos requeridos: name, type, currency'));
   }
+  const excludeTotal = (excludeFromTotal === true || excludeFromTotal === 1) ? 1 : 0;
+  const hideDash = (hideInDashboard === true || hideInDashboard === 1) ? 1 : 0;
   return new Promise((resolve, reject) => {
     db.run(
-      `INSERT INTO wallets (name, alias, type, currency, balance, description, icon, color, isActive)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [name, alias || null, type, currency, balance || 0, description || null, icon || null, color || null],
+      `INSERT INTO wallets (name, alias, type, currency, balance, description, icon, color, isActive, excludeFromTotal, hideInDashboard)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      [name, alias || null, type, currency, balance || 0, description || null, icon || null, color || null, excludeTotal, hideDash],
       function (err) {
         if (err) return reject(err);
         db.get('SELECT * FROM wallets WHERE id = ?', [this.lastID], (e, row) => {
@@ -47,10 +49,10 @@ function createWallet(data) {
   });
 }
 
-// Actualiza SOLO metadata (name/alias/description/icon/color). Nunca balance,
+// Actualiza SOLO metadata (name/alias/description/icon/color/toggles). Nunca balance,
 // type ni currency: son fijos tras la creación (mutan solo vía transacciones).
 function updateWalletMeta(id, fields) {
-  const { name, alias, description, icon, color } = fields;
+  const { name, alias, description, icon, color, excludeFromTotal, hideInDashboard } = fields;
   return new Promise((resolve, reject) => {
     getWalletById(id, 1).then((wallet) => {
       if (!wallet) return reject(Object.assign(new Error('Billetera no encontrada'), { status: 404 }));
@@ -59,9 +61,16 @@ function updateWalletMeta(id, fields) {
       const newDescription = description !== undefined ? description : wallet.description;
       const newIcon = icon !== undefined ? icon : wallet.icon;
       const newColor = color !== undefined ? color : wallet.color;
+      // Los flags sólo cambian si vienen en el body (si no, conservan su valor actual)
+      const newExcludeTotal = excludeFromTotal !== undefined
+        ? (excludeFromTotal === true || excludeFromTotal === 1 ? 1 : 0)
+        : wallet.excludeFromTotal;
+      const newHideDash = hideInDashboard !== undefined
+        ? (hideInDashboard === true || hideInDashboard === 1 ? 1 : 0)
+        : wallet.hideInDashboard;
       db.run(
-        `UPDATE wallets SET name = ?, alias = ?, description = ?, icon = ?, color = ? WHERE id = ?`,
-        [newName, newAlias, newDescription, newIcon, newColor, id],
+        `UPDATE wallets SET name = ?, alias = ?, description = ?, icon = ?, color = ?, excludeFromTotal = ?, hideInDashboard = ? WHERE id = ?`,
+        [newName, newAlias, newDescription, newIcon, newColor, newExcludeTotal, newHideDash, id],
         (updErr) => {
           if (updErr) return reject(updErr);
           getWalletById(id).then(resolve).catch(reject);

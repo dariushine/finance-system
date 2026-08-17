@@ -5,6 +5,9 @@ const { getRateForDate } = require('../services/rates');
 module.exports = function registerStatsRoutes(app) {
   app.get('/api/stats', async (req, res) => {
     const rateType = req.query.rate === 'paralelo' ? 'paralelo' : 'bcv';
+    // Excluir billeteras marcadas para no contar en los totales del dashboard.
+    // Los reportes llaman ESTE MISMO endpoint SIN este flag, así no les afecta.
+    const excludeFromTotal = req.query.excludeFromTotal === '1' || req.query.excludeFromTotal === 'true';
 
     const { from, to, period } = req.query;
     let fromDate = from;
@@ -28,8 +31,22 @@ module.exports = function registerStatsRoutes(app) {
     }
 
     try {
+      // Si se pide excluir billeteras de los totales, descartamos las transacciones
+      // cuyas billeteras tengan excludeFromTotal = 1.
+      const excludeIds = excludeFromTotal
+        ? await new Promise((resolve, reject) => {
+            db.all(`SELECT id FROM wallets WHERE excludeFromTotal = 1`, (err, r) => err ? reject(err) : resolve((r || []).map((x) => x.id)));
+          })
+        : [];
       const rows = await new Promise((resolve, reject) => {
-        db.all("SELECT t.type, t.amount, t.date, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE COALESCE(t.date, '') >= ? AND COALESCE(t.date, '') <= ?", [fromDate, toDate], (err, r) => err ? reject(err) : resolve(r));
+        const params = [fromDate, toDate];
+        let walletFilter = '';
+        if (excludeIds.length) {
+          walletFilter = ` AND w.id NOT IN (${excludeIds.map(() => '?').join(',')})`;
+          params.push(...excludeIds);
+        }
+        db.all(`SELECT t.type, t.amount, t.date, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE COALESCE(t.date, '') >= ? AND COALESCE(t.date, '') <= ?${walletFilter}`,
+          params, (err, r) => err ? reject(err) : resolve(r));
       });
 
       let total_income = 0;
