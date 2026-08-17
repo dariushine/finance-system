@@ -46,11 +46,11 @@ const primaryItems = [
   { label: 'Billeteras', icon: <WalletIcon />, path: '/wallets' },
   { label: 'Transacciones', icon: <TransactionIcon />, path: '/transactions' },
   { label: 'Exchanges', icon: <ExchangeIcon />, path: '/exchanges' },
-  { label: 'Pagos Frecuentes', icon: <ScheduleIcon />, path: '/recurring-payments' },
 ];
 
 // Items secundarios: en el sidebar (desktop) y dentro del menú "Más" (mobile)
 const moreItems = [
+  { label: 'Pagos Frecuentes', icon: <ScheduleIcon />, path: '/recurring-payments' },
   { label: 'Reportes', icon: <ReportIcon />, path: '/reports' },
   { label: 'Categorías', icon: <CategoryIcon />, path: '/categories' },
   { label: 'Tasas', icon: <RatesIcon />, path: '/rates' },
