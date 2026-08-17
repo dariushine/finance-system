@@ -35,6 +35,7 @@ import {
   KeyboardArrowDown as AppBarExpandIcon,
   Category as CategoryIcon,
   MoreHoriz as MoreHorizIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -45,6 +46,7 @@ const primaryItems = [
   { label: 'Billeteras', icon: <WalletIcon />, path: '/wallets' },
   { label: 'Transacciones', icon: <TransactionIcon />, path: '/transactions' },
   { label: 'Exchanges', icon: <ExchangeIcon />, path: '/exchanges' },
+  { label: 'Pagos Frecuentes', icon: <ScheduleIcon />, path: '/recurring-payments' },
 ];
 
 // Items secundarios: en el sidebar (desktop) y dentro del menú "Más" (mobile)
