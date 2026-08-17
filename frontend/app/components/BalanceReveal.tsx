@@ -3,7 +3,7 @@
 import { useState, ReactNode } from 'react';
 import { Typography, IconButton, Box, SxProps, Theme } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
-import { useHideBalances, maskBalance, maskNumber } from '../lib/hooks/useHideBalances';
+import { useHideBalances, maskBalance, maskEquivalentAmount } from '../lib/hooks/useHideBalances';
 
 interface BalanceRevealProps {
   /** Texto formateado del saldo, ej: "$1.234,56 USD" */
@@ -48,7 +48,7 @@ export default function BalanceReveal({
   const mainShown = hidden ? maskBalance(display, true) : display;
   // El caption solo enmascara sus números (texto se conserva). Textos sin números
   // (ej: "Dólares estadounidenses") no se ven afectados.
-  const captionShown = caption ? (hidden ? maskNumber(caption) : caption) : '';
+  const captionShown = caption ? (hidden ? maskEquivalentAmount(caption) : caption) : ''; 
 
   const toggleReveal = (e: React.MouseEvent) => {
     // No dejar que el clic en el ojo active la tarjeta (navegación)
@@ -85,8 +85,10 @@ export default function BalanceReveal({
   );
 
   return (
-    <Box sx={{ display: 'block', ...sx }}>
-      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+    <Box sx={{ display: 'block', width: '100%', ...sx }}>
+      {/* Bloque independiente: evita que el caption (variant="caption" es inline)
+          se pegue a la derecha del monto en las tarjetas del dashboard. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: 'fit-content' }}>
         <Typography component="span" variant={variant} fontWeight="bold" color={color}>
           {mainShown}
         </Typography>
@@ -94,9 +96,11 @@ export default function BalanceReveal({
         {icon}
       </Box>
       {caption && (
-        <Typography variant={captionVariant} color="text.secondary">
-          {captionShown}
-        </Typography>
+        <Box component="div" sx={{ display: 'block', width: '100%' }}>
+          <Typography component="span" variant={captionVariant} color="text.secondary" sx={{ display: 'block' }}>
+            {captionShown}
+          </Typography>
+        </Box>
       )}
     </Box>
   );
