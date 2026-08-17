@@ -15,6 +15,7 @@ import {
   Alert,
   Snackbar,
   CircularProgress,
+  Chip,
 } from '@mui/material';
 import { Add, Remove } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
@@ -135,26 +136,45 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
           {isEdit ? 'Editar Pago Frecuente' : 'Nuevo Pago Frecuente'}
         </Typography>
 
-        <Box display="flex" gap={1} mb={2}>
-          <Button
-            variant={type === 'expense' ? 'contained' : 'outlined'}
-            startIcon={<Remove />}
-            onClick={() => setType('expense')}
-            color="error"
-            fullWidth
-          >
-            Gasto
-          </Button>
-          <Button
-            variant={type === 'income' ? 'contained' : 'outlined'}
-            startIcon={<Add />}
-            onClick={() => setType('income')}
-            color="success"
-            fullWidth
-          >
-            Ingreso
-          </Button>
-        </Box>
+        {!isEdit && (
+          <Box display="flex" gap={1} mb={2}>
+            <Button
+              variant={type === 'expense' ? 'contained' : 'outlined'}
+              startIcon={<Remove />}
+              onClick={() => setType('expense')}
+              color="error"
+              fullWidth
+            >
+              Gasto
+            </Button>
+            <Button
+              variant={type === 'income' ? 'contained' : 'outlined'}
+              startIcon={<Add />}
+              onClick={() => setType('income')}
+              color="success"
+              fullWidth
+            >
+              Ingreso
+            </Button>
+          </Box>
+        )}
+        {isEdit && (
+          <Box display="flex" alignItems="center" gap={1} mb={2}>
+            <Typography variant="body2" color="text.secondary" component="span">
+              Tipo:
+            </Typography>
+            <Chip
+              size="small"
+              icon={type === 'income' ? <Add /> : <Remove />}
+              label={type === 'income' ? 'Ingreso' : 'Gasto'}
+              color={type === 'income' ? 'success' : 'error'}
+              variant="outlined"
+            />
+            <Typography variant="caption" color="text.secondary" component="span">
+              El tipo no se puede cambiar al editar.
+            </Typography>
+          </Box>
+        )}
 
         <form onSubmit={handleSubmit}>
           <Box display="flex" flexDirection="column" gap={2}>
