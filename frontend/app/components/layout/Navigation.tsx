@@ -34,19 +34,28 @@ import {
   KeyboardArrowUp as AppBarCollapseIcon,
   KeyboardArrowDown as AppBarExpandIcon,
   Category as CategoryIcon,
+  MoreHoriz as MoreHorizIcon,
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
-const navItems = [
+// Items de primer nivel: van en la barra inferior (mobile) y en el sidebar (desktop)
+const primaryItems = [
   { label: 'Dashboard', icon: <HomeIcon />, path: '/' },
   { label: 'Billeteras', icon: <WalletIcon />, path: '/wallets' },
   { label: 'Transacciones', icon: <TransactionIcon />, path: '/transactions' },
   { label: 'Exchanges', icon: <ExchangeIcon />, path: '/exchanges' },
+];
+
+// Items secundarios: en el sidebar (desktop) y dentro del menú "Más" (mobile)
+const moreItems = [
   { label: 'Reportes', icon: <ReportIcon />, path: '/reports' },
   { label: 'Categorías', icon: <CategoryIcon />, path: '/categories' },
   { label: 'Tasas', icon: <RatesIcon />, path: '/rates' },
 ];
+
+// Sidebar de escritorio muestra todo
+const navItems = [...primaryItems, ...moreItems];
 
 const EXPANDED_WIDTH = 250;
 const COLLAPSED_WIDTH = 68;
@@ -84,9 +93,13 @@ export default function Navigation() {
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
-  const bottomNavValue = navItems.findIndex(item =>
+  // Index en la barra inferior. Si la página actual es un item secundario ("Más"),
+  // el botón "Más" queda resaltado.
+  const primaryIndex = primaryItems.findIndex(item =>
     item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
   );
+  const inPrimary = primaryIndex >= 0;
+  const bottomNavValue = inPrimary ? primaryIndex : primaryItems.length; // primaryItems.length = posición de "Más"
 
   const isActive = (path: string) =>
     path === '/' ? pathname === '/' : pathname.startsWith(path);
@@ -135,6 +148,60 @@ export default function Navigation() {
         ))}
       </List>
     </>
+  );
+
+  const renderMobileDrawer = () => (
+    <Box sx={{ width: 250, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <DashboardIcon color="primary" />
+        <Typography variant="h6" fontWeight="bold">Finanzas</Typography>
+      </Box>
+      <List sx={{ flexGrow: 1, px: 1 }}>
+        {primaryItems.map((item) => (
+          <ListItem
+            key={`p-${item.path}`}
+            component={Link}
+            href={item.path}
+            onClick={() => setMobileOpen(false)}
+            sx={{
+              borderRadius: 1,
+              color: isActive(item.path) ? theme.palette.primary.main : 'inherit',
+              bgcolor: isActive(item.path) ? 'action.selected' : 'transparent',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 40, color: isActive(item.path) ? theme.palette.primary.main : 'inherit' }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText primary={item.label} />
+          </ListItem>
+        ))}
+        <Box sx={{ mt: 2, mb: 0.5, mx: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+            Más
+          </Typography>
+        </Box>
+        {moreItems.map((item) => (
+          <ListItem
+            key={`m-${item.path}`}
+            component={Link}
+            href={item.path}
+            onClick={() => setMobileOpen(false)}
+            sx={{
+              borderRadius: 1,
+              color: isActive(item.path) ? theme.palette.primary.main : 'inherit',
+              bgcolor: isActive(item.path) ? 'action.selected' : 'transparent',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 40, color: isActive(item.path) ? theme.palette.primary.main : 'inherit' }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText primary={item.label} />
+          </ListItem>
+        ))}
+      </List>
+    </Box>
   );
 
   const renderDrawer = (collapsed: boolean) => (
@@ -262,7 +329,7 @@ export default function Navigation() {
         </Box>
       )}
 
-      {/* Drawer móvil */}
+      {/* Drawer móvil: barra Hamburguesa y el botón "Más" comparten este drawer */}
       <Drawer
         variant="temporary"
         open={mobileOpen}
@@ -273,7 +340,7 @@ export default function Navigation() {
           '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 250 },
         }}
       >
-        {renderDrawer(false)}
+        {renderMobileDrawer()}
       </Drawer>
 
       {/* Barra lateral escritorio (colapsable) */}
@@ -317,10 +384,15 @@ export default function Navigation() {
             showLabels
             value={bottomNavValue}
             onChange={(event, newValue) => {
-              router.push(navItems[newValue].path);
+              // El último item ("Más") abre el drawer en vez de navegar
+              if (newValue === primaryItems.length) {
+                setMobileOpen(true);
+                return;
+              }
+              router.push(primaryItems[newValue].path);
             }}
           >
-            {navItems.map((item) => (
+            {primaryItems.map((item) => (
               <BottomNavigationAction
                 key={item.path}
                 label={item.label}
@@ -334,6 +406,17 @@ export default function Navigation() {
                 }}
               />
             ))}
+            <BottomNavigationAction
+              label="Más"
+              icon={<MoreHorizIcon />}
+              sx={{
+                color: inPrimary ? 'text.secondary' : theme.palette.primary.main,
+                '& .MuiBottomNavigationAction-label': {
+                  fontSize: '0.75rem',
+                  mt: 0.5,
+                },
+              }}
+            />
           </BottomNavigation>
         </Paper>
       )}
