@@ -238,6 +238,26 @@ db.serialize(() => {
     source TEXT DEFAULT 'dolarapi',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Pagos frecuentes: plantillas para crear transacciones de forma rápida.
+  // Solo guardan data prellenada (monto, moneda, tipo, categoría, descripción y
+  // una billetera preferida); no generan transacciones por sí solos (el usuario
+  // las ejecuta manualmente).
+  db.run(`CREATE TABLE IF NOT EXISTS recurring_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    amount DECIMAL(10,2) NOT NULL,
+    currency TEXT NOT NULL,
+    type TEXT NOT NULL,
+    category_id INTEGER NOT NULL,
+    wallet_id INTEGER NOT NULL,
+    isActive BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES categories(id),
+    FOREIGN KEY (wallet_id) REFERENCES wallets(id)
+  )`);
 });
 
 // Consultar las tasas oficial (BCV) y paralelo de Dolarapi
@@ -699,6 +719,188 @@ app.put('/api/categories/:id/reactivate', (req, res) => {
       });
     });
   });
+});
+
+// ---- Pagos Frecuentes ----
+// Helper: inner join a categoría y billetera para devolver nombres legibles.
+const RECURRING_SELECT = `
+  SELECT
+    rp.id,
+    rp.name,
+    rp.description,
+    rp.amount,
+    rp.currency,
+    rp.type,
+    rp.category_id AS categoryId,
+    c.name AS categoryName,
+    rp.wallet_id AS walletId,
+    w.name AS walletName,
+    w.currency AS walletCurrency,
+    rp.created_at AS createdAt,
+    rp.updated_at AS updatedAt
+  FROM recurring_payments rp
+  JOIN categories c ON c.id = rp.category_id
+  JOIN wallets w ON w.id = rp.wallet_id
+`;
+
+// Listar pagos frecuentes activos
+app.get('/api/recurring-payments', (req, res) => {
+  db.all(`${RECURRING_SELECT} WHERE rp.isActive = 1 ORDER BY rp.name`, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// Obtener un pago frecuente por id (solo activos)
+app.get('/api/recurring-payments/:id', (req, res) => {
+  const id = Number(req.params.id);
+  db.get(`${RECURRING_SELECT} WHERE rp.id = ? AND rp.isActive = 1`, [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Pago frecuente no encontrado' });
+    res.json(row);
+  });
+});
+
+// Crear un pago frecuente
+app.post('/api/recurring-payments', async (req, res) => {
+  try {
+    const { name, description, amount, currency, type, categoryId, walletId } = req.body || {};
+    const trimmedName = String(name || '').trim();
+    if (!trimmedName) throw new Error('El nombre es requerido');
+    if (type !== 'income' && type !== 'expense') throw new Error('type debe ser income o expense');
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) throw new Error('El monto debe ser mayor a 0');
+    if (!currency) throw new Error('La moneda es requerida');
+    if (!categoryId) throw new Error('La categoría es requerida');
+    if (!walletId) throw new Error('La billetera es requerida');
+
+    // Validar que categoría y billetera existen y son activas
+    const category = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM categories WHERE id = ? AND isActive = 1', [categoryId], (err, row) =>
+        err ? reject(err) : resolve(row));
+    });
+    if (!category) throw new Error('Categoría no encontrada');
+    if (category.type !== type) throw new Error('La categoría debe coincidir con el tipo del pago');
+
+    const wallet = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId], (err, row) =>
+        err ? reject(err) : resolve(row));
+    });
+    if (!wallet) throw new Error('Billetera no encontrada');
+    if (wallet.currency !== currency) throw new Error(`La billetera usa ${wallet.currency}, pero el pago es en ${currency}`);
+
+    const id = await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO recurring_payments (name, description, amount, currency, type, category_id, wallet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [trimmedName, description || '', parsedAmount, currency, type, categoryId, walletId],
+        function (err) { err ? reject(err) : resolve(this.lastID); }
+      );
+    });
+
+    db.get(`${RECURRING_SELECT} WHERE rp.id = ?`, [id], (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json(row);
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Editar un pago frecuente
+app.put('/api/recurring-payments/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM recurring_payments WHERE id = ? AND isActive = 1', [id], (err, row) =>
+        err ? reject(err) : resolve(row));
+    });
+    if (!existing) throw new Error('Pago frecuente no encontrado');
+
+    const { name, description, amount, currency, type, categoryId, walletId } = req.body || {};
+    const trimmedName = name != null ? String(name).trim() : existing.name;
+    const finalType = type || existing.type;
+    const finalCurrency = currency || existing.currency;
+    const finalAmount = amount != null ? Number(amount) : existing.amount;
+    const finalCategoryId = categoryId || existing.category_id;
+    const finalWalletId = walletId || existing.wallet_id;
+
+    if (!trimmedName) throw new Error('El nombre es requerido');
+    if (finalType !== 'income' && finalType !== 'expense') throw new Error('type debe ser income o expense');
+    if (!Number.isFinite(finalAmount) || finalAmount <= 0) throw new Error('El monto debe ser mayor a 0');
+
+    if (finalCategoryId !== existing.category_id) {
+      const category = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM categories WHERE id = ? AND isActive = 1', [finalCategoryId], (err, row) =>
+          err ? reject(err) : resolve(row));
+      });
+      if (!category) throw new Error('Categoría no encontrada');
+      if (category.type !== finalType) throw new Error('La categoría debe coincidir con el tipo del pago');
+    }
+
+    if (finalWalletId !== existing.wallet_id) {
+      const wallet = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [finalWalletId], (err, row) =>
+          err ? reject(err) : resolve(row));
+      });
+      if (!wallet) throw new Error('Billetera no encontrada');
+      if (wallet.currency !== finalCurrency) throw new Error(`La billetera usa ${wallet.currency}, pero el pago es en ${finalCurrency}`);
+    }
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE recurring_payments SET name = ?, description = ?, amount = ?, currency = ?, type = ?, category_id = ?, wallet_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [trimmedName, description != null ? description : existing.description, finalAmount, finalCurrency, finalType, finalCategoryId, finalWalletId, id],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    db.get(`${RECURRING_SELECT} WHERE rp.id = ?`, [id], (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(row);
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Eliminar (soft-delete) un pago frecuente
+app.delete('/api/recurring-payments/:id', (req, res) => {
+  const id = Number(req.params.id);
+  db.run('UPDATE recurring_payments SET isActive = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND isActive = 1', [id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+// Ejecutar un pago frecuente: crea una transacción real a partir de la plantilla.
+// Devuelve la transacción creada (para redirigir a su detalle).
+app.post('/api/recurring-payments/:id/execute', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const row = await new Promise((resolve, reject) => {
+      db.get(`${RECURRING_SELECT} WHERE rp.id = ? AND rp.isActive = 1`, [id], (err, r) =>
+        err ? reject(err) : resolve(r));
+    });
+    if (!row) throw new Error('Pago frecuente no encontrado');
+
+    // El amount/type/category/wallet vienen del pago frecuente; fecha/hora opcionales
+    // se pueden sobreescribir desde el frontend (prellenado editable).
+    const { date, time, overrideAmount, overrideType, overrideCategoryName, overrideWalletId, description } = req.body || {};
+    const amount = overrideAmount != null ? Number(overrideAmount) : row.amount;
+    const type = overrideType || row.type;
+    const categoryName = overrideCategoryName || row.categoryName;
+    const walletId = overrideWalletId || row.walletId;
+    const finalDescription =
+      description != null ? description
+      : (row.description ? `Pago frecuente: ${row.name} — ${row.description}` : `Pago frecuente: ${row.name}`);
+
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto debe ser mayor a 0');
+
+    const transaction = await createTransaction(walletId, categoryName, type, amount, finalDescription, 0, date, time);
+    res.json({ success: true, transaction });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 app.get('/api/wallets', (req, res) => {

@@ -1,0 +1,163 @@
+'use client';
+
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Typography,
+  IconButton,
+  Avatar,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  ArrowUpward,
+  ArrowDownward,
+  PlayArrow,
+  ChevronRight,
+  Schedule as ScheduleIcon,
+} from '@mui/icons-material';
+import {
+  getRecurringPayments,
+  type RecurringPayment,
+} from '../lib/api';
+
+const formatCurrency = (amount: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat('es-VE', { style: 'currency', currency, minimumFractionDigits: 2 }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+};
+
+export default function RecurringPaymentsPage() {
+  const router = useRouter();
+  const [payments, setPayments] = useState<RecurringPayment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getRecurringPayments();
+      setPayments(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar pagos frecuentes');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
+        <Box>
+          <Typography variant="h4" gutterBottom fontWeight="bold" sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
+            Pagos Frecuentes
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Plantillas para crear transacciones con un solo toque
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => router.push('/recurring-payments/new')}
+          disabled={loading}
+        >
+          Nuevo
+        </Button>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {loading ? (
+        <Box display="flex" justifyContent="center" py={6}>
+          <CircularProgress />
+        </Box>
+      ) : payments.length === 0 ? (
+        <Card variant="outlined">
+          <CardContent sx={{ textAlign: 'center', py: 6 }}>
+            <ScheduleIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+            <Typography variant="h6">Sin pagos frecuentes</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Crea tu primer pago frecuente para registrar transacciones repetidas en un toque.
+            </Typography>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => router.push('/recurring-payments/new')}>
+              Crear pago frecuente
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Box>
+          {payments.map((p) => {
+            const isIncome = p.type === 'income';
+            return (
+              <Card
+                key={p.id}
+                variant="outlined"
+                sx={{ mb: 1.5, cursor: 'pointer', transition: 'background-color 0.15s ease', '&:hover': { backgroundColor: 'action.hover' } }}
+                onClick={() => router.push(`/recurring-payments/${p.id}`)}
+              >
+                <CardContent sx={{ py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Avatar
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      bgcolor: isIncome ? 'success.light' : 'error.light',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isIncome ? <ArrowUpward /> : <ArrowDownward />}
+                  </Avatar>
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Typography variant="body1" fontWeight="bold" noWrap>
+                      {p.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {isIncome ? 'Ingreso' : 'Gasto'} · {p.categoryName} · {p.walletName}
+                    </Typography>
+                  </Box>
+                  <Box display="flex" alignItems="center" gap={1} sx={{ flexShrink: 0 }}>
+                    <Typography
+                      variant="body1"
+                      fontWeight="bold"
+                      color={isIncome ? 'success.main' : 'error.main'}
+                    >
+                      {isIncome ? '+' : '-'}{formatCurrency(p.amount, p.currency)}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      aria-label="Realizar pago"
+                      color="primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/recurring-payments/${p.id}?action=execute`);
+                      }}
+                      title="Realizar"
+                    >
+                      <PlayArrow />
+                    </IconButton>
+                    <ChevronRight fontSize="small" color="action" />
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Box>
+      )}
+    </Box>
+  );
+}

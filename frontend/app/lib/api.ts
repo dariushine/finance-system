@@ -448,3 +448,103 @@ export async function getBalance(): Promise<Balance> {
   if (!response.ok) throw new Error('Failed to load balance');
   return response.json();
 }
+
+// Recurring Payments API
+
+export interface RecurringPayment {
+  id: number;
+  name: string;
+  description?: string | null;
+  amount: number;
+  currency: string;
+  type: 'income' | 'expense';
+  categoryId: number;
+  categoryName: string;
+  walletId: number;
+  walletName: string;
+  walletCurrency: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RecurringPaymentInput {
+  name: string;
+  description?: string;
+  amount: number;
+  currency: string;
+  type: 'income' | 'expense';
+  categoryId: number;
+  walletId: number;
+}
+
+export async function getRecurringPayments(): Promise<RecurringPayment[]> {
+  const response = await fetch(`${API_URL}/recurring-payments`);
+  if (!response.ok) throw new Error('Failed to load recurring payments');
+  return response.json();
+}
+
+export async function getRecurringPayment(id: number | string): Promise<RecurringPayment> {
+  const response = await fetch(`${API_URL}/recurring-payments/${id}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'No se pudo cargar el pago frecuente');
+  }
+  return response.json();
+}
+
+export async function createRecurringPayment(data: RecurringPaymentInput): Promise<RecurringPayment> {
+  const response = await fetch(`${API_URL}/recurring-payments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo crear el pago frecuente');
+  return body;
+}
+
+export async function updateRecurringPayment(
+  id: number | string,
+  data: Partial<RecurringPaymentInput>
+): Promise<RecurringPayment> {
+  const response = await fetch(`${API_URL}/recurring-payments/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo actualizar el pago frecuente');
+  return body;
+}
+
+export async function deleteRecurringPayment(id: number | string): Promise<any> {
+  const response = await fetch(`${API_URL}/recurring-payments/${id}`, { method: 'DELETE' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo eliminar el pago frecuente');
+  return body;
+}
+
+export interface ExecuteRecurringInput {
+  date?: string;
+  time?: string;
+  overrideAmount?: number;
+  overrideType?: 'income' | 'expense';
+  overrideCategoryName?: string;
+  overrideWalletId?: number;
+  description?: string;
+}
+
+// Crear una transacción real a partir del pago frecuente (prellenado editable).
+export async function executeRecurringPayment(
+  id: number | string,
+  data: ExecuteRecurringInput
+): Promise<{ success: boolean; transaction: { id: number; type: string; amount: number; currency: string } }> {
+  const response = await fetch(`${API_URL}/recurring-payments/${id}/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo realizar el pago frecuente');
+  return body;
+}
