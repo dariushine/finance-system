@@ -11,6 +11,7 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -43,6 +44,8 @@ import {
   Close,
   Menu as MenuIcon,
   ReceiptLong,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import {
   getRecurringPayment,
@@ -98,6 +101,7 @@ export default function RecurringPaymentDetailPage() {
   const [execCategory, setExecCategory] = useState('');
   const [execSaving, setExecSaving] = useState(false);
   const [execError, setExecError] = useState<string | null>(null);
+  const [execShowOptional, setExecShowOptional] = useState(false);
 
   const { wallets, loading: walletsLoading } = useWallets();
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error'; message: string }>({
@@ -331,7 +335,7 @@ export default function RecurringPaymentDetailPage() {
         </DialogActions>
       </Dialog>
 
-      {/* El tipo se muestra fijo: esta plantilla no puede transformarse de gasto a ingreso (ni viceversa) al realizarla. */}
+      {/* El tipo se muestra como chip coloreado: esta plantilla no puede transformarse de gasto a ingreso (ni viceversa) al realizarla. */}
       <Dialog open={execOpen} onClose={() => setExecOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
           Realizar: {payment.name}
@@ -339,11 +343,38 @@ export default function RecurringPaymentDetailPage() {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} pt={1}>
-            <Alert severity="info" icon={isIncome ? <ArrowUpward /> : <ArrowDownward />}>
-              Esta plantilla crea un <b>{isIncome ? 'ingreso' : 'gasto'}</b>. El tipo está fijado por el pago frecuente.
-            </Alert>
+            {/* Tipo: chip coloreado en vez de aviso (gasto rojo / ingreso verde) */}
+            <Box display="flex" alignItems="center" gap={1}>
+              <Chip
+                size="small"
+                icon={isIncome ? <ArrowUpward /> : <ArrowDownward />}
+                label={isIncome ? 'Ingreso' : 'Gasto'}
+                color={isIncome ? 'success' : 'error'}
+              />
+            </Box>
+
             <TextField label="Monto" type="number" value={execAmount} onChange={(e) => setExecAmount(e.target.value)} fullWidth autoFocus InputProps={{ endAdornment: <span>{currency}</span> }} />
-            <TextField label="Comisión (opcional)" type="number" value={execFee} onChange={(e) => setExecFee(e.target.value)} fullWidth InputProps={{ endAdornment: <span>{currency}</span> }} helperText="Se descuenta aparte del monto" />
+
+            {/* Opcionales (fecha, hora, comisión) en bloque colapsable, como en el form de transacción */}
+            <Box>
+              <Box
+                onClick={() => setExecShowOptional((v) => !v)}
+                sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
+              >
+                <Typography variant="body2">Opcionales</Typography>
+                <IconButton size="small" sx={{ ml: 0.5 }}>
+                  {execShowOptional ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </IconButton>
+              </Box>
+              <Collapse in={execShowOptional}>
+                <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                  <TextField label="Fecha" type="date" value={execDate} onChange={(e) => setExecDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
+                  <TextField label="Hora (opcional)" type="time" value={execTime} onChange={(e) => setExecTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Si la dejas vacía se usa la hora actual" />
+                  <TextField label="Comisión (opcional)" type="number" value={execFee} onChange={(e) => setExecFee(e.target.value)} fullWidth onWheel={(e) => e.currentTarget.blur()} helperText="Se descuenta aparte del monto" InputProps={{ endAdornment: <span>{currency}</span> }} />
+                </Box>
+              </Collapse>
+            </Box>
+
             <FormControl fullWidth required>
               <InputLabel>Billetera</InputLabel>
               <Select value={execWallet} label="Billetera" onChange={(e) => setExecWallet(e.target.value)} disabled={walletsLoading}>
@@ -354,8 +385,6 @@ export default function RecurringPaymentDetailPage() {
             {compatibleWallets.length === 0 && <Alert severity="warning">No tienes billeteras activas en {currency}. Crea una antes de realizar este pago.</Alert>}
             <CategoryAutocomplete type={payment.type} valueName={execCategory} onChange={(cat) => setExecCategory(cat ? cat.name : '')} allowCreate />
             <TextField label="Descripción" value={execDescription} onChange={(e) => setExecDescription(e.target.value)} multiline rows={2} fullWidth />
-            <TextField label="Fecha" type="date" value={execDate} onChange={(e) => setExecDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
-            <TextField label="Hora (opcional)" type="time" value={execTime} onChange={(e) => setExecTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Si la dejas vacía se usa la hora actual" />
             {execError && <Alert severity="error">{execError}</Alert>}
           </Stack>
         </DialogContent>
