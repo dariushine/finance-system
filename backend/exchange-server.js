@@ -2153,9 +2153,29 @@ app.delete('/api/daily-rates/:id', (req, res) => {
 app.get('/api/stats', async (req, res) => {
   const rateType = req.query.rate === 'paralelo' ? 'paralelo' : 'bcv';
 
+  // Rango de fechas (from/to explícitos o preset por period)
+  const { from, to, period } = req.query;
+  let fromDate = from;
+  let toDate = to;
+  if (!fromDate || !toDate) {
+    const now = new Date();
+    toDate = now.toISOString().split('T')[0];
+    if (!period || period === 'all' || period === '') {
+      fromDate = '1970-01-01';
+    } else {
+      const d = new Date(now);
+      if (period === '1m') d.setMonth(d.getMonth() - 1);
+      else if (period === '3m') d.setMonth(d.getMonth() - 3);
+      else if (period === '6m') d.setMonth(d.getMonth() - 6);
+      else if (period === '1y') d.setMonth(d.getMonth() - 12);
+      else { fromDate = '1970-01-01'; }
+      if (fromDate === '1970-01-01') fromDate = d.toISOString().split('T')[0];
+    }
+  }
+
   try {
     const rows = await new Promise((resolve, reject) => {
-      db.all("SELECT t.type, t.amount, t.date, c.name AS category, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id", (err, r) => err ? reject(err) : resolve(r));
+      db.all("SELECT t.type, t.amount, t.date, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE COALESCE(t.date, '') >= ? AND COALESCE(t.date, '') <= ?", [fromDate, toDate], (err, r) => err ? reject(err) : resolve(r));
     });
 
     let total_income = 0;
@@ -2201,7 +2221,7 @@ app.get('/api/stats', async (req, res) => {
 
       const cat = row.category || 'Sin categoría';
       if (!categoryMap.has(cat)) {
-        categoryMap.set(cat, { category: cat, count: 0, total: 0 });
+        categoryMap.set(cat, { category: cat, count: 0, total: 0, expenseOnly: row.categoryType === 'expense' });
       }
       const c = categoryMap.get(cat);
       c.count++;
@@ -2217,10 +2237,85 @@ app.get('/api/stats', async (req, res) => {
         net: parseFloat((m.income - m.expense).toFixed(2)),
       }));
 
-    const byCategory = Array.from(categoryMap.values()).map((c) => ({
-      ...c,
-      total: parseFloat(c.total.toFixed(2)),
-    }));
+    // Solo categorías de tipo gasto aparecen en "Gastos por Categoría"
+    const byCategory = Array.from(categoryMap.values())
+      .filter((c) => c.expenseOnly)
+      .map((c) => ({
+        category: c.category,
+        count: c.count,
+        total: parseFloat(c.total.toFixed(2)),
+      }))
+      .sort((a, b) => b.total - a.total);
+    // Suma total de gastos por categoría (coincide con total_expense)
+    const byCategoryTotal = byCategory.reduce((s, c) => s + c.total, 0);
+
+    // Estadísticas de exchange SERVER-SIDE, en USD y dentro del rango de fechas
+    const exchangeRows = await new Promise((resolve, reject) => {
+      db.all(`SELECT
+          e.from_amount AS fromAmount,
+          e.to_amount AS toAmount,
+          e.rate,
+          e.fee,
+          fw.currency AS fromCurrency,
+          tw.currency AS toCurrency,
+          dt.date AS date
+        FROM exchanges e
+        JOIN wallets fw ON fw.id = e.from_wallet_id
+        JOIN wallets tw ON tw.id = e.to_wallet_id
+        LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
+        WHERE e.deleted = 0 AND COALESCE(dt.date, '') >= ? AND COALESCE(dt.date, '') <= ?`,
+        [fromDate, toDate], (err, r) => err ? reject(err) : resolve(r || []));
+    });
+    let totalFromUSD = 0;
+    let totalToUSD = 0;
+    let totalFeeUSD = 0;
+    let totalExchanges = exchangeRows.length;
+    // Spread = (to_rate / market_rate - 1); mercado = de la fecha (bcv/paralelo)
+    // Acumulamos el spread total y el conteo real para promediar
+    let spreadSum = 0;
+    let spreadCount = 0;
+    const exchangeRateCache = new Map();
+    const getExRate = async (date) => {
+      if (exchangeRateCache.has(date)) return exchangeRateCache.get(date);
+      const r = await getRateForDate(date, rateType);
+      exchangeRateCache.set(date, r);
+      return r;
+    };
+    for (const ex of exchangeRows) {
+      const fromUsd = ex.fromCurrency === 'VES' && ex.rate != null && ex.rate !== 0
+        ? Number(ex.fromAmount) / Number(ex.rate)
+        : (ex.fromCurrency === 'VES' ? 0 : Number(ex.fromAmount) || 0);
+      const toUsd = ex.toCurrency === 'VES' && ex.rate != null && ex.rate !== 0
+        ? Number(ex.toAmount) / Number(ex.rate)
+        : (ex.toCurrency === 'VES' ? 0 : Number(ex.toAmount) || 0);
+      totalFromUSD += fromUsd;
+      totalToUSD += toUsd;
+      // Comisión: convertir fee a USD según la moneda de origen
+      if (ex.fee) {
+        const feeUsd = ex.fromCurrency === 'VES' && ex.rate != null && ex.rate !== 0
+          ? Number(ex.fee) / Number(ex.rate)
+          : Number(ex.fee) || 0;
+        totalFeeUSD += feeUsd;
+      }
+      // Spread: si hay tasa de mercado del día, compararla con la tasa del exchange
+      if (ex.rate != null && Number(ex.rate) > 0 && ex.date) {
+        const market = await getExRate(ex.date.split('T')[0]);
+        if (market && Number(market) > 0) {
+          // Para VES->USD u otras, spread razonable = |market/rate - 1|
+          const spread = Math.abs(Number(market) / Number(ex.rate) - 1) * 100;
+          spreadSum += spread;
+          spreadCount++;
+        }
+      }
+    }
+    const averageSpread = spreadCount > 0 ? spreadSum / spreadCount : 0;
+    const exchangeStats = {
+      totalExchanges,
+      averageSpread: parseFloat(averageSpread.toFixed(2)),
+      totalFromAmount: parseFloat(totalFromUSD.toFixed(2)),
+      totalToAmount: parseFloat(totalToUSD.toFixed(2)),
+      totalFee: parseFloat(totalFeeUSD.toFixed(2)),
+    };
 
     res.json({
       total_income: parseFloat(total_income.toFixed(2)),
@@ -2236,6 +2331,8 @@ app.get('/api/stats', async (req, res) => {
       },
       monthly,
       byCategory,
+      byCategoryTotal: parseFloat(byCategoryTotal.toFixed(2)),
+      exchangeStats,
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
