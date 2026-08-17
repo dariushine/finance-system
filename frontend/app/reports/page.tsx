@@ -33,8 +33,6 @@ import {
   useTheme,
 } from '@mui/material';
 import {
-  BarChart as BarChartIcon,
-  PieChart as PieChartIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   AttachMoney as MoneyIcon,
@@ -71,7 +69,9 @@ interface ReportData {
     averageSpread: number;
     totalFromAmount: number;
     totalToAmount: number;
+    totalFee: number;
   };
+  byCategoryTotal: number;
   summary: {
     totalTransactions: number;
     totalIncome: number;
@@ -251,7 +251,6 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState('6m');
-  const [chartType, setChartType] = useState('bar');
   const [rateType, setRateType] = useState<'bcv' | 'paralelo'>('bcv');
 
   // Handlers ESTABLES: cada uno solo re-renderiza la tarjeta que se abre/cierra.
@@ -272,42 +271,33 @@ export default function ReportsPage() {
   const loadReportData = async () => {
     try {
       setLoading(true);
-      const [statsResponse, transactionsResponse, walletsResponse, exchangesResponse] = await Promise.all([
-        fetch(`${API_URL}/stats?rate=${rateType}`),
-        fetch(`${API_URL}/transactions?limit=100`),
-        fetch(`${API_URL}/wallets`),
-        fetch(`${API_URL}/exchanges?limit=50`)
-      ]);
+      // El rango se pasa al backend: period=1m|3m|6m|1y|all
+      const statsResponse = await fetch(`${API_URL}/stats?rate=${rateType}&period=${timeRange}`);
+      const walletsResponse = await fetch(`${API_URL}/wallets`);
 
-      if (!statsResponse.ok || !transactionsResponse.ok) {
+      if (!statsResponse.ok) {
         throw new Error('Error al cargar datos de reportes');
       }
 
       const stats = await statsResponse.json();
-      const transactions = await transactionsResponse.json();
       const wallets = await walletsResponse.json();
-      const exchanges = exchangesResponse.ok ? await exchangesResponse.json() : [];
 
-      // Procesar datos para reportes
+      // Procesar datos para reportes (las estadísticas de exchange vienen del backend)
       const reportData: ReportData = {
         monthlySummary: stats.monthly || [],
         byCategory: stats.byCategory || [],
+        byCategoryTotal: stats.byCategoryTotal || 0,
         walletBalances: Array.isArray(wallets) ? wallets.map((w: any) => ({
           name: w.name,
           balance: w.balance || 0,
           currency: w.currency || 'USD'
         })) : [],
-        exchangeStats: {
-          totalExchanges: Array.isArray(exchanges.data) ? exchanges.data.length : exchanges.length || 0,
-          averageSpread: Array.isArray(exchanges.data) 
-            ? exchanges.data.filter((e: any) => e.spread).reduce((sum: number, e: any) => sum + (e.spread || 0), 0) / (exchanges.data.filter((e: any) => e.spread).length || 1)
-            : 0,
-          totalFromAmount: Array.isArray(exchanges.data)
-            ? exchanges.data.reduce((sum: number, e: any) => sum + (e.fromAmount || 0), 0)
-            : 0,
-          totalToAmount: Array.isArray(exchanges.data)
-            ? exchanges.data.reduce((sum: number, e: any) => sum + (e.toAmount || 0), 0)
-            : 0
+        exchangeStats: stats.exchangeStats || {
+          totalExchanges: 0,
+          averageSpread: 0,
+          totalFromAmount: 0,
+          totalToAmount: 0,
+          totalFee: 0
         },
         summary: stats.summary || {
           totalTransactions: 0,
@@ -499,9 +489,6 @@ export default function ReportsPage() {
               <Typography variant="h4" gutterBottom>
                 {data.walletBalances.length}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {data.walletBalances.filter(w => w.balance > 0).length} con saldo
-              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -512,24 +499,9 @@ export default function ReportsPage() {
         <Grid item xs={12} lg={8}>
           <Card>
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                <Typography variant="h6">
-                  Performance Mensual
-                </Typography>
-                <ToggleButtonGroup
-                  value={chartType}
-                  exclusive
-                  onChange={(e, newType) => newType && setChartType(newType)}
-                  size="small"
-                >
-                  <ToggleButton value="bar">
-                    <BarChartIcon />
-                  </ToggleButton>
-                  <ToggleButton value="pie">
-                    <PieChartIcon />
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              </Box>
+              <Typography variant="h6" gutterBottom mb={3}>
+                Performance Mensual
+              </Typography>
 
               {data.monthlySummary.length > 0 ? (
                 isMobile ? (
@@ -645,45 +617,46 @@ export default function ReportsPage() {
                   </Box>
                 ) : (
                 <Box>
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Categoría</TableCell>
-                          <TableCell align="right">Monto</TableCell>
-                          <TableCell align="right">%</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {data.byCategory.slice(0, 8).map((category, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <Typography variant="body2">
-                                {category.category}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body2">
-                                {formatCurrency(category.total)}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right">
-                              <Chip
-                                label={`${(category.total / data.summary.totalExpenses * 100).toFixed(1)}%`}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                  
-                  <Box mt={2}>
+                  {data.byCategory.slice(0, 6).map((category, index) => (
+                    <Box key={index} mb={1.5}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                        <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                          {category.category}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {formatCurrency(category.total)}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{
+                          width: '100%',
+                          bgcolor: 'divider',
+                          borderRadius: 1,
+                          height: 8,
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: `${Math.min((category.total / (data.byCategoryTotal || data.summary.totalExpenses || 1)) * 100, 100)}%`,
+                            bgcolor: 'error.main',
+                            borderRadius: 1,
+                            height: 8,
+                            transition: 'width 0.3s',
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                  ))}
+                  {data.byCategory.length > 6 && (
                     <Typography variant="caption" color="text.secondary">
-                      Total categorías: {data.byCategory.length}
+                      +{data.byCategory.length - 6} categorías más
+                    </Typography>
+                  )}
+                  <Divider sx={{ my: 1.5 }} />
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" fontWeight="bold">Total</Typography>
+                    <Typography variant="body2" fontWeight="bold" color="error.main">
+                      {formatCurrency(data.byCategoryTotal || data.summary.totalExpenses)}
                     </Typography>
                   </Box>
                 </Box>
@@ -806,11 +779,11 @@ export default function ReportsPage() {
                 <Grid item xs={6}>
                   <Card variant="outlined">
                     <CardContent sx={{ textAlign: 'center' }}>
-                      <Typography variant="h4" color="primary" gutterBottom>
-                        {data.exchangeStats.averageSpread.toFixed(2)}%
+                      <Typography variant="h4" color="warning.main" gutterBottom>
+                        {formatCurrency(data.exchangeStats.totalFee)}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Spread Promedio
+                        Comisiones
                       </Typography>
                     </CardContent>
                   </Card>
