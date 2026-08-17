@@ -464,10 +464,10 @@ export default function ReportsPage() {
       </Grid>
 
       {/* Monthly Performance */}
-      <Grid container spacing={3} mb={4}>
+      <Grid container spacing={3} mb={4} alignItems="stretch">
         <Grid item xs={12} lg={8}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Typography variant="h6" gutterBottom mb={3}>
                 Performance Mensual
               </Typography>
@@ -563,8 +563,8 @@ export default function ReportsPage() {
 
         {/* Category Breakdown */}
         <Grid item xs={12} lg={4}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Typography variant="h6" gutterBottom>
                 Gastos por Categoría
               </Typography>
@@ -643,10 +643,10 @@ export default function ReportsPage() {
       </Grid>
 
       {/* Wallet Balances & Exchange Stats */}
-      <Grid container spacing={3}>
+      <Grid container spacing={3} alignItems="stretch">
         <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Typography variant="h6" gutterBottom>
                 Balances por Billetera
               </Typography>
@@ -711,8 +711,8 @@ export default function ReportsPage() {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Typography variant="h6" gutterBottom>
                 Estadísticas de Exchanges
               </Typography>
