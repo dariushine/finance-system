@@ -57,7 +57,7 @@ const moreItems = [
   { label: 'Tasas', icon: <RatesIcon />, path: '/rates' },
   // Opciones siempre al final del menú "Más" (sidebar desktop + drawer móvil).
   // NO se agrega al bottom nav móvil (ya está lleno).
-  { label: 'Opciones', icon: <SettingsIcon />, path: '/opciones' },
+  { label: 'Opciones', icon: <SettingsIcon />, path: '/settings' },
 ];
 
 // Sidebar de escritorio muestra todo
