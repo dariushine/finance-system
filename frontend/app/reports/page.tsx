@@ -81,10 +81,10 @@ interface ReportData {
 }
 
 // --- Formateador a nivel de módulo (referencia estable) ---
-const formatCurrency = (amount: number) => {
+const formatCurrency = (amount: number, currency: string = 'USD') => {
   return new Intl.NumberFormat('es-VE', {
     style: 'currency',
-    currency: 'USD',
+    currency: currency === 'VES' ? 'VES' : 'USD',
     minimumFractionDigits: 2
   }).format(amount);
 };
@@ -194,50 +194,23 @@ const CategoryAccordionItem = memo(function CategoryAccordionItem({
   );
 });
 
-const WalletAccordionItem = memo(function WalletAccordionItem({
+const WalletRow = memo(function WalletRow({
   wallet,
-  isOpen,
-  index,
-  onToggle,
 }: {
   wallet: ReportData['walletBalances'][number];
-  isOpen: boolean;
-  index: number;
-  onToggle: (index: number) => void;
 }) {
   return (
-    <Accordion
-      expanded={isOpen}
-      onChange={() => onToggle(index)}
-      disableGutters
-      sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+    <Box
+      display="flex"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}
     >
-      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 48 }}>
-        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
-          <Typography variant="body1">{wallet.name}</Typography>
-          <Typography variant="body2" fontWeight="bold" color={wallet.balance >= 0 ? 'success.main' : 'error.main'}>
-            {formatCurrency(wallet.balance)}
-          </Typography>
-        </Box>
-      </AccordionSummary>
-      <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
-        <Divider sx={{ mb: 1.5 }} />
-        <Stack spacing={1}>
-          <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Moneda</Typography>
-            <Chip label={wallet.currency} size="small" variant="outlined" />
-          </Box>
-          <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Estado</Typography>
-            <Chip
-              label={wallet.balance >= 0 ? 'Activa' : 'Negativa'}
-              size="small"
-              color={wallet.balance >= 0 ? 'success' : 'error'}
-            />
-          </Box>
-        </Stack>
-      </AccordionDetails>
-    </Accordion>
+      <Typography variant="body1">{wallet.name}</Typography>
+      <Typography variant="body2" fontWeight="bold" color={wallet.balance >= 0 ? 'success.main' : 'error.main'}>
+        {formatCurrency(wallet.balance, wallet.currency)}
+      </Typography>
+    </Box>
   );
 });
 
@@ -246,7 +219,6 @@ export default function ReportsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [monthlyExpanded, setMonthlyExpanded] = useState<number | false>(false);
   const [categoryExpanded, setCategoryExpanded] = useState<number | false>(false);
-  const [walletExpanded, setWalletExpanded] = useState<number | false>(false);
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -259,9 +231,6 @@ export default function ReportsPage() {
   }, []);
   const handleCategoryToggle = useCallback((index: number) => {
     setCategoryExpanded((prev) => (prev === index ? false : index));
-  }, []);
-  const handleWalletToggle = useCallback((index: number) => {
-    setWalletExpanded((prev) => (prev === index ? false : index));
   }, []);
 
   useEffect(() => {
@@ -684,16 +653,10 @@ export default function ReportsPage() {
               
               {data.walletBalances.length > 0 ? (
                 isMobile ? (
-                  // MOBILE: acordeón por billetera
+                  // MOBILE: lista simple por billetera (sin acordeón, la moneda va en el monto)
                   <Box>
                     {data.walletBalances.map((wallet, index) => (
-                      <WalletAccordionItem
-                        key={index}
-                        wallet={wallet}
-                        isOpen={walletExpanded === index}
-                        index={index}
-                        onToggle={handleWalletToggle}
-                      />
+                      <WalletRow key={index} wallet={wallet} />
                     ))}
                   </Box>
                 ) : (
@@ -704,7 +667,6 @@ export default function ReportsPage() {
                         <TableCell>Billetera</TableCell>
                         <TableCell>Moneda</TableCell>
                         <TableCell align="right">Balance</TableCell>
-                        <TableCell align="center">Estado</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -728,15 +690,8 @@ export default function ReportsPage() {
                               fontWeight="medium"
                               color={wallet.balance >= 0 ? 'success.main' : 'error.main'}
                             >
-                              {formatCurrency(wallet.balance)}
+                              {formatCurrency(wallet.balance, wallet.currency)}
                             </Typography>
-                          </TableCell>
-                          <TableCell align="center">
-                            <Chip
-                              label={wallet.balance >= 0 ? 'Activa' : 'Negativa'}
-                              size="small"
-                              color={wallet.balance >= 0 ? 'success' : 'error'}
-                            />
                           </TableCell>
                         </TableRow>
                       ))}
