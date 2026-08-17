@@ -6,8 +6,8 @@ const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 3002;
 
 // Seed de datos de demostración (billeteras de ejemplo + categorías por defecto).
-// Poner SEED_DEMO_DATA=false para arrancar con una base de datos totalmente vacía.
-const seedDemoData = process.env.SEED_DEMO_DATA !== 'false';
+// DESACTIVADO por defecto: solo siembra el demo data cuando SEED_DEMO_DATA=true.
+const seedDemoData = process.env.SEED_DEMO_DATA === 'true';
 
 const dbPath = path.join(__dirname, 'data/finance.db');
 const db = new sqlite3.Database(dbPath);
@@ -227,13 +227,23 @@ db.serialize(() => {
   });
   } // fin de seed de datos de demostración
 
-  // Asegurar existencia de la categoría 'fee' (expense) incluso en DB ya inicializadas
-  db.get("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense'", (err, row) => {
-    if (!err && !row) {
-      db.run("INSERT INTO categories (name, type, color) VALUES ('fee', 'expense', '#e67e22')", (e) => {
-        if (!e) console.log('✅ Categoría fee (comisión) agregada');
-      });
-    }
+  // Asegurar existencia de las categorías de infraestructura del sistema SIEMPRE
+  // (no son demo data): fee (comisiones), exchange_out (débito de exchange) y
+  // exchange_in (crédito de exchange). Sin ellas, los flujos internos fallarían
+  // incluso con una base de datos vacía.
+  const systemCategories = [
+    ['fee', 'expense', '#e67e22'],
+    ['exchange_out', 'expense', '#9c27b0'],
+    ['exchange_in', 'income', '#673ab7'],
+  ];
+  systemCategories.forEach(([name, type, color]) => {
+    db.get('SELECT id FROM categories WHERE name = ? AND type = ?', [name, type], (err, row) => {
+      if (!err && !row) {
+        db.run('INSERT INTO categories (name, type, color) VALUES (?, ?, ?)', [name, type, color], (e) => {
+          if (!e) console.log(`✅ Categoría de sistema '${name}' agregada`);
+        });
+      }
+    });
   });
 
   // Tabla de tasas diarias (BCV oficial + paralelo) consumida por reportes
