@@ -45,6 +45,8 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useWallets } from '../lib/hooks';
+import { useHideBalances } from '../lib/hooks/useHideBalances';
+import BalanceReveal from '../components/BalanceReveal';
 import {
   getDeletedWallets,
   createWallet,
@@ -70,6 +72,7 @@ const formatUsd = (n: number) =>
 
 export default function WalletsPage() {
   const router = useRouter();
+  const ocultarSaldos = useHideBalances();
   const [rateType, setRateType] = useState<'bcv' | 'paralelo'>('bcv');
   const { wallets, loading, error, refetch } = useWallets(rateType);
 
@@ -221,23 +224,20 @@ export default function WalletsPage() {
                     {wallet.type} · {wallet.currency}
                   </Typography>
                   <Box mt={2}>
-                    <Typography variant="h4" color="primary.main" fontWeight="bold">
-                      {Number(wallet.balance).toLocaleString('es-VE')} {wallet.currency}
-                    </Typography>
-                    {wallet.currency !== 'USD' && wallet.usdValue != null ? (
-                      <Typography variant="body2" color="text.secondary">
-                        ≈ {formatUsd(wallet.usdValue)} USD
-                        {wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}
-                      </Typography>
-                    ) : wallet.currency === 'USD' ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Dólares estadounidenses
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Sin tasa disponible
-                      </Typography>
-                    )}
+                    <BalanceReveal
+                      display={`${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
+                      variant="h4"
+                      color="primary.main"
+                      iconSize="medium"
+                      captionVariant="body2"
+                      caption={
+                        wallet.currency !== 'USD' && wallet.usdValue != null
+                          ? `≈ ${formatUsd(wallet.usdValue)} USD${wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}`
+                          : wallet.currency === 'USD'
+                          ? 'Dólares estadounidenses'
+                          : 'Sin tasa disponible'
+                      }
+                    />
                   </Box>
                   <Box display="flex" justifyContent="flex-end" mt={1}>
                     <ChevronRight color="disabled" />
@@ -282,7 +282,9 @@ export default function WalletsPage() {
                     </Box>
                     <Box mt={1}>
                       <Typography variant="body2">
-                        {Number(wallet.balance).toLocaleString('es-VE')} {wallet.currency}
+                        {ocultarSaldos
+                          ? `••• ${wallet.currency}`
+                          : `${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">{wallet.type}</Typography>
                     </Box>
@@ -346,7 +348,6 @@ export default function WalletsPage() {
                 >
                   <MenuItem value="USD">USD</MenuItem>
                   <MenuItem value="VES">VES</MenuItem>
-                  <MenuItem value="EUR">EUR</MenuItem>
                 </Select>
               </FormControl>
             </Box>

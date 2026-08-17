@@ -36,6 +36,7 @@ import {
   Category as CategoryIcon,
   MoreHoriz as MoreHorizIcon,
   Schedule as ScheduleIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -54,6 +55,9 @@ const moreItems = [
   { label: 'Reportes', icon: <ReportIcon />, path: '/reports' },
   { label: 'Categorías', icon: <CategoryIcon />, path: '/categories' },
   { label: 'Tasas', icon: <RatesIcon />, path: '/rates' },
+  // Opciones siempre al final del menú "Más" (sidebar desktop + drawer móvil).
+  // NO se agrega al bottom nav móvil (ya está lleno).
+  { label: 'Opciones', icon: <SettingsIcon />, path: '/settings' },
 ];
 
 // Sidebar de escritorio muestra todo

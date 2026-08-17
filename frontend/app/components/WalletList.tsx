@@ -12,6 +12,7 @@ import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useWallets } from '../lib/hooks';
 import theme from '../theme';
+import BalanceReveal from './BalanceReveal';
 
 const icons: Record<string, React.ReactNode> = {
   bank: <AccountBalance />,
@@ -127,19 +128,16 @@ export default function WalletList() {
                         )}
                       </Box>
                     </Box>
-                    <Typography variant="h5" fontWeight="bold" color="primary">
-                      {Number(wallet.balance).toLocaleString('es-VE')} {wallet.currency}
-                    </Typography>
-                    {wallet.currency !== 'USD' && wallet.usdValue != null ? (
-                      <Typography variant="caption" color="text.secondary">
-                        ≈ {formatUsd(wallet.usdValue)} USD
-                        {wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}
-                      </Typography>
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">
-                        Dólares estadounidenses
-                      </Typography>
-                    )}
+                    <BalanceReveal
+                      display={`${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
+                      variant="h5"
+                      color="primary.main"
+                      caption={
+                        wallet.currency !== 'USD' && wallet.usdValue != null
+                          ? `≈ ${formatUsd(wallet.usdValue)} USD${wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}`
+                          : 'Dólares estadounidenses'
+                      }
+                    />
                     <Box display="flex" justifyContent="flex-end" mt={1}>
                       <ChevronRight color="disabled" />
                     </Box>
