@@ -10,8 +10,11 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Typography,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   IconButton,
+  Typography,
   Avatar,
 } from '@mui/material';
 import {
@@ -21,11 +24,13 @@ import {
   PlayArrow,
   ChevronRight,
   Schedule as ScheduleIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import {
   getRecurringPayments,
   type RecurringPayment,
 } from '../lib/api';
+import RecurringPaymentForm from '../components/RecurringPaymentForm';
 
 const formatCurrency = (amount: number, currency: string) => {
   try {
@@ -40,6 +45,7 @@ export default function RecurringPaymentsPage() {
   const [payments, setPayments] = useState<RecurringPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -70,7 +76,7 @@ export default function RecurringPaymentsPage() {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => router.push('/recurring-payments/new')}
+          onClick={() => setCreateOpen(true)}
           disabled={loading}
         >
           Nuevo
@@ -95,7 +101,7 @@ export default function RecurringPaymentsPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Crea tu primer pago frecuente para registrar transacciones repetidas en un toque.
             </Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => router.push('/recurring-payments/new')}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
               Crear pago frecuente
             </Button>
           </CardContent>
@@ -158,6 +164,22 @@ export default function RecurringPaymentsPage() {
           })}
         </Box>
       )}
+
+      {/* Modal Nuevo pago frecuente */}
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+          Nuevo Pago Frecuente
+          <IconButton onClick={() => setCreateOpen(false)} aria-label="Cerrar" size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pb: 2 }}>
+          <RecurringPaymentForm
+            onSuccess={(id) => router.push(`/recurring-payments/${id}`)}
+            onCancel={() => setCreateOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }
