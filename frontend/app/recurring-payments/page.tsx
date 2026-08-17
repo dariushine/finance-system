@@ -13,6 +13,7 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  Fab,
   IconButton,
   Typography,
   Avatar,
@@ -26,11 +27,13 @@ import {
   Schedule as ScheduleIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import {
   getRecurringPayments,
   type RecurringPayment,
 } from '../lib/api';
 import RecurringPaymentForm from '../components/RecurringPaymentForm';
+import RecurringPaymentExecuteDialog from '../components/RecurringPaymentExecuteDialog';
 
 const formatCurrency = (amount: number, currency: string) => {
   try {
@@ -42,10 +45,12 @@ const formatCurrency = (amount: number, currency: string) => {
 
 export default function RecurringPaymentsPage() {
   const router = useRouter();
+  const theme = useTheme();
   const [payments, setPayments] = useState<RecurringPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [executePayment, setExecutePayment] = useState<RecurringPayment | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -132,11 +137,11 @@ export default function RecurringPaymentsPage() {
                     <Typography variant="body1" fontWeight="bold" noWrap>
                       {p.name}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {isIncome ? 'Ingreso' : 'Gasto'} · {p.categoryName} · {p.walletName}
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {isIncome ? 'Ingreso' : 'Gasto'} · {p.categoryName} · {p.walletName || 'Sin billetera'}
                     </Typography>
                   </Box>
-                  <Box display="flex" alignItems="center" gap={1} sx={{ flexShrink: 0 }}>
+                  <Box display="flex" alignItems="center" gap={1.5} sx={{ flexShrink: 0 }}>
                     <Typography
                       variant="body1"
                       fontWeight="bold"
@@ -144,18 +149,26 @@ export default function RecurringPaymentsPage() {
                     >
                       {isIncome ? '+' : '-'}{formatCurrency(p.amount, p.currency)}
                     </Typography>
-                    <IconButton
+                    {/* Botón de acción "Realizar": icono play en fondo primario */}
+                    <Fab
                       size="small"
-                      aria-label="Realizar pago"
                       color="primary"
+                      aria-label={`Realizar ${p.name}`}
+                      title="Realizar"
                       onClick={(e) => {
                         e.stopPropagation();
-                        router.push(`/recurring-payments/${p.id}?action=execute`);
+                        setExecutePayment(p);
                       }}
-                      title="Realizar"
+                      sx={{
+                        width: 34,
+                        height: 34,
+                        minHeight: 0,
+                        boxShadow: theme.shadows[2],
+                        '& .MuiSvgIcon-root': { fontSize: 19 },
+                      }}
                     >
                       <PlayArrow />
-                    </IconButton>
+                    </Fab>
                     <ChevronRight fontSize="small" color="action" />
                   </Box>
                 </CardContent>
@@ -180,6 +193,13 @@ export default function RecurringPaymentsPage() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Modal Realizar (abre aquí mismo desde el listado) */}
+      <RecurringPaymentExecuteDialog
+        payment={executePayment}
+        open={Boolean(executePayment)}
+        onClose={() => setExecutePayment(null)}
+      />
     </Box>
   );
 }
