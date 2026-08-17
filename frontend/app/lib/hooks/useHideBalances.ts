@@ -52,10 +52,9 @@ export function useHideBalances(): boolean {
   return hidden;
 }
 
-// Formatea el número ocultando el saldo (solo parte numérica); conserva la moneda
-// si se pasa el símbolo por separado. Útil para "••••" / "***,***".
-export function maskBalance(display: string, hidden: boolean): string {
-  if (!hidden) return display;
-  // Reemplaza todos los dígitos por "•", manteniendo separadores y símbolo.
-  return display.replace(/[0-9]/g, '•');
+// Formatea el número ocultando el saldo con una máscara FIJA de tres puntos,
+// para que no se pueda deducir la cantidad de cifras del monto real.
+export function maskBalance(_display: string, hidden: boolean): string {
+  if (!hidden) return _display;
+  return '•••';
 }

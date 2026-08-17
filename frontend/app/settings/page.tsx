@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -8,8 +7,6 @@ import {
   CardContent,
   Switch,
   FormControlLabel,
-  Alert,
-  Divider,
   Stack,
 } from '@mui/material';
 import { VisibilityOff } from '@mui/icons-material';
@@ -17,12 +14,9 @@ import { useHideBalances, setHideBalances } from '../lib/hooks/useHideBalances';
 
 export default function OpcionesPage() {
   const hidden = useHideBalances();
-  const [justChanged, setJustChanged] = useState(false);
 
   const handleToggle = (checked: boolean) => {
     setHideBalances(checked);
-    setJustChanged(true);
-    setTimeout(() => setJustChanged(false), 2500);
   };
 
   return (
@@ -51,8 +45,7 @@ export default function OpcionesPage() {
                   Ocultar saldos
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Muestra el total del dashboard y los saldos de las billeteras ocultos, con un
-                  icono de ojo para revelarlos puntualmente.
+                  Muestra el saldo oculto con un icono de ojo para revelarlo puntualmente.
                 </Typography>
               </Box>
             </Box>
@@ -64,29 +57,10 @@ export default function OpcionesPage() {
               labelPlacement="start"
             />
           </Stack>
-
-          {justChanged && (
-            <Alert severity="success" sx={{ mt: 2 }}>
-              Preferencia guardada. Se aplica el cambio al instante.
-            </Alert>
-          )}
         </CardContent>
       </Card>
 
-      <Box mt={3}>
-        <Typography variant="body2" color="text.secondary">
-          Los saldos ocultos son:
-        </Typography>
-        <Stack component="ul" spacing={0.5} sx={{ mt: 1, pl: 2, color: 'text.secondary' }}>
-          <li>Total del dashboard (Balance Total)</li>
-          <li>Saldo de billeteras en el dashboard</li>
-          <li>Saldo de billeteras en la página de billeteras</li>
-          <li>Se siguen mostrando en el detalle de la billetera y en reportes.</li>
-        </Stack>
-      </Box>
-
-      <Divider sx={{ my: 3 }} />
-      <Typography variant="caption" color="text.disabled">
+      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 2 }}>
         Esta preferencia se guarda en este dispositivo y solo afecta la visualización (no altera ningún dato).
       </Typography>
     </Box>
