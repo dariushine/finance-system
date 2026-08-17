@@ -5,6 +5,10 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 3002;
 
+// Seed de datos de demostración (billeteras de ejemplo + categorías por defecto).
+// Poner SEED_DEMO_DATA=false para arrancar con una base de datos totalmente vacía.
+const seedDemoData = process.env.SEED_DEMO_DATA !== 'false';
+
 const dbPath = path.join(__dirname, 'data/finance.db');
 const db = new sqlite3.Database(dbPath);
 
@@ -169,6 +173,8 @@ db.serialize(() => {
     ensureExchangesFeeSync();
   });
   
+  // Insertar datos de demostración (solo si está habilitado; desactivar con SEED_DEMO_DATA=false)
+  if (seedDemoData) {
   // Insertar datos iniciales
   db.get('SELECT COUNT(*) as count FROM wallets', (err, result) => {
     if (!err && result && result.count === 0) {
@@ -219,6 +225,7 @@ db.serialize(() => {
       console.log('✅ 18 categorías creadas (incluyendo exchange_out/in y fee)');
     }
   });
+  } // fin de seed de datos de demostración
 
   // Asegurar existencia de la categoría 'fee' (expense) incluso en DB ya inicializadas
   db.get("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense'", (err, row) => {
