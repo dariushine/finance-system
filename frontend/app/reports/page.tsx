@@ -377,10 +377,10 @@ export default function ReportsPage() {
       </Box>
 
       {/* Summary Stats */}
-      <Grid container spacing={3} mb={4}>
+      <Grid container spacing={3} mb={4} alignItems="stretch">
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Box display="flex" alignItems="center" gap={1} mb={2}>
                 <MoneyIcon color="primary" />
                 <Typography variant="body2" color="text.secondary">
@@ -400,8 +400,8 @@ export default function ReportsPage() {
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Box display="flex" alignItems="center" gap={1} mb={2}>
                 <TrendingDownIcon color="error" />
                 <Typography variant="body2" color="text.secondary">
@@ -421,8 +421,8 @@ export default function ReportsPage() {
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Box display="flex" alignItems="center" gap={1} mb={2}>
                 <TrendingUpIcon color={data.summary.net >= 0 ? 'success' : 'error'} />
                 <Typography variant="body2" color="text.secondary">
@@ -447,8 +447,8 @@ export default function ReportsPage() {
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Box display="flex" alignItems="center" gap={1} mb={2}>
                 <BankIcon color="secondary" />
                 <Typography variant="body2" color="text.secondary">
