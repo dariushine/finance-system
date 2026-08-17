@@ -815,12 +815,6 @@ export default function ReportsPage() {
                   </Card>
                 </Grid>
               </Grid>
-              
-              <Box mt={3}>
-                <Typography variant="body2" color="text.secondary">
-                  Las tasas de exchange se calculan automáticamente en base a los montos enviados y recibidos.
-                </Typography>
-              </Box>
             </CardContent>
           </Card>
         </Grid>
