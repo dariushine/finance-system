@@ -45,7 +45,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useWallets } from '../lib/hooks';
-import { useHideBalances, maskBalance } from '../lib/hooks/useHideBalances';
+import { useHideBalances } from '../lib/hooks/useHideBalances';
 import BalanceReveal from '../components/BalanceReveal';
 import {
   getDeletedWallets,
@@ -229,21 +229,15 @@ export default function WalletsPage() {
                       variant="h4"
                       color="primary.main"
                       iconSize="medium"
+                      captionVariant="body2"
+                      caption={
+                        wallet.currency !== 'USD' && wallet.usdValue != null
+                          ? `≈ ${formatUsd(wallet.usdValue)} USD${wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}`
+                          : wallet.currency === 'USD'
+                          ? 'Dólares estadounidenses'
+                          : 'Sin tasa disponible'
+                      }
                     />
-                    {wallet.currency !== 'USD' && wallet.usdValue != null ? (
-                      <Typography variant="body2" color="text.secondary">
-                        ≈ {maskBalance(formatUsd(wallet.usdValue), ocultarSaldos)} USD
-                        {wallet.rate && !ocultarSaldos ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}
-                      </Typography>
-                    ) : wallet.currency === 'USD' ? (
-                      <Typography variant="body2" color="text.secondary">
-                        {ocultarSaldos ? '••••' : 'Dólares estadounidenses'}
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        {ocultarSaldos ? 'Sin detalle' : 'Sin tasa disponible'}
-                      </Typography>
-                    )}
                   </Box>
                   <Box display="flex" justifyContent="flex-end" mt={1}>
                     <ChevronRight color="disabled" />
@@ -289,7 +283,7 @@ export default function WalletsPage() {
                     <Box mt={1}>
                       <Typography variant="body2">
                         {ocultarSaldos
-                          ? `${maskBalance(Number(wallet.balance).toLocaleString('es-VE'), true)} ${wallet.currency}`
+                          ? `••• ${wallet.currency}`
                           : `${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">{wallet.type}</Typography>

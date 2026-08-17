@@ -58,3 +58,10 @@ export function maskBalance(_display: string, hidden: boolean): string {
   if (!hidden) return _display;
   return '•••';
 }
+
+// Enmascara SOLO los números de un texto (montos), dejando el texto intacto.
+// Ej: "≈ 2.500,00 USD (tasa 35,00)" → "≈ ••• USD (tasa •••)".
+// Usado para los textos secundarios (equivalente USD) que acompañan un saldo.
+export function maskNumber(text: string): string {
+  return text.replace(/[\d.,]+/g, '•••');
+}

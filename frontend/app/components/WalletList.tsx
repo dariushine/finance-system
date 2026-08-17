@@ -13,7 +13,6 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useWallets } from '../lib/hooks';
 import theme from '../theme';
 import BalanceReveal from './BalanceReveal';
-import { useHideBalances, maskBalance } from '../lib/hooks/useHideBalances';
 
 const icons: Record<string, React.ReactNode> = {
   bank: <AccountBalance />,
@@ -37,7 +36,6 @@ export default function WalletList() {
   const cardRef = useRef<HTMLDivElement>(null);
   const { wallets, loading, error } = useWallets();
   const [page, setPage] = useState(1);
-  const ocultarSaldos = useHideBalances();
 
   // Ocultar del dashboard las billeteras marcadas (hideInDashboard).
   // Las marcas se configuran en la edición de la billetera.
@@ -134,17 +132,12 @@ export default function WalletList() {
                       display={`${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
                       variant="h5"
                       color="primary.main"
+                      caption={
+                        wallet.currency !== 'USD' && wallet.usdValue != null
+                          ? `≈ ${formatUsd(wallet.usdValue)} USD${wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}`
+                          : 'Dólares estadounidenses'
+                      }
                     />
-                    {wallet.currency !== 'USD' && wallet.usdValue != null ? (
-                      <Typography variant="caption" color="text.secondary">
-                        ≈ {maskBalance(formatUsd(wallet.usdValue), ocultarSaldos)} USD
-                        {wallet.rate && !ocultarSaldos ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}
-                      </Typography>
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">
-                        {ocultarSaldos ? '••••' : 'Dólares estadounidenses'}
-                      </Typography>
-                    )}
                     <Box display="flex" justifyContent="flex-end" mt={1}>
                       <ChevronRight color="disabled" />
                     </Box>
