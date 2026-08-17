@@ -12,6 +12,8 @@ import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useWallets } from '../lib/hooks';
 import theme from '../theme';
+import BalanceReveal from './BalanceReveal';
+import { useHideBalances, maskBalance } from '../lib/hooks/useHideBalances';
 
 const icons: Record<string, React.ReactNode> = {
   bank: <AccountBalance />,
@@ -35,6 +37,7 @@ export default function WalletList() {
   const cardRef = useRef<HTMLDivElement>(null);
   const { wallets, loading, error } = useWallets();
   const [page, setPage] = useState(1);
+  const ocultarSaldos = useHideBalances();
 
   // Ocultar del dashboard las billeteras marcadas (hideInDashboard).
   // Las marcas se configuran en la edición de la billetera.
@@ -127,17 +130,19 @@ export default function WalletList() {
                         )}
                       </Box>
                     </Box>
-                    <Typography variant="h5" fontWeight="bold" color="primary">
-                      {Number(wallet.balance).toLocaleString('es-VE')} {wallet.currency}
-                    </Typography>
+                    <BalanceReveal
+                      display={`${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
+                      variant="h5"
+                      color="primary.main"
+                    />
                     {wallet.currency !== 'USD' && wallet.usdValue != null ? (
                       <Typography variant="caption" color="text.secondary">
-                        ≈ {formatUsd(wallet.usdValue)} USD
-                        {wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}
+                        ≈ {maskBalance(formatUsd(wallet.usdValue), ocultarSaldos)} USD
+                        {wallet.rate && !ocultarSaldos ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}
                       </Typography>
                     ) : (
                       <Typography variant="caption" color="text.secondary">
-                        Dólares estadounidenses
+                        {ocultarSaldos ? '••••' : 'Dólares estadounidenses'}
                       </Typography>
                     )}
                     <Box display="flex" justifyContent="flex-end" mt={1}>

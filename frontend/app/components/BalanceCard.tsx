@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, Typography, Box, CircularProgress } from '@mui/material';
 import { AttachMoney, TrendingUp, ErrorOutline } from '@mui/icons-material';
 import { financeApi, Stats } from '../services/financeApi';
+import BalanceReveal from './BalanceReveal';
 
 export default function BalanceCard() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -65,9 +66,11 @@ export default function BalanceCard() {
             <Typography variant="h6" gutterBottom>
               Balance Total
             </Typography>
-            <Typography variant="h4" fontWeight="bold">
-              ${totalBalance.toLocaleString()} USD
-            </Typography>
+            <BalanceReveal
+              display={`$${totalBalance.toLocaleString()} USD`}
+              variant="h4"
+              color="white"
+            />
             <Typography variant="body2" sx={{ opacity: 0.9 }}>
               Actualizado {lastUpdated}
             </Typography>
