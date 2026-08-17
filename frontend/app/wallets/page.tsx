@@ -26,6 +26,8 @@ import {
   Divider,
   ToggleButton,
   ToggleButtonGroup,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   AccountBalance,
@@ -80,6 +82,8 @@ export default function WalletsPage() {
     description: '',
     icon: 'bank',
     color: '#0077b6',
+    excludeFromTotal: false,
+    hideInDashboard: false,
   });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -102,7 +106,7 @@ export default function WalletsPage() {
   };
 
   const openCreate = () => {
-    setForm({ name: '', alias: '', type: 'bank', currency: 'USD', description: '', icon: 'bank', color: '#0077b6' });
+    setForm({ name: '', alias: '', type: 'bank', currency: 'USD', description: '', icon: 'bank', color: '#0077b6', excludeFromTotal: false, hideInDashboard: false });
     setFormError(null);
     setCreateOpen(true);
   };
@@ -123,6 +127,8 @@ export default function WalletsPage() {
         description: form.description.trim() || undefined,
         icon: form.icon,
         color: form.color,
+        excludeFromTotal: form.excludeFromTotal,
+        hideInDashboard: form.hideInDashboard,
       });
       setCreateOpen(false);
       await refetch();
@@ -347,6 +353,24 @@ export default function WalletsPage() {
               fullWidth
               multiline
               minRows={2}
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.excludeFromTotal}
+                  onChange={(e) => setForm({ ...form, excludeFromTotal: e.target.checked })}
+                />
+              }
+              label="No contar en los totales del dashboard"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.hideInDashboard}
+                  onChange={(e) => setForm({ ...form, hideInDashboard: e.target.checked })}
+                />
+              }
+              label="Ocultar de la lista del dashboard"
             />
             <FormControl fullWidth>
               <InputLabel>Icono</InputLabel>

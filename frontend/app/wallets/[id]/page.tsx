@@ -33,6 +33,8 @@ import {
   Divider,
   Stack,
   TablePagination,
+  Switch,
+  FormControlLabel,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -128,12 +130,14 @@ export default function WalletDetailPage() {
 
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState<{ name: string; alias: string; description: string; icon: string; color: string }>({
+  const [editForm, setEditForm] = useState<{ name: string; alias: string; description: string; icon: string; color: string; excludeFromTotal: boolean; hideInDashboard: boolean }>({
     name: '',
     alias: '',
     description: '',
     icon: 'bank',
     color: '#0077b6',
+    excludeFromTotal: false,
+    hideInDashboard: false,
   });
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -180,6 +184,8 @@ export default function WalletDetailPage() {
         description: w.description || '',
         icon: w.icon || 'bank',
         color: w.color || '#0077b6',
+        excludeFromTotal: !!w.excludeFromTotal,
+        hideInDashboard: !!w.hideInDashboard,
       });
     } catch (e: any) {
       setError(e?.message || 'Error al cargar la billetera');
@@ -247,6 +253,8 @@ export default function WalletDetailPage() {
       description: wallet.description || '',
       icon: wallet.icon || 'bank',
       color: wallet.color || '#0077b6',
+      excludeFromTotal: !!wallet.excludeFromTotal,
+      hideInDashboard: !!wallet.hideInDashboard,
     });
     setEditError(null);
     setEditOpen(true);
@@ -266,6 +274,8 @@ export default function WalletDetailPage() {
         description: editForm.description.trim() || undefined,
         icon: editForm.icon,
         color: editForm.color,
+        excludeFromTotal: editForm.excludeFromTotal,
+        hideInDashboard: editForm.hideInDashboard,
       });
       setEditOpen(false);
       await load();
@@ -570,6 +580,24 @@ export default function WalletDetailPage() {
               fullWidth
               multiline
               minRows={2}
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={editForm.excludeFromTotal}
+                  onChange={(e) => setEditForm({ ...editForm, excludeFromTotal: e.target.checked })}
+                />
+              }
+              label="No contar en los totales del dashboard"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={editForm.hideInDashboard}
+                  onChange={(e) => setEditForm({ ...editForm, hideInDashboard: e.target.checked })}
+                />
+              }
+              label="Ocultar de la lista del dashboard"
             />
             <FormControl fullWidth>
               <InputLabel>Icono</InputLabel>

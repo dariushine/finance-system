@@ -80,8 +80,9 @@ class FinanceApi {
   }
 
   // Stats
-  async getStats(): Promise<Stats> {
-    return this.fetch('/stats');
+  async getStats(excludeFromTotal = false): Promise<Stats> {
+    const qs = excludeFromTotal ? '?excludeFromTotal=1' : '';
+    return this.fetch(`/stats${qs}`);
   }
 
   // Exchanges

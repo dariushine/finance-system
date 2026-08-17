@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsIn, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsIn, Min, IsBoolean } from 'class-validator';
 
 export class CreateWalletDto {
   @IsString()
@@ -28,4 +28,12 @@ export class CreateWalletDto {
   @IsString()
   @IsOptional()
   color?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  excludeFromTotal?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  hideInDashboard?: boolean;
 }

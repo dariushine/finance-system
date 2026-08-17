@@ -16,7 +16,7 @@ export default function BalanceCard() {
       try {
         setLoading(true);
         const [statsData] = await Promise.all([
-          financeApi.getStats(),
+          financeApi.getStats(true),
         ]);
         setStats(statsData);
         setLastUpdated(new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }));

@@ -34,6 +34,12 @@ export class Wallet {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  excludeFromTotal: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  hideInDashboard: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 
