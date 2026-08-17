@@ -456,13 +456,14 @@ export interface RecurringPayment {
   name: string;
   description?: string | null;
   amount: number;
+  fee?: number | null;
   currency: string;
   type: 'income' | 'expense';
   categoryId: number;
   categoryName: string;
-  walletId: number;
-  walletName: string;
-  walletCurrency: string;
+  walletId?: number | null;
+  walletName?: string | null;
+  walletCurrency?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -471,10 +472,11 @@ export interface RecurringPaymentInput {
   name: string;
   description?: string;
   amount: number;
+  fee?: number;
   currency: string;
   type: 'income' | 'expense';
   categoryId: number;
-  walletId: number;
+  walletId?: number | null;
 }
 
 export async function getRecurringPayments(): Promise<RecurringPayment[]> {
@@ -528,7 +530,7 @@ export interface ExecuteRecurringInput {
   date?: string;
   time?: string;
   overrideAmount?: number;
-  overrideType?: 'income' | 'expense';
+  overrideFee?: number;
   overrideCategoryName?: string;
   overrideWalletId?: number;
   description?: string;

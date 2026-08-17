@@ -241,23 +241,73 @@ db.serialize(() => {
 
   // Pagos frecuentes: plantillas para crear transacciones de forma rápida.
   // Solo guardan data prellenada (monto, moneda, tipo, categoría, descripción y
-  // una billetera preferida); no generan transacciones por sí solos (el usuario
-  // las ejecuta manualmente).
+  // una billetera preferida OPCIONAL); no generan transacciones por sí solos (el
+  // usuario las ejecuta manualmente). fee = comisión opcional incluida al ejecutar.
   db.run(`CREATE TABLE IF NOT EXISTS recurring_payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     description TEXT,
     amount DECIMAL(10,2) NOT NULL,
+    fee DECIMAL(10,2) DEFAULT 0,
     currency TEXT NOT NULL,
     type TEXT NOT NULL,
     category_id INTEGER NOT NULL,
-    wallet_id INTEGER NOT NULL,
+    wallet_id INTEGER,
     isActive BOOLEAN DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (wallet_id) REFERENCES wallets(id)
   )`);
+
+  // Migración para instalaciones que ya tenían la primera versión de la tabla:
+  // wallet_id antes era NOT NULL, pero ahora es una preferencia opcional.
+  db.all(`PRAGMA table_info(recurring_payments)`, (err, cols) => {
+    if (err) return;
+    const columns = cols || [];
+    const names = columns.map((c) => c.name);
+    const walletColumn = columns.find((c) => c.name === 'wallet_id');
+
+    if (walletColumn?.notnull) {
+      // SQLite no permite quitar NOT NULL con ALTER TABLE: se reconstruye la tabla
+      // preservando las plantillas existentes y convirtiendo la billetera en nullable.
+      const feeValue = names.includes('fee') ? 'COALESCE(fee, 0)' : '0';
+      db.run(`CREATE TABLE recurring_payments_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        amount DECIMAL(10,2) NOT NULL,
+        fee DECIMAL(10,2) DEFAULT 0,
+        currency TEXT NOT NULL,
+        type TEXT NOT NULL,
+        category_id INTEGER NOT NULL,
+        wallet_id INTEGER,
+        isActive BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES categories(id),
+        FOREIGN KEY (wallet_id) REFERENCES wallets(id)
+      )`, (createErr) => {
+        if (createErr) return console.error('Error migrando pagos frecuentes:', createErr.message);
+        db.run(
+          `INSERT INTO recurring_payments_new (id, name, description, amount, fee, currency, type, category_id, wallet_id, isActive, created_at, updated_at)
+           SELECT id, name, description, amount, ${feeValue}, currency, type, category_id, wallet_id, isActive, created_at, updated_at
+           FROM recurring_payments`,
+          (copyErr) => {
+            if (copyErr) return console.error('Error copiando pagos frecuentes:', copyErr.message);
+            db.run('DROP TABLE recurring_payments', (dropErr) => {
+              if (dropErr) return console.error('Error reemplazando pagos frecuentes:', dropErr.message);
+              db.run('ALTER TABLE recurring_payments_new RENAME TO recurring_payments', (renameErr) => {
+                if (renameErr) console.error('Error finalizando migración de pagos frecuentes:', renameErr.message);
+              });
+            });
+          }
+        );
+      });
+    } else if (!names.includes('fee')) {
+      db.run(`ALTER TABLE recurring_payments ADD COLUMN fee DECIMAL(10,2) DEFAULT 0`);
+    }
+  });
 });
 
 // Consultar las tasas oficial (BCV) y paralelo de Dolarapi
@@ -729,6 +779,7 @@ const RECURRING_SELECT = `
     rp.name,
     rp.description,
     rp.amount,
+    rp.fee,
     rp.currency,
     rp.type,
     rp.category_id AS categoryId,
@@ -740,7 +791,7 @@ const RECURRING_SELECT = `
     rp.updated_at AS updatedAt
   FROM recurring_payments rp
   JOIN categories c ON c.id = rp.category_id
-  JOIN wallets w ON w.id = rp.wallet_id
+  LEFT JOIN wallets w ON w.id = rp.wallet_id
 `;
 
 // Listar pagos frecuentes activos
@@ -764,17 +815,18 @@ app.get('/api/recurring-payments/:id', (req, res) => {
 // Crear un pago frecuente
 app.post('/api/recurring-payments', async (req, res) => {
   try {
-    const { name, description, amount, currency, type, categoryId, walletId } = req.body || {};
+    const { name, description, amount, fee, currency, type, categoryId, walletId } = req.body || {};
     const trimmedName = String(name || '').trim();
     if (!trimmedName) throw new Error('El nombre es requerido');
     if (type !== 'income' && type !== 'expense') throw new Error('type debe ser income o expense');
     const parsedAmount = Number(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) throw new Error('El monto debe ser mayor a 0');
+    const parsedFee = fee != null ? Number(fee) : 0;
+    if (!Number.isFinite(parsedFee) || parsedFee < 0) throw new Error('La comisión no puede ser negativa');
     if (!currency) throw new Error('La moneda es requerida');
     if (!categoryId) throw new Error('La categoría es requerida');
-    if (!walletId) throw new Error('La billetera es requerida');
 
-    // Validar que categoría y billetera existen y son activas
+    // Validar que categoría existe y coincide con el tipo
     const category = await new Promise((resolve, reject) => {
       db.get('SELECT * FROM categories WHERE id = ? AND isActive = 1', [categoryId], (err, row) =>
         err ? reject(err) : resolve(row));
@@ -782,17 +834,22 @@ app.post('/api/recurring-payments', async (req, res) => {
     if (!category) throw new Error('Categoría no encontrada');
     if (category.type !== type) throw new Error('La categoría debe coincidir con el tipo del pago');
 
-    const wallet = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId], (err, row) =>
-        err ? reject(err) : resolve(row));
-    });
-    if (!wallet) throw new Error('Billetera no encontrada');
-    if (wallet.currency !== currency) throw new Error(`La billetera usa ${wallet.currency}, pero el pago es en ${currency}`);
+    // Billetera OPICIONAL: se valida solo si se provee.
+    let finalWalletId = null;
+    if (walletId != null && walletId !== '') {
+      const wallet = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId], (err, row) =>
+          err ? reject(err) : resolve(row));
+      });
+      if (!wallet) throw new Error('Billetera no encontrada');
+      if (wallet.currency !== currency) throw new Error(`La billetera usa ${wallet.currency}, pero el pago es en ${currency}`);
+      finalWalletId = wallet.id;
+    }
 
     const id = await new Promise((resolve, reject) => {
       db.run(
-        'INSERT INTO recurring_payments (name, description, amount, currency, type, category_id, wallet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [trimmedName, description || '', parsedAmount, currency, type, categoryId, walletId],
+        'INSERT INTO recurring_payments (name, description, amount, fee, currency, type, category_id, wallet_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [trimmedName, description || '', parsedAmount, parsedFee, currency, type, categoryId, finalWalletId],
         function (err) { err ? reject(err) : resolve(this.lastID); }
       );
     });
@@ -816,17 +873,20 @@ app.put('/api/recurring-payments/:id', async (req, res) => {
     });
     if (!existing) throw new Error('Pago frecuente no encontrado');
 
-    const { name, description, amount, currency, type, categoryId, walletId } = req.body || {};
+    const { name, description, amount, fee, currency, type, categoryId, walletId } = req.body || {};
     const trimmedName = name != null ? String(name).trim() : existing.name;
     const finalType = type || existing.type;
     const finalCurrency = currency || existing.currency;
     const finalAmount = amount != null ? Number(amount) : existing.amount;
+    const finalFee = fee != null ? Number(fee) : (existing.fee || 0);
     const finalCategoryId = categoryId || existing.category_id;
-    const finalWalletId = walletId || existing.wallet_id;
+    // Billetera: acepta null/'' para restablecer a "ninguno".
+    const finalWalletId = walletId != null && walletId !== '' ? walletId : null;
 
     if (!trimmedName) throw new Error('El nombre es requerido');
     if (finalType !== 'income' && finalType !== 'expense') throw new Error('type debe ser income o expense');
     if (!Number.isFinite(finalAmount) || finalAmount <= 0) throw new Error('El monto debe ser mayor a 0');
+    if (!Number.isFinite(finalFee) || finalFee < 0) throw new Error('La comisión no puede ser negativa');
 
     if (finalCategoryId !== existing.category_id) {
       const category = await new Promise((resolve, reject) => {
@@ -837,7 +897,8 @@ app.put('/api/recurring-payments/:id', async (req, res) => {
       if (category.type !== finalType) throw new Error('La categoría debe coincidir con el tipo del pago');
     }
 
-    if (finalWalletId !== existing.wallet_id) {
+    // Validar billetera solo si se eligió una (distinta de la actual).
+    if (finalWalletId != null && finalWalletId !== existing.wallet_id) {
       const wallet = await new Promise((resolve, reject) => {
         db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [finalWalletId], (err, row) =>
           err ? reject(err) : resolve(row));
@@ -848,8 +909,8 @@ app.put('/api/recurring-payments/:id', async (req, res) => {
 
     await new Promise((resolve, reject) => {
       db.run(
-        'UPDATE recurring_payments SET name = ?, description = ?, amount = ?, currency = ?, type = ?, category_id = ?, wallet_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [trimmedName, description != null ? description : existing.description, finalAmount, finalCurrency, finalType, finalCategoryId, finalWalletId, id],
+        'UPDATE recurring_payments SET name = ?, description = ?, amount = ?, fee = ?, currency = ?, type = ?, category_id = ?, wallet_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [trimmedName, description != null ? description : existing.description, finalAmount, finalFee, finalCurrency, finalType, finalCategoryId, finalWalletId, id],
         (err) => err ? reject(err) : resolve()
       );
     });
@@ -883,20 +944,26 @@ app.post('/api/recurring-payments/:id/execute', async (req, res) => {
     });
     if (!row) throw new Error('Pago frecuente no encontrado');
 
-    // El amount/type/category/wallet vienen del pago frecuente; fecha/hora opcionales
-    // se pueden sobreescribir desde el frontend (prellenado editable).
-    const { date, time, overrideAmount, overrideType, overrideCategoryName, overrideWalletId, description } = req.body || {};
+    // El amount/type/category/wallet vienen del pago frecuente; fecha/hora y comisión
+    // se pueden sobreescribir desde el frontend (prellenado editable). El type del
+    // pago frecuente NO es editable en el panel de realizar (lo fija el frontend).
+    const { date, time, overrideAmount, overrideCategoryName, overrideWalletId, overrideFee, description } = req.body || {};
     const amount = overrideAmount != null ? Number(overrideAmount) : row.amount;
-    const type = overrideType || row.type;
+    // El tipo pertenece a la plantilla y no puede cambiarse al realizarla.
+    const type = row.type;
     const categoryName = overrideCategoryName || row.categoryName;
-    const walletId = overrideWalletId || row.walletId;
+    // Si la plantilla no tiene billetera y tampoco se eligió una en el form, es inválido.
+    const walletId = overrideWalletId != null && overrideWalletId !== '' ? overrideWalletId : row.walletId;
+    const fee = overrideFee != null ? Number(overrideFee) : (row.fee || 0);
     const finalDescription =
       description != null ? description
       : (row.description ? `Pago frecuente: ${row.name} — ${row.description}` : `Pago frecuente: ${row.name}`);
 
     if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto debe ser mayor a 0');
+    if (!Number.isFinite(fee) || fee < 0) throw new Error('La comisión no puede ser negativa');
+    if (!walletId) throw new Error('Selecciona una billetera para realizar el pago');
 
-    const transaction = await createTransaction(walletId, categoryName, type, amount, finalDescription, 0, date, time);
+    const transaction = await createTransaction(walletId, categoryName, type, amount, finalDescription, fee, date, time);
     res.json({ success: true, transaction });
   } catch (error) {
     res.status(400).json({ error: error.message });

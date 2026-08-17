@@ -41,6 +41,8 @@ import {
   Notes,
   Tag,
   Close,
+  Menu as MenuIcon,
+  ReceiptLong,
 } from '@mui/icons-material';
 import {
   getRecurringPayment,
@@ -50,6 +52,7 @@ import {
 } from '../../lib/api';
 import { useWallets } from '../../lib/hooks';
 import CategoryAutocomplete from '../../components/CategoryAutocomplete';
+import RecurringPaymentForm from '../../components/RecurringPaymentForm';
 
 const formatCurrency = (amount: number, currency: string) => {
   try {
@@ -80,40 +83,34 @@ export default function RecurringPaymentDetailPage() {
   const [payment, setPayment] = useState<RecurringPayment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Menú hamburguesa
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
-  const closeMenu = () => setMenuAnchor(null);
-
-  // Eliminar
+  const [editOpen, setEditOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
 
-  // Ejecutar (Realizar)
+  // Formulario para convertir la plantilla en una transacción real.
   const [execOpen, setExecOpen] = useState(false);
   const [execAmount, setExecAmount] = useState('');
+  const [execFee, setExecFee] = useState('');
   const [execDescription, setExecDescription] = useState('');
   const [execWallet, setExecWallet] = useState('');
   const [execDate, setExecDate] = useState(todayISODate());
   const [execTime, setExecTime] = useState('');
-  const [execType, setExecType] = useState<'income' | 'expense'>('expense');
   const [execCategory, setExecCategory] = useState('');
   const [execSaving, setExecSaving] = useState(false);
   const [execError, setExecError] = useState<string | null>(null);
 
   const { wallets, loading: walletsLoading } = useWallets();
-
-  const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
+  const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error'; message: string }>({
     open: false, severity: 'success', message: '',
   });
-  const notice = (message: string, severity: 'success' | 'error' | 'warning' = 'success') =>
+  const notice = (message: string, severity: 'success' | 'error' = 'success') =>
     setSnackbar({ open: true, severity, message });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getRecurringPayment(id);
-      setPayment(data);
+      setPayment(await getRecurringPayment(id));
     } catch (e: any) {
       setError(e?.message || 'Error al cargar el pago frecuente');
     } finally {
@@ -123,34 +120,30 @@ export default function RecurringPaymentDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-abrir "Realizar" si vienen con ?action=execute
-  useEffect(() => {
-    if (searchParams.get('action') === 'execute' && payment && !loading) {
-      openExecute();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, payment, loading]);
-
-  const openExecute = () => {
+  const openExecute = useCallback(() => {
     if (!payment) return;
-    // Prellenar todos los campos desde el pago frecuente (editable)
     setExecAmount(String(payment.amount));
+    setExecFee(payment.fee ? String(payment.fee) : '');
     setExecDescription(payment.description || '');
-    setExecWallet(String(payment.walletId));
+    setExecWallet(payment.walletId != null ? String(payment.walletId) : '');
     setExecDate(todayISODate());
     setExecTime('');
-    setExecType(payment.type);
     setExecCategory(payment.categoryName);
     setExecError(null);
     setExecOpen(true);
-  };
+  }, [payment]);
+
+  // El acceso rápido desde el listado abre el mismo panel de realizar.
+  useEffect(() => {
+    if (searchParams.get('action') === 'execute' && payment && !loading) openExecute();
+  }, [searchParams, payment, loading, openExecute]);
+
+  const closeMenu = () => setMenuAnchor(null);
 
   const confirmDelete = async () => {
     setExecSaving(true);
     try {
       await deleteRecurringPayment(id);
-      setDelOpen(false);
-      notice('Pago frecuente eliminado');
       router.push('/recurring-payments');
     } catch (e: any) {
       notice(e?.message || 'Error al eliminar', 'error');
@@ -163,38 +156,26 @@ export default function RecurringPaymentDetailPage() {
   const submitExecute = async () => {
     if (!payment) return;
     const amount = Number(execAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setExecError('El monto debe ser mayor a 0.');
-      return;
-    }
-    if (!execWallet) {
-      setExecError('Selecciona una billetera.');
-      return;
-    }
-    if (!execCategory.trim()) {
-      setExecError('Escribe o selecciona una categoría.');
-      return;
-    }
+    const fee = execFee ? Number(execFee) : 0;
+    if (!Number.isFinite(amount) || amount <= 0) return setExecError('El monto debe ser mayor a 0.');
+    if (!Number.isFinite(fee) || fee < 0) return setExecError('La comisión no puede ser negativa.');
+    if (!execWallet) return setExecError('Selecciona una billetera para crear la transacción.');
+    if (!execCategory.trim()) return setExecError('Escribe o selecciona una categoría.');
+
     setExecSaving(true);
     setExecError(null);
     try {
       const res = await executeRecurringPayment(id, {
         overrideAmount: amount,
-        overrideType: execType,
+        overrideFee: fee,
         overrideCategoryName: execCategory.trim(),
         overrideWalletId: Number(execWallet),
         description: execDescription || undefined,
         date: execDate || undefined,
         time: execTime || undefined,
       });
-      const txId = res?.transaction?.id;
       setExecOpen(false);
-      if (txId) {
-        router.push(`/transactions/${txId}`);
-      } else {
-        router.refresh();
-        notice('Transacción creada desde el pago frecuente');
-      }
+      router.push(`/transactions/${res.transaction.id}`);
     } catch (e: any) {
       setExecError(e?.message || 'Error al realizar el pago');
     } finally {
@@ -203,26 +184,21 @@ export default function RecurringPaymentDetailPage() {
   };
 
   if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
+    return <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px"><CircularProgress /></Box>;
   }
-
   if (error || !payment) {
     return (
       <Box>
-        <Button startIcon={<ArrowBack />} onClick={() => router.push('/recurring-payments')} sx={{ mb: 2 }}>
-          Volver a pagos frecuentes
-        </Button>
+        <Button startIcon={<ArrowBack />} onClick={() => router.push('/recurring-payments')} sx={{ mb: 2 }}>Volver a pagos frecuentes</Button>
         <Alert severity="error">{error || 'Pago frecuente no encontrado'}</Alert>
       </Box>
     );
   }
 
   const isIncome = payment.type === 'income';
-  const currency = payment.currency || payment.walletCurrency || 'USD';
+  const currency = payment.currency || 'USD';
+  // Una transacción creada desde la plantilla tiene que respetar su moneda.
+  const compatibleWallets = wallets.filter((w) => w.currency === currency);
 
   return (
     <Box>
@@ -230,237 +206,167 @@ export default function RecurringPaymentDetailPage() {
         Volver a pagos frecuentes
       </Button>
 
-      {/* Header / monto */}
-      <Card sx={{ mb: 3, position: 'relative' }}>
-        <Box display="flex" justifyContent="flex-end" px={2} pt={1}>
-          <IconButton aria-label="Acciones" onClick={(e) => setMenuAnchor(e.currentTarget)} size="medium">
-            <ScheduleIcon />
-          </IconButton>
-        </Box>
-        <CardContent sx={{ pt: 0 }}>
-          <Stack spacing={2} alignItems="center" textAlign="center">
-            <Avatar
-              sx={{
-                width: { xs: 64, sm: 72 },
-                height: { xs: 64, sm: 72 },
-                bgcolor: isIncome ? theme.palette.success.light : theme.palette.error.light,
-              }}
-            >
-              {isIncome ? <ArrowUpward fontSize="large" /> : <ArrowDownward fontSize="large" />}
-            </Avatar>
-            <Box>
-              <Typography variant="caption" color="text.secondary" display="block" textTransform="uppercase" letterSpacing={1}>
-                Pago frecuente · {isIncome ? 'Ingreso' : 'Gasto'}
-              </Typography>
-              <Typography variant="h3" fontWeight="bold" color={isIncome ? 'success.main' : 'error.main'} sx={{ fontSize: { xs: '1.8rem', sm: '2.4rem' } }}>
-                {isIncome ? '+' : '-'}{formatCurrency(payment.amount, currency)}
-              </Typography>
-              <Typography variant="h6" fontWeight="bold">
-                {payment.name}
-              </Typography>
-              <Box display="flex" alignItems="center" justifyContent="center" gap={0.75} mt={1}>
-                <AccountBalanceWallet fontSize="small" color="action" />
-                <Typography variant="body1" fontWeight="medium">{payment.walletName}</Typography>
+      {/* Cabecera tipo detalle de billetera: describe una plantilla, no una transacción ya hecha. */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
+            <Box display="flex" alignItems="center" gap={2}>
+              <Avatar sx={{ width: 56, height: 56, bgcolor: isIncome ? theme.palette.success.main : theme.palette.error.main }}>
+                <ScheduleIcon />
+              </Avatar>
+              <Box>
+                <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                  <Typography variant="h5" fontWeight="bold">{payment.name}</Typography>
+                  <Chip size="small" label={isIncome ? 'Ingreso' : 'Gasto'} color={isIncome ? 'success' : 'error'} variant="outlined" />
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Plantilla de pago frecuente · {payment.categoryName}
+                </Typography>
               </Box>
             </Box>
-
-            {/* Botón central Realizar */}
-            <Button
-              variant="contained"
-              color="primary"
-              size="large"
-              startIcon={<PlayArrow />}
-              onClick={openExecute}
-              sx={{ mt: 1, px: 4 }}
-            >
-              Realizar
-            </Button>
-          </Stack>
-        </CardContent>
-
-        {/* Menú hamburguesa de acciones */}
-        <Menu
-          anchorEl={menuAnchor}
-          open={Boolean(menuAnchor)}
-          onClose={closeMenu}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        >
-          <MenuItem onClick={() => { closeMenu(); router.push(`/recurring-payments/${id}/edit`); }}>
-            <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
-            Editar
-          </MenuItem>
-          <MenuItem onClick={() => { closeMenu(); setDelOpen(true); }}>
-            <ListItemIcon><DeleteOutline fontSize="small" color="error" /></ListItemIcon>
-            Eliminar
-          </MenuItem>
-        </Menu>
-      </Card>
-
-      {/* Detalle */}
-      <Card>
-        <CardContent>
-          <Box display="flex" alignItems="center" gap={1} mb={2}>
-            <ScheduleIcon color="action" />
-            <Typography variant="h6">Detalle</Typography>
+            <IconButton aria-label="Acciones del pago frecuente" onClick={(e) => setMenuAnchor(e.currentTarget)}>
+              <MenuIcon />
+            </IconButton>
           </Box>
-          <Stack divider={<Divider flexItem />} spacing={1.5}>
-            <InfoRow
-              label="Tipo"
-              value={
-                <Chip size="small" label={isIncome ? 'Ingreso' : 'Gasto'} color={isIncome ? 'success' : 'error'} variant="outlined" />
-              }
-            />
-            <InfoRow
-              label="Categoría"
-              value={<Chip size="small" label={payment.categoryName} variant="outlined" icon={<Tag />} />}
-            />
-            <InfoRow
-              label="Moneda"
-              value={<Chip size="small" label={currency} variant="outlined" />}
-            />
-            <InfoRow
-              label="Billetera preferida"
-              value={
-                <Box display="flex" alignItems="center" gap={0.5}>
-                  <AccountBalanceWallet fontSize="small" color="action" />
-                  <Typography variant="body2">{payment.walletName}</Typography>
-                </Box>
-              }
-            />
-            {payment.description && (
-              <InfoRow
-                label="Descripción"
-                value={
-                  <Box display="flex" alignItems="flex-start" gap={0.5}>
-                    <Notes fontSize="small" color="action" sx={{ mt: 0.25 }} />
-                    <Typography variant="body2" textAlign="right">{payment.description}</Typography>
-                  </Box>
-                }
-              />
-            )}
-          </Stack>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Box display="flex" gap={{ xs: 2, sm: 4 }} flexWrap="wrap" alignItems="center">
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block">Monto al realizar</Typography>
+              <Typography variant="h4" fontWeight="bold" color={isIncome ? 'success.main' : 'error.main'}>
+                {formatCurrency(payment.amount, currency)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block">Comisión</Typography>
+              <Typography variant="h6" fontWeight="bold">
+                {(payment.fee || 0) > 0 ? formatCurrency(Number(payment.fee), currency) : 'Sin comisión'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block">Billetera preferida</Typography>
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <AccountBalanceWallet fontSize="small" color="action" />
+                <Typography variant="body1" fontWeight="medium">{payment.walletName || 'Ninguna'}</Typography>
+              </Box>
+            </Box>
+          </Box>
         </CardContent>
       </Card>
 
-      {/* Diálogo Eliminar */}
+      <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={3}>
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+              <ReceiptLong color="action" />
+              <Typography variant="h6">Datos de la plantilla</Typography>
+            </Box>
+            <Stack divider={<Divider flexItem />} spacing={1.5}>
+              <InfoRow label="Tipo" value={<Chip size="small" label={isIncome ? 'Ingreso' : 'Gasto'} color={isIncome ? 'success' : 'error'} variant="outlined" />} />
+              <InfoRow label="Categoría" value={<Chip size="small" label={payment.categoryName} variant="outlined" icon={<Tag />} />} />
+              <InfoRow label="Moneda" value={<Chip size="small" label={currency} variant="outlined" />} />
+              <InfoRow label="Billetera preferida" value={<Typography variant="body2">{payment.walletName || 'Ninguna'}</Typography>} />
+              {payment.description && <InfoRow label="Descripción" value={<Box display="flex" alignItems="flex-start" gap={0.5}><Notes fontSize="small" color="action" /><Typography variant="body2" textAlign="right">{payment.description}</Typography></Box>} />}
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <PlayArrow color="primary" />
+              <Typography variant="h6">Usar esta plantilla</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Crea una transacción nueva con estos datos. Antes de confirmarla podrás ajustar monto, comisión, categoría, descripción, billetera, fecha y hora.
+            </Typography>
+            <Button variant="contained" startIcon={<PlayArrow />} onClick={openExecute} fullWidth size="large">
+              Realizar pago
+            </Button>
+          </CardContent>
+        </Card>
+      </Box>
+
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+        <MenuItem onClick={() => { closeMenu(); setEditOpen(true); }}>
+          <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>Editar
+        </MenuItem>
+        <MenuItem onClick={() => { closeMenu(); setDelOpen(true); }}>
+          <ListItemIcon><DeleteOutline fontSize="small" color="error" /></ListItemIcon>Eliminar
+        </MenuItem>
+      </Menu>
+
+      {/* Editar en modal, no como página separada. */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Editar pago frecuente</DialogTitle>
+        <DialogContent sx={{ pb: 2 }}>
+          <RecurringPaymentForm
+            initial={{
+              id: payment.id,
+              name: payment.name,
+              description: payment.description,
+              amount: payment.amount,
+              fee: payment.fee || 0,
+              currency: payment.currency,
+              type: payment.type,
+              categoryId: payment.categoryId,
+              categoryName: payment.categoryName,
+              walletId: payment.walletId ?? null,
+            }}
+            onSuccess={async () => { setEditOpen(false); await load(); notice('Pago frecuente actualizado'); }}
+            onCancel={() => setEditOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={delOpen} onClose={() => setDelOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Eliminar pago frecuente</DialogTitle>
         <DialogContent>
-          <Typography>
-            ¿Seguro que quieres eliminar <b>{payment.name}</b>? No se elimina de la base, solo se oculta. No afecta transacciones ya creadas.
-          </Typography>
+          <Typography>¿Seguro que quieres eliminar <b>{payment.name}</b>? Las transacciones que ya realizaste no se modifican.</Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDelOpen(false)}>Cancelar</Button>
-          <Button variant="contained" color="error" onClick={confirmDelete} disabled={execSaving}>
-            {execSaving ? 'Eliminando...' : 'Eliminar'}
-          </Button>
+          <Button variant="contained" color="error" onClick={confirmDelete} disabled={execSaving}>{execSaving ? 'Eliminando...' : 'Eliminar'}</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Diálogo Ejecutar (Realizar) — prellenado y editable */}
+      {/* El tipo se muestra fijo: esta plantilla no puede transformarse de gasto a ingreso (ni viceversa) al realizarla. */}
       <Dialog open={execOpen} onClose={() => setExecOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
           Realizar: {payment.name}
-          <IconButton onClick={() => setExecOpen(false)} aria-label="Cerrar" size="small">
-            <Close />
-          </IconButton>
+          <IconButton onClick={() => setExecOpen(false)} aria-label="Cerrar" size="small"><Close /></IconButton>
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} pt={1}>
-            <Box display="flex" gap={1}>
-              <Button
-                variant={execType === 'expense' ? 'contained' : 'outlined'}
-                color="error"
-                fullWidth
-                onClick={() => setExecType('expense')}
-              >
-                Gasto
-              </Button>
-              <Button
-                variant={execType === 'income' ? 'contained' : 'outlined'}
-                color="success"
-                fullWidth
-                onClick={() => setExecType('income')}
-              >
-                Ingreso
-              </Button>
-            </Box>
-            <TextField
-              label="Monto"
-              type="number"
-              value={execAmount}
-              onChange={(e) => setExecAmount(e.target.value)}
-              fullWidth
-              autoFocus
-              InputProps={{ endAdornment: <span>{currency}</span> }}
-            />
+            <Alert severity="info" icon={isIncome ? <ArrowUpward /> : <ArrowDownward />}>
+              Esta plantilla crea un <b>{isIncome ? 'ingreso' : 'gasto'}</b>. El tipo está fijado por el pago frecuente.
+            </Alert>
+            <TextField label="Monto" type="number" value={execAmount} onChange={(e) => setExecAmount(e.target.value)} fullWidth autoFocus InputProps={{ endAdornment: <span>{currency}</span> }} />
+            <TextField label="Comisión (opcional)" type="number" value={execFee} onChange={(e) => setExecFee(e.target.value)} fullWidth InputProps={{ endAdornment: <span>{currency}</span> }} helperText="Se descuenta aparte del monto" />
             <FormControl fullWidth required>
               <InputLabel>Billetera</InputLabel>
-              <Select
-                value={execWallet}
-                label="Billetera"
-                onChange={(e) => setExecWallet(e.target.value)}
-                disabled={walletsLoading}
-              >
-                {wallets.map((w) => (
-                  <MenuItem key={w.id} value={String(w.id)}>{w.name} ({w.currency})</MenuItem>
-                ))}
+              <Select value={execWallet} label="Billetera" onChange={(e) => setExecWallet(e.target.value)} disabled={walletsLoading}>
+                <MenuItem value="" disabled>Selecciona una billetera</MenuItem>
+                {compatibleWallets.map((w) => <MenuItem key={w.id} value={String(w.id)}>{w.name} ({w.currency})</MenuItem>)}
               </Select>
             </FormControl>
-            <CategoryAutocomplete
-              type={execType}
-              valueName={execCategory}
-              onChange={(cat) => setExecCategory(cat ? cat.name : '')}
-              allowCreate
-            />
-            <TextField
-              label="Descripción"
-              value={execDescription}
-              onChange={(e) => setExecDescription(e.target.value)}
-              multiline
-              rows={2}
-              fullWidth
-            />
-            <TextField
-              label="Fecha"
-              type="date"
-              value={execDate}
-              onChange={(e) => setExecDate(e.target.value)}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-            />
-            <TextField
-              label="Hora (opcional)"
-              type="time"
-              value={execTime}
-              onChange={(e) => setExecTime(e.target.value)}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              helperText="Si la dejas vacía se usa la hora actual"
-            />
+            {compatibleWallets.length === 0 && <Alert severity="warning">No tienes billeteras activas en {currency}. Crea una antes de realizar este pago.</Alert>}
+            <CategoryAutocomplete type={payment.type} valueName={execCategory} onChange={(cat) => setExecCategory(cat ? cat.name : '')} allowCreate />
+            <TextField label="Descripción" value={execDescription} onChange={(e) => setExecDescription(e.target.value)} multiline rows={2} fullWidth />
+            <TextField label="Fecha" type="date" value={execDate} onChange={(e) => setExecDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
+            <TextField label="Hora (opcional)" type="time" value={execTime} onChange={(e) => setExecTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Si la dejas vacía se usa la hora actual" />
             {execError && <Alert severity="error">{execError}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setExecOpen(false)}>Cancelar</Button>
-          <Button variant="contained" color="primary" onClick={submitExecute} disabled={execSaving}>
-            {execSaving ? 'Creando transacción...' : 'Crear transacción'}
-          </Button>
+          <Button variant="contained" onClick={submitExecute} disabled={execSaving || compatibleWallets.length === 0}>{execSaving ? 'Creando transacción...' : 'Crear transacción'}</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
-          {snackbar.message}
-        </Alert>
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((s) => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>{snackbar.message}</Alert>
       </Snackbar>
     </Box>
   );

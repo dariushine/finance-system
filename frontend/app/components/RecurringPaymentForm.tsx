@@ -35,11 +35,12 @@ interface RecurringPaymentFormProps {
     name: string;
     description?: string | null;
     amount: number;
+    fee?: number | null;
     currency: string;
     type: 'income' | 'expense';
     categoryId: number;
     categoryName: string;
-    walletId: number;
+    walletId?: number | null;
   } | null;
   /** Se dispara con el id del pago guardado (para navegar al detalle). */
   onSuccess?: (id: number) => void;
@@ -53,7 +54,8 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
   const [amount, setAmount] = useState(initial ? String(initial.amount) : '');
   const [currency, setCurrency] = useState(initial?.currency || 'USD');
   const [description, setDescription] = useState(initial?.description || '');
-  const [wallet, setWallet] = useState(initial ? String(initial.walletId) : '');
+  const [wallet, setWallet] = useState(initial?.walletId != null ? String(initial.walletId) : '');
+  const [fee, setFee] = useState(initial?.fee ? String(initial.fee) : '');
   // Categoría: guardamos el nombre (resuelto por valueName) y el id si es existente.
   const [categoryName, setCategoryName] = useState(initial?.categoryName || '');
 
@@ -65,19 +67,22 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
 
   const handleWalletChange = (walletId: string) => {
     setWallet(walletId);
+    // La moneda se sincroniza con la billetera preferida (si se elige una).
     const w: Wallet | undefined = wallets.find((x) => String(x.id) === walletId);
-    // La moneda se sincroniza con la billetera preferida.
     if (w) setCurrency(w.currency);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const walletObj = wallets.find((w) => String(w.id) === wallet);
     const parsedAmount = Number(amount);
+    const parsedFee = fee ? Number(fee) : 0;
+    // Billetera opcional: '' o null = "ninguno"
+    const walletObj = wallet ? wallets.find((w) => String(w.id) === wallet) : undefined;
+    const finalWalletId = walletObj ? walletObj.id : null;
 
     if (!name.trim()) { setError('Escribe un nombre para el pago frecuente.'); return; }
-    if (!walletObj) { setError('Selecciona una billetera preferida.'); return; }
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) { setError('El monto debe ser mayor a cero.'); return; }
+    if (!Number.isFinite(parsedFee) || parsedFee < 0) { setError('La comisión no puede ser negativa.'); return; }
     if (!categoryName.trim()) { setError('Selecciona o escribe una categoría.'); return; }
 
     // Resolver categoría: si es nueva (no existe), crear la categoría primero.
@@ -100,10 +105,11 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
         name: name.trim(),
         description: description || undefined,
         amount: parsedAmount,
+        fee: parsedFee > 0 ? parsedFee : undefined,
         currency,
         type,
         categoryId: resolvedId,
-        walletId: walletObj.id,
+        walletId: finalWalletId,
       };
 
       let saved;
@@ -186,14 +192,15 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
               </Select>
             </FormControl>
 
-            <FormControl fullWidth required>
-              <InputLabel>Billetera preferida</InputLabel>
+            <FormControl fullWidth>
+              <InputLabel>Billetera preferida (opcional)</InputLabel>
               <Select
                 value={wallet}
-                label="Billetera preferida"
+                label="Billetera preferida (opcional)"
                 onChange={(e) => handleWalletChange(e.target.value)}
                 disabled={loading || walletsLoading}
               >
+                <MenuItem value="">Ninguna</MenuItem>
                 {wallets.map((w) => (
                   <MenuItem key={w.id} value={String(w.id)}>
                     {w.name} ({w.currency})
@@ -201,6 +208,17 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
                 ))}
               </Select>
             </FormControl>
+
+            <TextField
+              label="Comisión (opcional)"
+              type="number"
+              value={fee}
+              onChange={(e) => setFee(e.target.value)}
+              placeholder="Ej: 3.75"
+              disabled={loading}
+              onWheel={(e) => e.currentTarget.blur()}
+              InputProps={{ endAdornment: <span>{currency}</span> }}
+            />
 
             <CategoryAutocomplete
               type={type}
@@ -247,7 +265,7 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
         )}
 
         <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-          💡 La moneda se sincroniza con la billetera preferida. La categoría se crea si no existe.
+          💡 La moneda se sincroniza con la billetera preferida (si eliges una). La categoría se crea si no existe.
         </Typography>
       </CardContent>
 
