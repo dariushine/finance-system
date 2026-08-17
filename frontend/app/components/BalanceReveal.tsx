@@ -58,9 +58,21 @@ export default function BalanceReveal({
   };
 
   const eyeButton = canReveal && (
+    // OJO: CardActionArea renderiza un <button>, así que el icono debe ser un
+    // <span> (con component="span") para evitar <button> anidado → error de hydration.
     <IconButton
+      component="span"
+      role="button"
+      tabIndex={0}
       size={iconSize}
       onClick={toggleReveal}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.stopPropagation();
+          e.preventDefault();
+          setLocalReveal((v) => !v);
+        }
+      }}
       aria-label={hidden ? 'Mostrar saldo' : 'Ocultar saldo'}
       sx={{ p: 0.5 }}
     >
