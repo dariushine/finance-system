@@ -2162,14 +2162,16 @@ app.get('/api/stats', async (req, res) => {
     toDate = now.toISOString().split('T')[0];
     if (!period || period === 'all' || period === '') {
       fromDate = '1970-01-01';
+    } else if (period === '1m') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 1); fromDate = d.toISOString().split('T')[0];
+    } else if (period === '3m') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 3); fromDate = d.toISOString().split('T')[0];
+    } else if (period === '6m') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 6); fromDate = d.toISOString().split('T')[0];
+    } else if (period === '1y') {
+      const d = new Date(now); d.setMonth(d.getMonth() - 12); fromDate = d.toISOString().split('T')[0];
     } else {
-      const d = new Date(now);
-      if (period === '1m') d.setMonth(d.getMonth() - 1);
-      else if (period === '3m') d.setMonth(d.getMonth() - 3);
-      else if (period === '6m') d.setMonth(d.getMonth() - 6);
-      else if (period === '1y') d.setMonth(d.getMonth() - 12);
-      else { fromDate = '1970-01-01'; }
-      if (fromDate === '1970-01-01') fromDate = d.toISOString().split('T')[0];
+      fromDate = '1970-01-01';
     }
   }
 
