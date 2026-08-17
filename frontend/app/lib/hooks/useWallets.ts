@@ -10,6 +10,8 @@ export interface Wallet {
   type: string;
   color?: string | null;
   icon?: string | null;
+  excludeFromTotal?: boolean;
+  hideInDashboard?: boolean;
 }
 
 interface WalletWithUsd extends Wallet {
@@ -39,7 +41,13 @@ export function useWallets(rateType: 'bcv' | 'paralelo' = 'bcv') {
         if (w.currency !== 'USD' && rate) {
           usdValue = Number(w.balance) / rate;
         }
-        return { ...w, usdValue, rate };
+        return {
+          ...w,
+          usdValue,
+          rate,
+          excludeFromTotal: !!w.excludeFromTotal,
+          hideInDashboard: !!w.hideInDashboard,
+        };
       });
 
       setWallets(enriched);

@@ -28,10 +28,12 @@ db.serialize(() => {
     icon TEXT,
     color TEXT,
     isActive BOOLEAN DEFAULT 1,
+    excludeFromTotal BOOLEAN DEFAULT 0,
+    hideInDashboard BOOLEAN DEFAULT 0,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  // Migración: añadir columna alias a DBs creadas antes de que existiera
+  // Migración: añadir columnas a DBs creadas antes de que existieran
   db.all(`PRAGMA table_info(wallets)`, (err, cols) => {
     if (err) return;
     const names = (cols || []).map((c) => c.name);
@@ -43,6 +45,12 @@ db.serialize(() => {
     }
     if (!names.includes('color')) {
       db.run(`ALTER TABLE wallets ADD COLUMN color TEXT`);
+    }
+    if (!names.includes('excludeFromTotal')) {
+      db.run(`ALTER TABLE wallets ADD COLUMN excludeFromTotal BOOLEAN DEFAULT 0`);
+    }
+    if (!names.includes('hideInDashboard')) {
+      db.run(`ALTER TABLE wallets ADD COLUMN hideInDashboard BOOLEAN DEFAULT 0`);
     }
   });
   
@@ -1013,15 +1021,17 @@ app.get('/api/wallets/:id', (req, res) => {
 
 // Crear una billetera
 app.post('/api/wallets', (req, res) => {
-  const { name, alias, type, currency, balance, description, icon, color } = req.body;
+  const { name, alias, type, currency, balance, description, icon, color, excludeFromTotal, hideInDashboard } = req.body;
   if (!name || !type || !currency) {
     return res.status(400).json({ error: 'Faltan campos requeridos: name, type, currency' });
   }
   const isActive = 1;
+  const excludeTotal = (excludeFromTotal === true || excludeFromTotal === 1) ? 1 : 0;
+  const hideDash = (hideInDashboard === true || hideInDashboard === 1) ? 1 : 0;
   db.run(
-    `INSERT INTO wallets (name, alias, type, currency, balance, description, icon, color, isActive)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [name, alias || null, type, currency, balance || 0, description || null, icon || null, color || null, isActive],
+    `INSERT INTO wallets (name, alias, type, currency, balance, description, icon, color, isActive, excludeFromTotal, hideInDashboard)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [name, alias || null, type, currency, balance || 0, description || null, icon || null, color || null, isActive, excludeTotal, hideDash],
     function (err) {
       if (err) return res.status(400).json({ error: err.message });
       db.get('SELECT * FROM wallets WHERE id = ?', [this.lastID], (e, row) => {
@@ -1037,7 +1047,7 @@ app.post('/api/wallets', (req, res) => {
 // (createTransaction/createExchange actualizan wallets.balance). Tampoco se
 // permite cambiar type ni currency: son fijos tras la creación.
 app.put('/api/wallets/:id', (req, res) => {
-  const { name, alias, description, icon, color } = req.body;
+  const { name, alias, description, icon, color, excludeFromTotal, hideInDashboard } = req.body;
   db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [req.params.id], (err, wallet) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada' });
@@ -1047,12 +1057,19 @@ app.put('/api/wallets/:id', (req, res) => {
     const newDescription = description !== undefined ? description : wallet.description;
     const newIcon = icon !== undefined ? icon : wallet.icon;
     const newColor = color !== undefined ? color : wallet.color;
+    // Los flags sólo cambian si vienen en el body (si no, conservan su valor actual)
+    const newExcludeTotal = excludeFromTotal !== undefined
+      ? (excludeFromTotal === true || excludeFromTotal === 1 ? 1 : 0)
+      : wallet.excludeFromTotal;
+    const newHideDash = hideInDashboard !== undefined
+      ? (hideInDashboard === true || hideInDashboard === 1 ? 1 : 0)
+      : wallet.hideInDashboard;
     // Se BORRA el balance de la query de actualización: aunque el cliente mande
     // un campo balance/type/currency en el body, se ignora.
 
     db.run(
-      `UPDATE wallets SET name = ?, alias = ?, description = ?, icon = ?, color = ? WHERE id = ?`,
-      [newName, newAlias, newDescription, newIcon, newColor, req.params.id],
+      `UPDATE wallets SET name = ?, alias = ?, description = ?, icon = ?, color = ?, excludeFromTotal = ?, hideInDashboard = ? WHERE id = ?`,
+      [newName, newAlias, newDescription, newIcon, newColor, newExcludeTotal, newHideDash, req.params.id],
       function (updErr) {
         if (updErr) return res.status(400).json({ error: updErr.message });
         db.get('SELECT * FROM wallets WHERE id = ?', [req.params.id], (e, row) => {
@@ -2438,6 +2455,9 @@ app.delete('/api/daily-rates/:id', (req, res) => {
 // ?rate=bcv (default) | paralelo — convierte VES a USD usando la tasa diaria registrada
 app.get('/api/stats', async (req, res) => {
   const rateType = req.query.rate === 'paralelo' ? 'paralelo' : 'bcv';
+  // Excluir billeteras marcadas para no contar en los totales del dashboard.
+  // Los reportes llaman ESTE MISMO endpoint SIN este flag, así no les afecta.
+  const excludeFromTotal = req.query.excludeFromTotal === '1' || req.query.excludeFromTotal === 'true';
 
   // Rango de fechas (from/to explícitos o preset por period)
   const { from, to, period } = req.query;
@@ -2462,8 +2482,22 @@ app.get('/api/stats', async (req, res) => {
   }
 
   try {
+    // Si se pide excluir billeteras de los totales, descartamos las transacciones
+    // cuyas billeteras tengan excludeFromTotal = 1.
+    const excludeIds = excludeFromTotal
+      ? await new Promise((resolve, reject) => {
+          db.all(`SELECT id FROM wallets WHERE excludeFromTotal = 1`, (err, r) => err ? reject(err) : resolve((r || []).map((x) => x.id)));
+        })
+      : [];
     const rows = await new Promise((resolve, reject) => {
-      db.all("SELECT t.type, t.amount, t.date, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE COALESCE(t.date, '') >= ? AND COALESCE(t.date, '') <= ?", [fromDate, toDate], (err, r) => err ? reject(err) : resolve(r));
+      const params = [fromDate, toDate];
+      let walletFilter = '';
+      if (excludeIds.length) {
+        walletFilter = ` AND w.id NOT IN (${excludeIds.map(() => '?').join(',')})`;
+        params.push(...excludeIds);
+      }
+      db.all(`SELECT t.type, t.amount, t.date, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE COALESCE(t.date, '') >= ? AND COALESCE(t.date, '') <= ?${walletFilter}`,
+        params, (err, r) => err ? reject(err) : resolve(r));
     });
 
     let total_income = 0;

@@ -36,9 +36,12 @@ export default function WalletList() {
   const { wallets, loading, error } = useWallets();
   const [page, setPage] = useState(1);
 
-  const pageCount = Math.max(1, Math.ceil(wallets.length / PER_PAGE));
+  // Ocultar del dashboard las billeteras marcadas (hideInDashboard).
+  // Las marcas se configuran en la edición de la billetera.
+  const visibleWallets = wallets.filter((w) => !w.hideInDashboard);
+  const pageCount = Math.max(1, Math.ceil(visibleWallets.length / PER_PAGE));
   const currentPage = Math.min(page, pageCount);
-  const shown = wallets.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
+  const shown = visibleWallets.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
 
   // Rastrear página previa para hacer scroll solo cuando el usuario cambia de
   // página (no al montar). El useEffect corre DESPUÉS de que React actualizó el
@@ -90,7 +93,7 @@ export default function WalletList() {
             💰 Billeteras
           </Typography>
           <Chip
-            label={`${wallets.length} ${wallets.length === 1 ? 'billetera' : 'billeteras'}`}
+            label={`${visibleWallets.length} ${visibleWallets.length === 1 ? 'billetera' : 'billeteras'}`}
             size="small"
             variant="outlined"
           />
@@ -148,7 +151,7 @@ export default function WalletList() {
         </Grid>
         </Box>
 
-        {wallets.length === 0 && (
+        {visibleWallets.length === 0 && (
           <Alert severity="info" sx={{ mt: 2 }}>No hay billeteras configuradas. Agrega una para comenzar.</Alert>
         )}
 

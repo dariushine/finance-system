@@ -14,6 +14,8 @@ export interface Wallet {
   icon?: string | null;
   color?: string | null;
   isActive?: boolean;
+  excludeFromTotal?: boolean;
+  hideInDashboard?: boolean;
   createdAt?: string;
 }
 
@@ -126,6 +128,8 @@ export interface WalletInput {
   description?: string;
   icon?: string;
   color?: string;
+  excludeFromTotal?: boolean;
+  hideInDashboard?: boolean;
 }
 
 // Crear una billetera

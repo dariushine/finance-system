@@ -13,6 +13,8 @@ CREATE TABLE wallets (
   balance DECIMAL(10,2) DEFAULT 0,
   description TEXT,
   isActive BOOLEAN DEFAULT 1,
+  excludeFromTotal BOOLEAN DEFAULT 0,
+  hideInDashboard BOOLEAN DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME
 );
