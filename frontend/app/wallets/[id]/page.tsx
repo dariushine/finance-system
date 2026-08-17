@@ -35,6 +35,7 @@ import {
   TablePagination,
   Switch,
   FormControlLabel,
+  Collapse,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -51,6 +52,8 @@ import {
   TrendingDown,
   CalendarMonth,
   Download,
+  ExpandMore,
+  ExpandLess,
 } from '@mui/icons-material';
 import TransactionAccordionList from '../../components/TransactionAccordionList';
 import {
@@ -139,6 +142,7 @@ export default function WalletDetailPage() {
     excludeFromTotal: false,
     hideInDashboard: false,
   });
+  const [showOptional, setShowOptional] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -581,24 +585,39 @@ export default function WalletDetailPage() {
               multiline
               minRows={2}
             />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={editForm.excludeFromTotal}
-                  onChange={(e) => setEditForm({ ...editForm, excludeFromTotal: e.target.checked })}
-                />
-              }
-              label="No contar en los totales del dashboard"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={editForm.hideInDashboard}
-                  onChange={(e) => setEditForm({ ...editForm, hideInDashboard: e.target.checked })}
-                />
-              }
-              label="Ocultar de la lista del dashboard"
-            />
+            <Box>
+              <Box
+                onClick={() => setShowOptional((v) => !v)}
+                sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none' }}
+              >
+                <Typography variant="body2">Opciones adicionales</Typography>
+                <IconButton size="small" sx={{ ml: 0.5 }}>
+                  {showOptional ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                </IconButton>
+              </Box>
+              <Collapse in={showOptional}>
+                <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={editForm.excludeFromTotal}
+                        onChange={(e) => setEditForm({ ...editForm, excludeFromTotal: e.target.checked })}
+                      />
+                    }
+                    label="No contar en los totales del dashboard"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={editForm.hideInDashboard}
+                        onChange={(e) => setEditForm({ ...editForm, hideInDashboard: e.target.checked })}
+                      />
+                    }
+                    label="Ocultar de la lista del dashboard"
+                  />
+                </Box>
+              </Collapse>
+            </Box>
             <FormControl fullWidth>
               <InputLabel>Icono</InputLabel>
               <Select value={editForm.icon} label="Icono" onChange={(e) => setEditForm({ ...editForm, icon: e.target.value })}>

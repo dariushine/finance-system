@@ -28,6 +28,7 @@ import {
   ToggleButtonGroup,
   Switch,
   FormControlLabel,
+  Collapse,
 } from '@mui/material';
 import {
   AccountBalance,
@@ -39,6 +40,8 @@ import {
   Restore as RestoreIcon,
   ChevronRight,
   ShowChart,
+  ExpandMore,
+  ExpandLess,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useWallets } from '../lib/hooks';
@@ -85,6 +88,7 @@ export default function WalletsPage() {
     excludeFromTotal: false,
     hideInDashboard: false,
   });
+  const [showOptional, setShowOptional] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -354,24 +358,39 @@ export default function WalletsPage() {
               multiline
               minRows={2}
             />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.excludeFromTotal}
-                  onChange={(e) => setForm({ ...form, excludeFromTotal: e.target.checked })}
-                />
-              }
-              label="No contar en los totales del dashboard"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.hideInDashboard}
-                  onChange={(e) => setForm({ ...form, hideInDashboard: e.target.checked })}
-                />
-              }
-              label="Ocultar de la lista del dashboard"
-            />
+            <Box>
+              <Box
+                onClick={() => setShowOptional((v) => !v)}
+                sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none' }}
+              >
+                <Typography variant="body2">Opciones adicionales</Typography>
+                <IconButton size="small" sx={{ ml: 0.5 }}>
+                  {showOptional ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                </IconButton>
+              </Box>
+              <Collapse in={showOptional}>
+                <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={form.excludeFromTotal}
+                        onChange={(e) => setForm({ ...form, excludeFromTotal: e.target.checked })}
+                      />
+                    }
+                    label="No contar en los totales del dashboard"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={form.hideInDashboard}
+                        onChange={(e) => setForm({ ...form, hideInDashboard: e.target.checked })}
+                      />
+                    }
+                    label="Ocultar de la lista del dashboard"
+                  />
+                </Box>
+              </Collapse>
+            </Box>
             <FormControl fullWidth>
               <InputLabel>Icono</InputLabel>
               <Select
