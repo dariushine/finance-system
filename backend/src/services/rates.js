@@ -87,6 +87,14 @@ function isValidTime(value) {
   return h >= 0 && h <= 23 && min >= 0 && min <= 59 && s >= 0 && s <= 59;
 }
 
+// Normaliza una hora a HH:MM (minuto) descartando segundos. La UI solo
+// maneja HH:MM y guardar segundos genera inconsistencias (p.ej. una
+// transacción a 12:55:55 con un fee a 12:55:00). Recibe HH:MM o HH:MM:SS.
+function normalizeTimeMinute(value) {
+  if (typeof value !== 'string' || value === '') return value;
+  return value.slice(0, 5); // HH:MM[:SS] → HH:MM
+}
+
 function getRateForDate(date, type) {
   return new Promise((resolve) => {
     const col = type === 'paralelo' ? 'paralelo' : 'bcv';
@@ -113,4 +121,4 @@ function getExchangeRates() {
 
 // Endpoint para que el frontend obtenga las tasas en vez de hardcodearlas
 
-module.exports = { fetchRatesFromApi, upsertRate, getTodayRate, isValidTime, getRateForDate, getExchangeRates };
+module.exports = { fetchRatesFromApi, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getRateForDate, getExchangeRates };

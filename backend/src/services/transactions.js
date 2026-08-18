@@ -7,16 +7,17 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
   return new Promise((resolve, reject) => {
     const commission = Number(fee) || 0;
     // Fecha + hora de la transacción. El frontend manda `date` como
-    // YYYY-MM-DD y `time` como HH:MM[:SS]. Si no se proveen, se usa hoy local.
+    // YYYY-MM-DD y `time` como HH:MM. Si no se proveen, se usa hoy local.
+    // La hora se normaliza a HH:MM (minuto): no se guardan segundos.
     const now = new Date();
     const pad2 = (n) => String(n).padStart(2, '0');
     const defaultDate = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-    const defaultTime = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+    const defaultTime = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
     const txDate = typeof date === 'string' && date !== '' ? date : defaultDate;
     let txTime = defaultTime;
     if (typeof time === 'string' && time !== '') {
-      // Aceptar HH:MM o HH:MM:SS
-      txTime = /^\d{2}:\d{2}:\d{2}$/.test(time) ? time : `${time}:00`;
+      // Aceptar HH:MM (o HH:MM:SS, truncando los segundos).
+      txTime = time.slice(0, 5);
     }
     db.serialize(() => {
       // 1. Obtener wallet

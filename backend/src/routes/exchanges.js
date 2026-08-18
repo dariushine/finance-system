@@ -4,7 +4,7 @@ const {
   getDb, allDb, runDb,
   createTransaction, syncParentFeeSql, withTransaction,
 } = require('../services/transactions');
-const { isValidTime } = require('../services/rates');
+const { isValidTime, normalizeTimeMinute } = require('../services/rates');
 const {
   getExchangeTransactions, createFeeForExchange, softDeleteExchangeTransactions,
 } = require('../services/exchanges');
@@ -31,7 +31,7 @@ module.exports = function registerExchangeRoutes(app) {
         return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
       }
       const txDate = typeof date === 'string' && date !== '' ? date : undefined;
-      const txTime = typeof time === 'string' && time !== '' ? (time.length === 5 ? `${time}:00` : time) : undefined;
+      const txTime = typeof time === 'string' && time !== '' ? normalizeTimeMinute(time) : undefined;
 
       const [fromWallet, toWallet] = await Promise.all([
         new Promise((resolve, reject) => db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [fromWalletId], (err, row) => (err ? reject(err) : resolve(row)))),
@@ -254,7 +254,7 @@ module.exports = function registerExchangeRoutes(app) {
       }
       if (time != null && time !== '') {
         if (!isValidTime(time)) return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
-        newTime = time.length === 5 ? `${time}:00` : time;
+        newTime = normalizeTimeMinute(time);
       } else if (time === '') {
         newTime = null;
       }
