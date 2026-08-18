@@ -49,6 +49,7 @@ import {
   TransactionDetail,
 } from '../../lib/api';
 import { useNumberFormat } from '../../lib/NumberFormat';
+import MoneyField from '../../components/MoneyField';
 
 const formatTimeOnly = (time?: string | null) => {
   if (!time) return '';
@@ -92,7 +93,7 @@ export default function ExchangeDetailPage() {
   const [saving, setSaving] = useState(false);
 
   // Form editar
-  const [editForm, setEditForm] = useState({ fromAmount: '', toAmount: '', fee: '', description: '', date: '', time: '' });
+  const [editForm, setEditForm] = useState({ fromAmount: 0, toAmount: 0, fee: 0, description: '', date: '', time: '' });
 
   // Feedback
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
@@ -135,9 +136,9 @@ export default function ExchangeDetailPage() {
   const openEdit = () => {
     if (!exchange) return;
     setEditForm({
-      fromAmount: String(exchange.fromAmount),
-      toAmount: String(exchange.toAmount),
-      fee: exchange.fee ? String(exchange.fee) : '',
+      fromAmount: exchange.fromAmount,
+      toAmount: exchange.toAmount,
+      fee: exchange.fee ? exchange.fee : 0,
       description: exchange.description || '',
       date: exchange.date || todayISODate(),
       time: exchange.time ? exchange.time.slice(0, 5) : '',
@@ -152,13 +153,13 @@ export default function ExchangeDetailPage() {
     setSaving(true);
     try {
       const payload: any = { description: editForm.description };
-      const from = Number(editForm.fromAmount);
-      const to = Number(editForm.toAmount);
+      const from = editForm.fromAmount;
+      const to = editForm.toAmount;
       if (!Number.isFinite(from) || from <= 0) throw new Error('El monto origen debe ser mayor a 0');
       if (!Number.isFinite(to) || to <= 0) throw new Error('El monto destino debe ser mayor a 0');
       payload.fromAmount = from;
       payload.toAmount = to;
-      const fee = editForm.fee.trim() === '' ? 0 : Number(editForm.fee);
+      const fee = editForm.fee;
       if (!Number.isFinite(fee) || fee < 0) throw new Error('La comisión no puede ser negativa');
       payload.fee = fee;
       if (editForm.date) payload.date = editForm.date;
@@ -400,26 +401,23 @@ export default function ExchangeDetailPage() {
             <Typography variant="body2" color="text.secondary">
               Edita montos, comisión, descripción y fecha. Las billeteras se mantienen.
             </Typography>
-            <TextField
+            <MoneyField
               label={`Monto enviado (${fromCurrency})`}
-              type="number"
               value={editForm.fromAmount}
-              onChange={(e) => setEditForm({ ...editForm, fromAmount: e.target.value })}
+              onValueChange={(n) => setEditForm({ ...editForm, fromAmount: n })}
               fullWidth
               autoFocus
             />
-            <TextField
+            <MoneyField
               label={`Monto recibido (${toCurrency})`}
-              type="number"
               value={editForm.toAmount}
-              onChange={(e) => setEditForm({ ...editForm, toAmount: e.target.value })}
+              onValueChange={(n) => setEditForm({ ...editForm, toAmount: n })}
               fullWidth
             />
-            <TextField
+            <MoneyField
               label={`Comisión (fee) (${fromCurrency})`}
-              type="number"
               value={editForm.fee}
-              onChange={(e) => setEditForm({ ...editForm, fee: e.target.value })}
+              onValueChange={(n) => setEditForm({ ...editForm, fee: n })}
               fullWidth
               helperText="Pon 0 para eliminar la comisión existente"
             />

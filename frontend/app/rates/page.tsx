@@ -110,6 +110,14 @@ export default function RatesPage() {
   const [form, setForm] = useState({ date: '', bcv: '', paralelo: '' });
   const [snackbar, setSnackbar] = useState<string | null>(null);
 
+  // Sanitiza una tasa: solo dígitos y un punto decimal (sin letras ni símbolos).
+  const sanitizeRate = (raw: string) => {
+    let cleaned = raw.replace(/[^\d.]/g, '');
+    const idx = cleaned.indexOf('.');
+    if (idx !== -1) cleaned = cleaned.slice(0, idx + 1) + cleaned.slice(idx + 1).replace(/\./g, '');
+    return cleaned;
+  };
+
   // Handler ESTABLE: solo se re-renderiza la tarjeta que se abre/cierra.
   const handleToggle = useCallback((id: number) => {
     setExpanded((prev) => (prev === id ? false : id));
@@ -299,19 +307,21 @@ export default function RatesPage() {
             />
             <TextField
               label="Tasa BCV (VES/USD)"
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={form.bcv}
-              onChange={(e) => setForm({ ...form, bcv: e.target.value })}
+              onChange={(e) => setForm({ ...form, bcv: sanitizeRate(e.target.value) })}
+              onPaste={(e) => { e.preventDefault(); setForm({ ...form, bcv: sanitizeRate(e.clipboardData.getData('text')) }); }}
               fullWidth
-              onWheel={(e) => e.currentTarget.blur()}
             />
             <TextField
               label="Tasa paralelo (VES/USD)"
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={form.paralelo}
-              onChange={(e) => setForm({ ...form, paralelo: e.target.value })}
+              onChange={(e) => setForm({ ...form, paralelo: sanitizeRate(e.target.value) })}
+              onPaste={(e) => { e.preventDefault(); setForm({ ...form, paralelo: sanitizeRate(e.clipboardData.getData('text')) }); }}
               fullWidth
-              onWheel={(e) => e.currentTarget.blur()}
             />
           </Box>
         </DialogContent>

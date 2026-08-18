@@ -58,6 +58,7 @@ import {
 } from '../../lib/api';
 import { parseLocalDate } from '../../lib/dates';
 import CategoryAutocomplete from '../../components/CategoryAutocomplete';
+import MoneyField from '../../components/MoneyField';
 import type { Category } from '../../lib/api';
 import { useNumberFormat } from '../../lib/NumberFormat';
 
@@ -106,17 +107,17 @@ export default function TransactionDetailPage() {
   const [assocOpen, setAssocOpen] = useState(false);
 
   // Form editar
-  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', time: '' });
+  const [editForm, setEditForm] = useState({ description: '', amount: 0, date: '', time: '' });
   const [editCategory, setEditCategory] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Form fee
-  const [feeAmount, setFeeAmount] = useState('');
+  const [feeAmount, setFeeAmount] = useState(0);
   const [feeDate, setFeeDate] = useState('');
   const [feeTime, setFeeTime] = useState('');
 
   // Form asociada
-  const [assocForm, setAssocForm] = useState({ amount: '', type: 'expense' as 'income' | 'expense', categoryName: '', description: '', date: '', time: '' });
+  const [assocForm, setAssocForm] = useState({ amount: 0, type: 'expense' as 'income' | 'expense', categoryName: '', description: '', date: '', time: '' });
 
   // Feedback
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
@@ -163,7 +164,7 @@ export default function TransactionDetailPage() {
     if (blockIfExchange()) return;
     setEditForm({
       description: tx.description || '',
-      amount: String(tx.amount),
+      amount: tx.amount,
       date: tx.date || todayISODate(),
       time: tx.time ? tx.time.slice(0, 5) : '',
     });
@@ -176,7 +177,7 @@ export default function TransactionDetailPage() {
     setSaving(true);
     try {
       const payload: any = { description: editForm.description };
-      const amount = Number(editForm.amount);
+      const amount = editForm.amount;
       if (Number.isFinite(amount) && amount > 0) payload.amount = amount;
       if (editForm.date) payload.date = editForm.date;
       payload.time = editForm.time || undefined;
@@ -220,7 +221,7 @@ export default function TransactionDetailPage() {
     if (!tx) return;
     if (blockIfExchange()) return;
     if (isFee) { notice('No puedes agregar comisión a una comisión (fee).', 'warning'); return; }
-    setFeeAmount('');
+    setFeeAmount(0);
     setFeeDate(tx.date || todayISODate());
     setFeeTime(tx.time ? tx.time.slice(0, 5) : '');
     setFeeOpen(true);
@@ -230,7 +231,7 @@ export default function TransactionDetailPage() {
     if (!tx) return;
     setSaving(true);
     try {
-      const amount = Number(feeAmount);
+      const amount = feeAmount;
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto de la comisión debe ser mayor a 0');
       const res = await addTransactionFee(id, { amount, date: feeDate || undefined, time: feeTime || undefined });
       if (!res?.success) throw new Error(res?.error || 'Error al agregar comisión');
@@ -249,7 +250,7 @@ export default function TransactionDetailPage() {
     if (!tx) return;
     if (blockIfExchange()) return;
     if (isFee) { notice('No puedes crear transacciones asociadas a una comisión (fee).', 'warning'); return; }
-    setAssocForm({ amount: '', type: 'expense', categoryName: '', description: '', date: tx.date || todayISODate(), time: tx.time ? tx.time.slice(0, 5) : '' });
+    setAssocForm({ amount: 0, type: 'expense', categoryName: '', description: '', date: tx.date || todayISODate(), time: tx.time ? tx.time.slice(0, 5) : '' });
     setAssocOpen(true);
   };
 
@@ -257,7 +258,7 @@ export default function TransactionDetailPage() {
     if (!tx) return;
     setSaving(true);
     try {
-      const amount = Number(assocForm.amount);
+      const amount = assocForm.amount;
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto debe ser mayor a 0');
       if (SYSTEM_CATEGORIES.includes(assocForm.categoryName)) throw new Error('No puedes usar categorías del sistema (fee, exchange).');
       const res = await createAssociatedTransaction(id, {
@@ -570,13 +571,12 @@ export default function TransactionDetailPage() {
               rows={2}
               fullWidth
             />
-            <TextField
+            <MoneyField
               label="Monto"
-              type="number"
               value={editForm.amount}
-              onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+              onValueChange={(n) => setEditForm({ ...editForm, amount: n })}
               fullWidth
-              InputProps={{ endAdornment: <span>{currency}</span> }}
+              currency={currency}
             />
             <TextField
               label="Fecha"
@@ -650,14 +650,13 @@ export default function TransactionDetailPage() {
             <Typography variant="body2" color="text.secondary">
               Se creará una nueva transacción de tipo comisión (fee). Si la transacción ya tiene una comisión, se agrega otra adicional.
             </Typography>
-            <TextField
+            <MoneyField
               label="Monto de la comisión"
-              type="number"
               value={feeAmount}
-              onChange={(e) => setFeeAmount(e.target.value)}
+              onValueChange={setFeeAmount}
               fullWidth
               autoFocus
-              InputProps={{ endAdornment: <span>{currency}</span> }}
+              currency={currency}
             />
             <TextField
               label="Fecha (opcional)"
@@ -692,14 +691,13 @@ export default function TransactionDetailPage() {
         <DialogTitle>Crear transacción asociada</DialogTitle>
         <DialogContent>
           <Stack spacing={2} pt={1}>
-            <TextField
+            <MoneyField
               label="Monto"
-              type="number"
               value={assocForm.amount}
-              onChange={(e) => setAssocForm({ ...assocForm, amount: e.target.value })}
+              onValueChange={(n) => setAssocForm({ ...assocForm, amount: n })}
               fullWidth
               autoFocus
-              InputProps={{ endAdornment: <span>{currency}</span> }}
+              currency={currency}
             />
             <FormControl fullWidth>
               <InputLabel>Tipo</InputLabel>

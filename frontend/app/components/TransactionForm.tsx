@@ -8,6 +8,7 @@ import {
 import { Add, Remove, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 import CategoryAutocomplete from './CategoryAutocomplete';
+import MoneyField from './MoneyField';
 import type { Category } from '../lib/api';
 
 interface TransactionFormProps {
@@ -16,8 +17,8 @@ interface TransactionFormProps {
 
 export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   const [type, setType] = useState<'expense' | 'income'>('expense');
-  const [amount, setAmount] = useState('');
-  const [fee, setFee] = useState('');
+  const [amount, setAmount] = useState(0);
+  const [fee, setFee] = useState(0);
   const [wallet, setWallet] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
@@ -40,8 +41,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const walletObj = wallets.find((w) => w.name === wallet);
-    const parsedAmount = Number(amount);
-    const parsedFee = Number(fee) || 0;
+    const parsedAmount = amount;
+    const parsedFee = fee;
 
     if (!walletObj || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setError('Selecciona una billetera e introduce un monto mayor que cero.');
@@ -81,8 +82,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       }
 
       // Reset form
-      setAmount('');
-      setFee('');
+      setAmount(0);
+      setFee(0);
       setWallet('');
       setCategory('');
       setSelectedCategory(null);
@@ -128,19 +129,15 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
 
         <form onSubmit={handleSubmit}>
           <Box display="flex" flexDirection="column" gap={2}>
-            <TextField
-              label="Monto"              type="number"
+            <MoneyField
+              label="Monto"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Ej: 1200"
+              onValueChange={setAmount}
+              currency={
+                wallets.find((w) => w.name === wallet)?.currency || 'USD/VES'
+              }
               required
               disabled={loading}
-              onWheel={(e) => e.currentTarget.blur()}
-              InputProps={{
-                endAdornment: wallet ? (
-                  wallets.find((w) => w.name === wallet)?.currency || ''
-                ) : 'USD/VES'
-              }}
             />
 
             {/* Opcionales (fecha, hora, comisión) en bloque colapsable */}
@@ -181,20 +178,16 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                     helperText="Si la dejas vacía se usa la hora actual"
                   />
 
-                  <TextField
+                  <MoneyField
                     label="Comisión (opcional)"
-                    type="number"
                     value={fee}
-                    onChange={(e) => setFee(e.target.value)}
-                    placeholder="Ej: 3.75"
+                    onValueChange={setFee}
+                    currency={wallet ? (
+
+                      wallets.find((w) => w.name === wallet)?.currency || ''
+                    ) : undefined}
                     disabled={loading}
-                    onWheel={(e) => e.currentTarget.blur()}
                     helperText="Se descuenta aparte del monto"
-                    InputProps={{
-                      endAdornment: wallet ? (
-                        wallets.find((w) => w.name === wallet)?.currency || ''
-                      ) : ''
-                    }}
                   />
 
                 </Box>

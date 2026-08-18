@@ -31,6 +31,7 @@ import {
 import { executeRecurringPayment, type RecurringPayment } from '../lib/api';
 import { useWallets } from '../lib/hooks';
 import CategoryAutocomplete from './CategoryAutocomplete';
+import MoneyField from './MoneyField';
 
 const todayISODate = () => new Date().toISOString().split('T')[0];
 
@@ -50,8 +51,8 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
   const router = useRouter();
   const { wallets, loading: walletsLoading } = useWallets();
 
-  const [amount, setAmount] = useState('');
-  const [fee, setFee] = useState('');
+  const [amount, setAmount] = useState(0);
+  const [fee, setFee] = useState(0);
   const [description, setDescription] = useState('');
   const [wallet, setWallet] = useState('');
   const [date, setDate] = useState(todayISODate());
@@ -63,8 +64,8 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
 
   const reset = () => {
     if (!payment) return;
-    setAmount(String(payment.amount));
-    setFee(payment.fee ? String(payment.fee) : '');
+    setAmount(payment.amount);
+    setFee(payment.fee ? payment.fee : 0);
     setDescription(payment.description || '');
     setWallet(payment.walletId != null ? String(payment.walletId) : '');
     setDate(todayISODate());
@@ -85,8 +86,8 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
 
   const submit = async () => {
     if (!payment) return;
-    const parsedAmount = Number(amount);
-    const parsedFee = fee ? Number(fee) : 0;
+    const parsedAmount = amount;
+    const parsedFee = fee;
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return setError('El monto debe ser mayor a 0.');
     if (!Number.isFinite(parsedFee) || parsedFee < 0) return setError('La comisión no puede ser negativa.');
     if (!wallet) return setError('Selecciona una billetera para crear la transacción.');
@@ -137,7 +138,7 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
             />
           </Box>
 
-          <TextField label="Monto" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} fullWidth autoFocus InputProps={{ endAdornment: <span>{currency}</span> }} />
+          <MoneyField label="Monto" value={amount} onValueChange={setAmount} fullWidth autoFocus currency={currency} />
 
           {/* Opcionales (fecha, hora, comisión) en bloque colapsable */}
           <Box>
@@ -154,7 +155,7 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
               <Box display="flex" flexDirection="column" gap={2} mt={1}>
                 <TextField label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
                 <TextField label="Hora (opcional)" type="time" value={time} onChange={(e) => setTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Si la dejas vacía se usa la hora actual" />
-                <TextField label="Comisión (opcional)" type="number" value={fee} onChange={(e) => setFee(e.target.value)} fullWidth onWheel={(e) => e.currentTarget.blur()} helperText="Se descuenta aparte del monto" InputProps={{ endAdornment: <span>{currency}</span> }} />
+                <MoneyField label="Comisión (opcional)" value={fee} onValueChange={setFee} fullWidth helperText="Se descuenta aparte del monto" currency={currency} />
               </Box>
             </Collapse>
           </Box>

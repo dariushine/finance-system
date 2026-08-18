@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select, FormControl, InputLabel, Chip, Alert, Snackbar, CircularProgress, Collapse, IconButton } from '@mui/material';
 import { SwapHoriz, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
+import MoneyField from './MoneyField';
 
 interface ExchangeFormProps {
   onSuccess?: () => void;
@@ -12,9 +13,9 @@ interface ExchangeFormProps {
 export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   const [fromWalletId, setFromWalletId] = useState<number | ''>('');
   const [toWalletId, setToWalletId] = useState<number | ''>('');
-  const [fromAmount, setFromAmount] = useState('');
-  const [toAmount, setToAmount] = useState('');
-  const [fee, setFee] = useState('');
+  const [fromAmount, setFromAmount] = useState(0);
+  const [toAmount, setToAmount] = useState(0);
+  const [fee, setFee] = useState(0);
   const [description, setDescription] = useState('');
   // Fecha del exchange (débito/crédito): por defecto hoy.
   const todayISODate = new Date().toISOString().split('T')[0];
@@ -33,15 +34,15 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
 
   const calculateRate = () => {
     if (!fromAmount || !toAmount) return null;
-    const from = parseFloat(fromAmount);
-    const to = parseFloat(toAmount);
+    const from = fromAmount;
+    const to = toAmount;
     if (from === 0) return null;
 
     // Tasa real: solo con el monto, la comisión NO afecta la tasa.
     // Ej: 100 USD -> 87.000 VES = 870 bs/$, con comisión 3.75 aparte.
     const rate = to / from;
     // Comisión en la moneda de origen
-    const commission = fee ? parseFloat(fee) : 0;
+    const commission = fee;
     // Total que se descuenta de la billetera origen (monto + comisión)
     const fromTotal = from + commission;
     
@@ -72,8 +73,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       const exchangeData = {
         fromWalletId: fromWalletId,
         toWalletId: toWalletId,
-        fromAmount: parseFloat(fromAmount),
-        toAmount: parseFloat(toAmount),
+        fromAmount: fromAmount,
+        toAmount: toAmount,
         fee: rateData.commission || undefined,
         description: description || undefined,
         date: date || undefined,
@@ -105,9 +106,9 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       });
       
       // Reset form
-      setFromAmount('');
-      setToAmount('');
-      setFee('');
+      setFromAmount(0);
+      setToAmount(0);
+      setFee(0);
       setDescription('');
       setDate(todayISODate);
       setTime('');
@@ -159,19 +160,14 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     ))}
                   </Select>
                 </FormControl>
-                <TextField
-                  placeholder="Monto"
-                  type="number"
+                <MoneyField
                   value={fromAmount}
-                  onChange={(e) => setFromAmount(e.target.value)}
+                  onValueChange={setFromAmount}
                   required
                   disabled={loading}
-                  onWheel={(e) => e.currentTarget.blur()}
-                  InputProps={{
-                    endAdornment: fromWalletId ? (
-                      wallets.find(w => w.id === fromWalletId)?.currency || ''
-                    ) : ''
-                  }}
+                  currency={fromWalletId ? (
+                    wallets.find(w => w.id === fromWalletId)?.currency || ''
+                  ) : undefined}
                 />
               </Box>
             </Box>
@@ -197,19 +193,14 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     ))}
                   </Select>
                 </FormControl>
-                <TextField
-                  placeholder="Monto"
-                  type="number"
+                <MoneyField
                   value={toAmount}
-                  onChange={(e) => setToAmount(e.target.value)}
+                  onValueChange={setToAmount}
                   required
                   disabled={loading}
-                  onWheel={(e) => e.currentTarget.blur()}
-                  InputProps={{
-                    endAdornment: toWalletId ? (
-                      wallets.find(w => w.id === toWalletId)?.currency || ''
-                    ) : ''
-                  }}
+                  currency={toWalletId ? (
+                    wallets.find(w => w.id === toWalletId)?.currency || ''
+                  ) : undefined}
                 />
               </Box>
             </Box>
@@ -255,20 +246,15 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     helperText="Si la dejas vacía se usa la hora actual"
                   />
 
-                  <TextField
+                  <MoneyField
                     label="Comisión (fee)"
-                    type="number"
                     value={fee}
-                    onChange={(e) => setFee(e.target.value)}
-                    placeholder="Ej: 3.75"
+                    onValueChange={setFee}
                     disabled={loading}
-                    onWheel={(e) => e.currentTarget.blur()}
                     helperText="Comisión pagada en la moneda de origen"
-                    InputProps={{
-                      endAdornment: fromWalletId ? (
-                        wallets.find(w => w.id === fromWalletId)?.currency || ''
-                      ) : ''
-                    }}
+                    currency={fromWalletId ? (
+                      wallets.find(w => w.id === fromWalletId)?.currency || ''
+                    ) : undefined}
                   />
                 </Box>
               </Collapse>
