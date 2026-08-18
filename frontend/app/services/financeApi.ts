@@ -80,8 +80,11 @@ class FinanceApi {
   }
 
   // Stats
-  async getStats(excludeFromTotal = false): Promise<Stats> {
-    const qs = excludeFromTotal ? '?excludeFromTotal=1' : '';
+  async getStats(excludeFromTotal = false, tz?: string): Promise<Stats> {
+    const params: string[] = [];
+    if (excludeFromTotal) params.push('excludeFromTotal=1');
+    if (tz) params.push(`tz=${encodeURIComponent(tz)}`);
+    const qs = params.length ? `?${params.join('&')}` : '';
     return this.fetch(`/stats${qs}`);
   }
 

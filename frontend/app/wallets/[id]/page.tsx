@@ -67,6 +67,7 @@ import {
 } from '../../lib/api';
 import theme from '../../theme';
 import { useNumberFormat } from '../../lib/NumberFormat';
+import { useTimeZone } from '../../lib/timeZone';
 
 const icons: Record<string, ReactNode> = {
   bank: <AccountBalance />,
@@ -95,6 +96,7 @@ const formatUsd = (n: number) =>
 export default function WalletDetailPage() {
   const params = useParams<{ id: string }>();
   const { formatAmount, formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const router = useRouter();
   const id = Number(params.id);
   const theme = useTheme();
@@ -169,6 +171,7 @@ export default function WalletDetailPage() {
         period: useCustom ? 'custom' : period,
         from: useCustom ? from : undefined,
         to: useCustom ? to : undefined,
+        tz: userTimeZone,
       });
       setReport(data);
     } catch (e: any) {

@@ -58,6 +58,7 @@ import CategoryAutocomplete from '../../components/CategoryAutocomplete';
 import RecurringPaymentForm from '../../components/RecurringPaymentForm';
 import MoneyField from '../../components/MoneyField';
 import { useNumberFormat } from '../../lib/NumberFormat';
+import { useTimeZone } from '../../lib/timeZone';
 
 const todayISODate = () => new Date().toISOString().split('T')[0];
 
@@ -77,6 +78,7 @@ export default function RecurringPaymentDetailPage() {
   const id = Number(params.id);
   const theme = useTheme();
   const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
 
   const [payment, setPayment] = useState<RecurringPayment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,6 +174,7 @@ export default function RecurringPaymentDetailPage() {
         description: execDescription || undefined,
         date: execDate || undefined,
         time: execTime || undefined,
+        tz: userTimeZone,
       });
       setExecOpen(false);
       router.push(`/transactions/${res.transaction.id}`);

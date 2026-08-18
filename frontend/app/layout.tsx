@@ -9,6 +9,7 @@ import AddFab from './components/AddFab';
 import RateFetcher from './components/RateFetcher';
 import theme from './theme';
 import { NumberFormatProvider } from './lib/NumberFormat';
+import { TimeZoneProvider } from './lib/timeZone';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -36,6 +37,7 @@ export default function RootLayout({
           <ThemeProvider theme={theme}>
             <CssBaseline />
             <NumberFormatProvider>
+            <TimeZoneProvider>
             <RateFetcher />
             <AddFab />
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -55,6 +57,7 @@ export default function RootLayout({
                 </Container>
               </Box>
             </Box>
+            </TimeZoneProvider>
             </NumberFormatProvider>
           </ThemeProvider>
         </AppRouterCacheProvider>

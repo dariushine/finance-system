@@ -49,6 +49,7 @@ import {
   TransactionDetail,
 } from '../../lib/api';
 import { useNumberFormat } from '../../lib/NumberFormat';
+import { useTimeZone } from '../../lib/timeZone';
 import MoneyField from '../../components/MoneyField';
 
 const formatTimeOnly = (time?: string | null) => {
@@ -74,6 +75,7 @@ const todayISODate = () => new Date().toISOString().split('T')[0];
 export default function ExchangeDetailPage() {
   const params = useParams<{ id: string }>();
   const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const router = useRouter();
   const id = Number(params.id);
   const theme = useTheme();
@@ -104,7 +106,7 @@ export default function ExchangeDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getExchange(id);
+      const data = await getExchange(id, userTimeZone);
       setExchange(data);
 
       // Cargar las transacciones que componen el exchange:
@@ -164,7 +166,7 @@ export default function ExchangeDetailPage() {
       payload.fee = fee;
       if (editForm.date) payload.date = editForm.date;
       payload.time = editForm.time || undefined;
-      const res = await updateExchange(exchange.id, payload);
+      const res = await updateExchange(exchange.id, payload, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al editar el exchange');
       notice('Exchange actualizado');
       setEditOpen(false);

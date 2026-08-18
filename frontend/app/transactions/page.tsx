@@ -14,6 +14,7 @@ import { ReceiptLong as ReceiptIcon } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 import { formatLocalDate } from '../lib/dates';
 import { useNumberFormat } from '../lib/NumberFormat';
+import { useTimeZone } from '../lib/timeZone';
 import { useRouter } from 'next/navigation';
 
 interface Transaction {
@@ -30,6 +31,7 @@ interface Transaction {
 
 export default function TransactionsPage() {
   const { formatAmount, formatNumber } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
@@ -76,6 +78,7 @@ export default function TransactionsPage() {
       if (applied.period) params.set('period', applied.period);
       if (applied.from) params.set('from', applied.from);
       if (applied.to) params.set('to', applied.to);
+      params.set('tz', userTimeZone);
       const response = await fetch(`${API_URL}/transactions?${params.toString()}`);
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'No se pudieron cargar las transacciones');
@@ -86,7 +89,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [applied]);
+  }, [applied, userTimeZone]);
 
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
 

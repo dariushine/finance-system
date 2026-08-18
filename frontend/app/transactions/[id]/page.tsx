@@ -61,6 +61,7 @@ import CategoryAutocomplete from '../../components/CategoryAutocomplete';
 import MoneyField from '../../components/MoneyField';
 import type { Category } from '../../lib/api';
 import { useNumberFormat } from '../../lib/NumberFormat';
+import { useTimeZone } from '../../lib/timeZone';
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '—';
@@ -91,6 +92,7 @@ const SYSTEM_CATEGORIES = ['fee', 'exchange_out', 'exchange_in'];
 
 export default function TransactionDetailPage() {
   const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = Number(params.id);
@@ -132,7 +134,7 @@ export default function TransactionDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getTransaction(id);
+      const data = await getTransaction(id, userTimeZone);
       setTx(data);
     } catch (e: any) {
       setError(e?.message || 'Error al cargar la transacción');
@@ -185,7 +187,7 @@ export default function TransactionDetailPage() {
       if (!isFee && editCategory !== tx.category && !SYSTEM_CATEGORIES.includes(editCategory)) {
         payload.categoryName = editCategory;
       }
-      const res = await updateTransaction(id, payload);
+      const res = await updateTransaction(id, payload, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al editar');
       notice('Transacción actualizada');
       setEditOpen(false);
@@ -233,7 +235,7 @@ export default function TransactionDetailPage() {
     try {
       const amount = feeAmount;
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto de la comisión debe ser mayor a 0');
-      const res = await addTransactionFee(id, { amount, date: feeDate || undefined, time: feeTime || undefined });
+      const res = await addTransactionFee(id, { amount, date: feeDate || undefined, time: feeTime || undefined }, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al agregar comisión');
       notice('Comisión agregada');
       setFeeOpen(false);
@@ -268,7 +270,7 @@ export default function TransactionDetailPage() {
         description: assocForm.description || undefined,
         date: assocForm.date || undefined,
         time: assocForm.time || undefined,
-      });
+      }, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al crear asociada');
       notice('Transacción asociada creada');
       setAssocOpen(false);

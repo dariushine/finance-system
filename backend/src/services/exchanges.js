@@ -19,8 +19,8 @@ function getExchangeTransactionRow(id) {
        t.type,
        t.amount,
        t.description,
-       t.date,
-       t.time,
+       t.datetime_utc AS datetimeUtc,
+       t.datetime_utc AS datetime_utc,
        t.category_id AS categoryId,
        t.parent_transaction_id AS parentId,
        t.deleted AS deleted,
@@ -34,18 +34,14 @@ function getExchangeTransactionRow(id) {
   );
 }
 
-// Crea una transacción fee (hija del débito) con la fecha/hora del exchange.
-// La comisión SIEMPRE es un gasto en la billetera del débito (origen).
-
-
-// createFeeForExchange + softDeleteExchangeTransactions
-async function createFeeForExchange(debit, amount, date, time, description) {
+// Crea una transacción fee (hija del débito) con el instante UTC del exchange.
+async function createFeeForExchange(debit, amount, datetimeUtc, description, tz) {
   const category = await getDb("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1");
   const fc = category ? category.id : debit.categoryId;
   await runDb(
-    `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
-     VALUES (?, ?, 'expense', ?, ?, ?, ?, 1.0, ?, 0, ?)`,
-    [debit.walletId, fc, amount, `Comisión: ${description || 'Exchange'}`, date, time, amount, debit.id]
+    `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
+     VALUES (?, ?, 'expense', ?, ?, ?, 1.0, ?, 0, ?)`,
+    [debit.walletId, fc, amount, `Comisión: ${description || 'Exchange'}`, datetimeUtc, amount, debit.id]
   );
 }
 

@@ -1,5 +1,6 @@
 // src/services/wallets.js — Lógica de negocio de billeteras.
 const { db } = require('../db');
+const { rangeToInstants, projectInstants } = require('./timeUtil');
 
 function listWallets({ deleted = false } = {}) {
   const active = deleted ? 0 : 1;
@@ -125,29 +126,36 @@ function resolveDateRange(from, to, period) {
 }
 
 // Reporte de una billetera: balance + ingresos/egresos + transacciones por rango.
-function getWalletReport(id, { from, to, period } = {}) {
+function getWalletReport(id, { from, to, period, tz } = {}) {
   return new Promise((resolve, reject) => {
     getWalletById(id).then((wallet) => {
       if (!wallet) return reject(Object.assign(new Error('Billetera no encontrada'), { status: 404 }));
-      const range = resolveDateRange(from, to, period);
+      const instants = rangeToInstants(from, to, period, tz);
+      const params = [id];
+      let dateFilter = '';
+      if (instants) {
+        dateFilter = ' AND t.datetime_utc >= ? AND t.datetime_utc < ?';
+        params.push(instants.start, instants.end);
+      }
       db.all(
         `SELECT
            t.id,
            t.type,
            t.amount,
            t.description,
-           t.date,
+           t.datetime_utc AS datetimeUtc,
+           t.datetime_utc AS datetime_utc,
            t.fee,
            c.name AS category,
            t.created_at AS createdAt
          FROM transactions t
          JOIN categories c ON c.id = t.category_id
-         WHERE t.wallet_id = ? AND t.deleted = 0 AND t.date >= ? AND t.date <= ?
-         ORDER BY t.date DESC, t.time DESC, t.created_at DESC, t.id DESC`,
-        [id, range.from, range.to],
+         WHERE t.wallet_id = ? AND t.deleted = 0${dateFilter}
+         ORDER BY t.datetime_utc DESC, t.created_at DESC, t.id DESC`,
+        params,
         (err, rows) => {
           if (err) return reject(err);
-          const transactions = rows || [];
+          const transactions = projectInstants(rows || [], tz);
           let income = 0;
           let expense = 0;
           transactions.forEach((t) => {
@@ -156,7 +164,7 @@ function getWalletReport(id, { from, to, period } = {}) {
           });
           resolve({
             wallet,
-            range,
+            range: { from: from || period || 'all', to: to || '', period: period || 'all', tz },
             summary: {
               income: parseFloat(income.toFixed(2)),
               expense: parseFloat(expense.toFixed(2)),

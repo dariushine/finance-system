@@ -11,6 +11,7 @@ const registerTransactions = require('./routes/transactions');
 const registerExchanges = require('./routes/exchanges');
 const registerRates = require('./routes/rates');
 const registerStats = require('./routes/stats');
+const registerSettings = require('./routes/settings');
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3002;
 
@@ -25,7 +26,7 @@ function buildApp() {
       timestamp: new Date().toISOString(),
       service: 'Finance API v4',
       version: '1.0.0',
-      features: ['wallets', 'transactions', 'exchanges', 'balance'],
+      features: ['wallets', 'transactions', 'exchanges', 'balance', 'timezone-config'],
       note: 'Exchanges con transacciones separadas (débito/crédito)',
     });
   });
@@ -36,6 +37,7 @@ function buildApp() {
   registerTransactions(app);
   registerExchanges(app);
   registerRates(app);
+  registerSettings(app);
   registerStats(app);
 
   return app;

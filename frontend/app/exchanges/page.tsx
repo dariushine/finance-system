@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 import { useNumberFormat } from '../lib/NumberFormat';
+import { useTimeZone } from '../lib/timeZone';
 import DateRangeFilter from '../components/DateRangeFilter';
 import EmptyState from '../components/EmptyState';
 import { CurrencyExchange as ExchangeIcon } from '@mui/icons-material';
@@ -163,6 +164,7 @@ export default function ExchangesPage() {
   const theme = useTheme();
   const router = useRouter();
   const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
@@ -193,6 +195,7 @@ export default function ExchangesPage() {
       if (applied.period) params.set('period', applied.period);
       if (applied.from) params.set('from', applied.from);
       if (applied.to) params.set('to', applied.to);
+      params.set('tz', userTimeZone);
       const response = await fetch(`${API_URL}/exchanges?${params.toString()}`);
       if (!response.ok) throw new Error('Error al cargar exchanges');
       

@@ -10,20 +10,22 @@ import { useWallets } from '../lib/hooks';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import MoneyField from './MoneyField';
 import type { Category } from '../lib/api';
+import { useTimeZone, todayInZone } from '../lib/timeZone';
 
 interface TransactionFormProps {
   onSuccess?: () => void;
 }
 
 export default function TransactionForm({ onSuccess }: TransactionFormProps) {
+  const { userTimeZone } = useTimeZone();
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState(0);
   const [fee, setFee] = useState(0);
   const [wallet, setWallet] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
-  // Fecha de la transacción: por defecto hoy (UTC, formato YYYY-MM-DD).
-  const todayISODate = new Date().toISOString().split('T')[0];
+  // Fecha de la transacción: por defecto hoy EN LA ZONA DEL USUARIO.
+  const todayISODate = todayInZone(userTimeZone);
   const [date, setDate] = useState(todayISODate);
   // Hora opcional (HH:MM). Por defecto vacía => backend usa hora local actual.
   const [time, setTime] = useState('');
@@ -73,6 +75,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           date: date || undefined,
           // Hora opcional (HH:MM). Backend la acepta o usa la hora local.
           time: time || undefined,
+          tz: userTimeZone,
         }),
       });
 
@@ -88,7 +91,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       setCategory('');
       setSelectedCategory(null);
       setDescription('');
-      setDate(todayISODate);
+      setDate(todayInZone(userTimeZone));
       setTime('');
       setSuccess(true);
       onSuccess?.();

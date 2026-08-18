@@ -1,4 +1,5 @@
 // src/routes/exchanges.js — Endpoints HTTP de exchanges.
+// Modelo de fecha: UN solo `datetime_utc` (instante absoluto UTC, ISO con Z).
 const { db } = require('../db');
 const {
   getDb, allDb, runDb,
@@ -6,14 +7,30 @@ const {
 } = require('../services/transactions');
 const { isValidTime, normalizeTimeMinute } = require('../services/rates');
 const {
-  getExchangeTransactions, createFeeForExchange, softDeleteExchangeTransactions,
+  getExchangeTransactions, getExchangeTransactionRow, createFeeForExchange, softDeleteExchangeTransactions,
 } = require('../services/exchanges');
+const { getUserTimeZone } = require('../services/settings');
+const { rangeToInstants, projectInstants } = require('../services/timeUtil');
+const { wallClockToUtc, isValidTimeZone } = require('../services/timeZoneMap');
+
+async function effectiveTz(q, body) {
+  const c = (body && body.tz) || (q && q.tz) || null;
+  if (c && isValidTimeZone(c)) return c;
+  return getUserTimeZone();
+}
+
+// Proyecta una fila (con datetimeUtc) a {date,time} en tz.
+function projectRow(row, tz) {
+  const p = projectInstants(row ? [row] : [], tz);
+  return p && p.length ? p[0] : row;
+}
 
 module.exports = function registerExchangeRoutes(app) {
+  // POST /api/exchanges — crear un exchange (débito + crédito + fee).
   app.post('/api/exchanges', async (req, res) => {
     try {
-      const { fromWalletId, toWalletId, fromAmount, toAmount, description, fee, date, time } = req.body;
-      console.log('💱 Procesando exchange:', { fromWalletId, toWalletId, fromAmount, toAmount, fee, date });
+      const { fromWalletId, toWalletId, fromAmount, toAmount, description, fee, date, time, tz } = req.body;
+      const tzEff = await effectiveTz(null, req.body);
 
       if (!fromWalletId || !toWalletId || !fromAmount || !toAmount) {
         return res.status(400).json({ error: 'Faltan campos requeridos: fromWalletId, toWalletId, fromAmount, toAmount' });
@@ -27,7 +44,7 @@ module.exports = function registerExchangeRoutes(app) {
       if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
       }
-      if (!isValidTime(time)) {
+      if (time != null && time !== '' && !isValidTime(time)) {
         return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
       }
       const txDate = typeof date === 'string' && date !== '' ? date : undefined;
@@ -49,11 +66,11 @@ module.exports = function registerExchangeRoutes(app) {
 
       const debitTransaction = await createTransaction(
         fromWalletId, 'exchange_out', 'expense', fromAmount,
-        `${description || 'Exchange'} → ${toWallet.name}`, commission, txDate, txTime
+        `${description || 'Exchange'} → ${toWallet.name}`, commission, txDate, txTime, tzEff
       );
       const creditTransaction = await createTransaction(
         toWalletId, 'exchange_in', 'income', toAmount,
-        `${description || 'Exchange'} ← ${fromWallet.name}`, 0, txDate, txTime
+        `${description || 'Exchange'} ← ${fromWallet.name}`, 0, txDate, txTime, tzEff
       );
 
       db.run(
@@ -90,101 +107,95 @@ module.exports = function registerExchangeRoutes(app) {
     }
   });
 
-  app.get('/api/exchanges', (req, res) => {
-    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100);
-    const offset = (page - 1) * limit;
+  // GET /api/exchanges — listar (paginado + rango en la zona del usuario).
+  app.get('/api/exchanges', async (req, res) => {
+    try {
+      const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+      const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100);
+      const offset = (page - 1) * limit;
 
-    const { from, to, period } = req.query;
-    let fromDate = from;
-    let toDate = to;
-    if (!fromDate || !toDate) {
-      if (!period) {
-        fromDate = '1970-01-01';
-        toDate = '9999-12-31';
-      } else {
-        const now = new Date();
-        toDate = now.toISOString().split('T')[0];
-        if (period === 'day') fromDate = toDate;
-        else if (period === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); fromDate = d.toISOString().split('T')[0]; }
-        else if (period === 'month') { const d = new Date(now); d.setDate(1); fromDate = d.toISOString().split('T')[0]; }
-        else if (period === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); fromDate = d.toISOString().split('T')[0]; }
-        else if (period === 'year') { const d = new Date(now); d.setMonth(d.getMonth() - 12); fromDate = d.toISOString().split('T')[0]; }
-        else fromDate = '1970-01-01';
+      const { from, to, period, tz } = req.query;
+      const tzEff = await effectiveTz(req.query, null);
+      const bounds = rangeToInstants(from, to, period, tzEff);
+      const conditions = ['e.deleted = 0'];
+      const params = [];
+      if (bounds) {
+        conditions.push('dt.datetime_utc >= ?', 'dt.datetime_utc < ?');
+        params.push(bounds.start, bounds.end);
       }
+      params.push(limit, offset);
+
+      const query = `
+        SELECT
+          e.id,
+          e.from_wallet_id AS fromWalletId,
+          e.to_wallet_id AS toWalletId,
+          e.from_amount AS fromAmount,
+          e.to_amount AS toAmount,
+          e.rate,
+          e.debit_transaction_id AS debitTransactionId,
+          e.credit_transaction_id AS creditTransactionId,
+          e.fee,
+          e.description,
+          e.created_at AS createdAt,
+          dt.datetime_utc AS datetimeUtc,
+          from_wallet.name AS fromWalletName,
+          to_wallet.name AS toWalletName,
+          from_wallet.currency AS fromCurrency,
+          to_wallet.currency AS toCurrency
+        FROM exchanges e
+        JOIN wallets from_wallet ON from_wallet.id = e.from_wallet_id
+        JOIN wallets to_wallet ON to_wallet.id = e.to_wallet_id
+        LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY COALESCE(dt.datetime_utc, '1970-01-01T00:00:00Z') DESC, e.created_at DESC, e.id DESC
+        LIMIT ? OFFSET ?`;
+
+      const rows = await new Promise((resv, rej) => db.all(query, params, (e, r) => (e ? rej(e) : resv(r))));
+      const total = await new Promise((resv, rej) =>
+        db.get(`SELECT COUNT(*) AS total FROM exchanges e LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id WHERE ${conditions.join(' AND ')}`, params.slice(0, -2), (e, r) => (e ? rej(e) : resv(r)))
+      );
+      res.json({ data: projectInstants(rows, tzEff), total: total?.total || 0, page, limit, tz: tzEff });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
-
-    const conditions = ["COALESCE(dt.date, '') >= ?", "COALESCE(dt.date, '') <= ?", 'e.deleted = 0'];
-    const params = [fromDate, toDate, limit, offset];
-    const query = `
-      SELECT
-        e.id,
-        e.from_wallet_id AS fromWalletId,
-        e.to_wallet_id AS toWalletId,
-        e.from_amount AS fromAmount,
-        e.to_amount AS toAmount,
-        e.rate,
-        e.debit_transaction_id AS debitTransactionId,
-        e.credit_transaction_id AS creditTransactionId,
-        e.fee,
-        e.description,
-        e.created_at AS createdAt,
-        dt.date AS date,
-        dt.time AS time,
-        from_wallet.name AS fromWalletName,
-        to_wallet.name AS toWalletName,
-        from_wallet.currency AS fromCurrency,
-        to_wallet.currency AS toCurrency
-      FROM exchanges e
-      JOIN wallets from_wallet ON from_wallet.id = e.from_wallet_id
-      JOIN wallets to_wallet ON to_wallet.id = e.to_wallet_id
-      LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY COALESCE(dt.date, '1970-01-01') DESC, COALESCE(dt.time, '') DESC, e.created_at DESC, e.id DESC
-      LIMIT ? OFFSET ?`;
-
-    db.all(query, params, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      db.get(`SELECT COUNT(*) AS total FROM exchanges e LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id WHERE ${conditions.join(' AND ')}`, [fromDate, toDate], (countErr, result) => {
-        if (countErr) return res.status(500).json({ error: countErr.message });
-        res.json({ data: rows || [], total: result?.total || 0, page, limit });
-      });
-    });
   });
 
-  // Detalle de un exchange
-  app.get('/api/exchanges/:id', (req, res) => {
-    const id = Number.parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID inválido' });
-    const query = `
-      SELECT
-        e.id,
-        e.from_wallet_id AS fromWalletId,
-        e.to_wallet_id AS toWalletId,
-        e.from_amount AS fromAmount,
-        e.to_amount AS toAmount,
-        e.rate,
-        e.fee,
-        e.description,
-        e.created_at AS createdAt,
-        e.debit_transaction_id AS debitTransactionId,
-        e.credit_transaction_id AS creditTransactionId,
-        dt.date AS date,
-        dt.time AS time,
-        fw.name AS fromWalletName,
-        tw.name AS toWalletName,
-        fw.currency AS fromCurrency,
-        tw.currency AS toCurrency
-      FROM exchanges e
-      JOIN wallets fw ON fw.id = e.from_wallet_id
-      JOIN wallets tw ON tw.id = e.to_wallet_id
-      LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
-      WHERE e.id = ? AND e.deleted = 0`;
-    db.get(query, [id], (err, row) => {
-      if (err) return res.status(500).json({ error: err.message });
+  // GET /api/exchanges/:id — detalle.
+  app.get('/api/exchanges/:id', async (req, res) => {
+    try {
+      const id = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID inválido' });
+      const tzEff = await effectiveTz(req.query, null);
+      const query = `
+        SELECT
+          e.id,
+          e.from_wallet_id AS fromWalletId,
+          e.to_wallet_id AS toWalletId,
+          e.from_amount AS fromAmount,
+          e.to_amount AS toAmount,
+          e.rate,
+          e.fee,
+          e.description,
+          e.created_at AS createdAt,
+          e.debit_transaction_id AS debitTransactionId,
+          e.credit_transaction_id AS creditTransactionId,
+          dt.datetime_utc AS datetimeUtc,
+          fw.name AS fromWalletName,
+          tw.name AS toWalletName,
+          fw.currency AS fromCurrency,
+          tw.currency AS toCurrency
+        FROM exchanges e
+        JOIN wallets fw ON fw.id = e.from_wallet_id
+        JOIN wallets tw ON tw.id = e.to_wallet_id
+        LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
+        WHERE e.id = ? AND e.deleted = 0`;
+      const row = await new Promise((resv, rej) => db.get(query, [id], (e, r) => (e ? rej(e) : resv(r))));
       if (!row) return res.status(404).json({ error: 'Exchange no encontrado' });
-      res.json(row);
-    });
+      res.json(projectRow(row, tzEff));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // PUT /api/exchanges/:id — editar montos, fee, fecha/hora y descripción.
@@ -202,7 +213,8 @@ module.exports = function registerExchangeRoutes(app) {
       );
       if (!ex || ex.deleted) return res.status(404).json({ error: 'Exchange no encontrado' });
 
-      const { fromAmount, toAmount, fee, description, date, time } = req.body;
+      const { fromAmount, toAmount, fee, description, date, time, tz } = req.body;
+      const tzEff = await effectiveTz(null, req.body);
       const [debit, credit] = await getExchangeTransactions(ex);
       if (!debit || debit.deleted || !credit || credit.deleted) {
         return res.status(400).json({ error: 'El exchange tiene transacciones inconsistentes.' });
@@ -246,17 +258,16 @@ module.exports = function registerExchangeRoutes(app) {
         feeChanged = newFee !== (Number(ex.fee) || 0);
       }
 
-      let newDate = debit.date || credit.date;
-      let newTime = debit.time || credit.time || null;
-      if (date != null && date !== '') {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
-        newDate = date;
-      }
-      if (time != null && time !== '') {
-        if (!isValidTime(time)) return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
-        newTime = normalizeTimeMinute(time);
-      } else if (time === '') {
-        newTime = null;
+      // Nueva fecha/hora → instante UTC (conserva la del débito si no se cambia).
+      let newDatetimeUtc = debit.datetimeUtc;
+      if (date != null && date !== '' || (time != null && time !== '')) {
+        const prevWall = projectRow({ datetimeUtc: debit.datetimeUtc }, tzEff) || {};
+        const newDate = (date != null && date !== '') ? date : prevWall.date;
+        if (newDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+          return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
+        }
+        const newTime = (time != null && time !== '') ? normalizeTimeMinute(time) : (prevWall.time || '00:00');
+        newDatetimeUtc = wallClockToUtc(newDate, newTime, tzEff);
       }
       const newDescription = description !== undefined ? (description || '') : ex.description;
 
@@ -279,14 +290,14 @@ module.exports = function registerExchangeRoutes(app) {
 
         const newRate = newToAmount / newFromAmount;
         const debitDesc = `${newDescription || 'Exchange'} → ${creditWalletName || 'destino'}`;
-        await runDb('UPDATE transactions SET amount = ?, description = ?, date = ?, time = ? WHERE id = ?', [newFromAmount, debitDesc, newDate, newTime, debit.id]);
+        await runDb('UPDATE transactions SET amount = ?, description = ?, datetime_utc = ? WHERE id = ?', [newFromAmount, debitDesc, newDatetimeUtc, debit.id]);
         const creditDesc = `${newDescription || 'Exchange'} ← ${debitWalletName || 'origen'}`;
-        await runDb('UPDATE transactions SET amount = ?, description = ?, date = ?, time = ? WHERE id = ?', [newToAmount, creditDesc, newDate, newTime, credit.id]);
+        await runDb('UPDATE transactions SET amount = ?, description = ?, datetime_utc = ? WHERE id = ?', [newToAmount, creditDesc, newDatetimeUtc, credit.id]);
 
         let feesAlive = [...prevFees];
         if (feeChanged) {
           if (newFee > 0 && prevFees.length === 0) {
-            await createFeeForExchange(debit, newFee, newDate, newTime, newDescription);
+            await createFeeForExchange(debit, newFee, newDatetimeUtc, newDescription, tzEff);
             feesAlive = [];
           } else if (newFee === 0) {
             for (const f of prevFees) await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
@@ -299,7 +310,7 @@ module.exports = function registerExchangeRoutes(app) {
           }
         }
         for (const f of feesAlive) {
-          await runDb('UPDATE transactions SET date = ?, time = ? WHERE id = ?', [newDate, newTime, f.id]);
+          await runDb('UPDATE transactions SET datetime_utc = ? WHERE id = ?', [newDatetimeUtc, f.id]);
         }
 
         await runDb(

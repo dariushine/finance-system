@@ -5,20 +5,22 @@ import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select
 import { SwapHoriz, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 import MoneyField from './MoneyField';
+import { useTimeZone, todayInZone } from '../lib/timeZone';
 
 interface ExchangeFormProps {
   onSuccess?: () => void;
 }
 
 export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
+  const { userTimeZone } = useTimeZone();
   const [fromWalletId, setFromWalletId] = useState<number | ''>('');
   const [toWalletId, setToWalletId] = useState<number | ''>('');
   const [fromAmount, setFromAmount] = useState(0);
   const [toAmount, setToAmount] = useState(0);
   const [fee, setFee] = useState(0);
   const [description, setDescription] = useState('');
-  // Fecha del exchange (débito/crédito): por defecto hoy.
-  const todayISODate = new Date().toISOString().split('T')[0];
+  // Fecha del exchange (débito/crédito): por defecto hoy EN LA ZONA DEL USUARIO.
+  const todayISODate = todayInZone(userTimeZone);
   const [date, setDate] = useState(todayISODate);
   // Hora opcional (HH:MM). Vacía => backend usa hora local actual.
   const [time, setTime] = useState('');
@@ -79,6 +81,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         description: description || undefined,
         date: date || undefined,
         time: time || undefined,
+        tz: userTimeZone,
       };
       
       // Hacer la llamada al endpoint de exchanges
@@ -110,7 +113,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setToAmount(0);
       setFee(0);
       setDescription('');
-      setDate(todayISODate);
+      setDate(todayInZone(userTimeZone));
       setTime('');
 
       // Notificar éxito al componente padre

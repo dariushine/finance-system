@@ -1,34 +1,26 @@
 // src/routes/stats.js — Estadísticas del dashboard.
 const { db } = require('../db');
 const { getRateForDate } = require('../services/rates');
+const { rangeToInstants, projectInstants } = require('../services/timeUtil');
+const { getUserTimeZone } = require('../services/settings');
+const { isValidTimeZone } = require('../services/timeZoneMap');
 
 module.exports = function registerStatsRoutes(app) {
   app.get('/api/stats', async (req, res) => {
     const rateType = req.query.rate === 'paralelo' ? 'paralelo' : 'bcv';
     // Excluir billeteras marcadas para no contar en los totales del dashboard.
-    // Los reportes llaman ESTE MISMO endpoint SIN este flag, así no les afecta.
     const excludeFromTotal = req.query.excludeFromTotal === '1' || req.query.excludeFromTotal === 'true';
 
     const { from, to, period } = req.query;
-    let fromDate = from;
-    let toDate = to;
-    if (!fromDate || !toDate) {
-      const now = new Date();
-      toDate = now.toISOString().split('T')[0];
-      if (!period || period === 'all' || period === '') {
-        fromDate = '1970-01-01';
-      } else if (period === '1m') {
-        const d = new Date(now); d.setMonth(d.getMonth() - 1); fromDate = d.toISOString().split('T')[0];
-      } else if (period === '3m') {
-        const d = new Date(now); d.setMonth(d.getMonth() - 3); fromDate = d.toISOString().split('T')[0];
-      } else if (period === '6m') {
-        const d = new Date(now); d.setMonth(d.getMonth() - 6); fromDate = d.toISOString().split('T')[0];
-      } else if (period === '1y') {
-        const d = new Date(now); d.setMonth(d.getMonth() - 12); fromDate = d.toISOString().split('T')[0];
-      } else {
-        fromDate = '1970-01-01';
-      }
-    }
+    const qz = req.query.tz;
+    const tz = qz && isValidTimeZone(qz) ? qz : await getUserTimeZone();
+    const { start, end } = rangeToInstants(from, to, period, tz) || {};
+    const instants = start && end ? { start, end } : null;
+
+    const dateFilter = instants
+      ? 't.datetime_utc >= ? AND t.datetime_utc < ?'
+      : null;
+    const dateParams = instants ? [instants.start, instants.end] : [];
 
     try {
       // Si se pide excluir billeteras de los totales, descartamos las transacciones
@@ -39,15 +31,19 @@ module.exports = function registerStatsRoutes(app) {
           })
         : [];
       const rows = await new Promise((resolve, reject) => {
-        const params = [fromDate, toDate];
+        const params = [...dateParams];
         let walletFilter = '';
         if (excludeIds.length) {
-          walletFilter = ` AND w.id NOT IN (${excludeIds.map(() => '?').join(',')})`;
+          walletFilter += ` AND w.id NOT IN (${excludeIds.map(() => '?').join(',')})`;
           params.push(...excludeIds);
         }
-        db.all(`SELECT t.type, t.amount, t.date, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE COALESCE(t.date, '') >= ? AND COALESCE(t.date, '') <= ?${walletFilter}`,
+        let dateFilterStr = '';
+        if (dateFilter) {
+          dateFilterStr = ` AND ${dateFilter}`;
+        }
+        db.all(`SELECT t.type, t.amount, t.datetime_utc AS datetime_utc, t.datetime_utc AS datetimeUtc, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE t.deleted = 0${dateFilterStr}${walletFilter}`,
           params, (err, r) => err ? reject(err) : resolve(r));
-      });
+      }).then((rows) => projectInstants(rows || [], tz));
 
       let total_income = 0;
       let total_expense = 0;
@@ -104,6 +100,11 @@ module.exports = function registerStatsRoutes(app) {
       const byCategoryTotal = byCategory.reduce((s, c) => s + c.total, 0);
 
       const exchangeRows = await new Promise((resolve, reject) => {
+        const params = [...dateParams];
+        let dateFilterStr = '';
+        if (dateFilter) {
+          dateFilterStr = ` AND ${dateFilter}`;
+        }
         db.all(`SELECT
             e.from_amount AS fromAmount,
             e.to_amount AS toAmount,
@@ -111,14 +112,15 @@ module.exports = function registerStatsRoutes(app) {
             e.fee,
             fw.currency AS fromCurrency,
             tw.currency AS toCurrency,
-            dt.date AS date
+            dt.datetime_utc AS datetime_utc,
+            dt.datetime_utc AS datetimeUtc
           FROM exchanges e
           JOIN wallets fw ON fw.id = e.from_wallet_id
           JOIN wallets tw ON tw.id = e.to_wallet_id
           LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id
-          WHERE e.deleted = 0 AND COALESCE(dt.date, '') >= ? AND COALESCE(dt.date, '') <= ?`,
-          [fromDate, toDate], (err, r) => err ? reject(err) : resolve(r || []));
-      });
+          WHERE e.deleted = 0${dateFilterStr}`,
+          params, (err, r) => err ? reject(err) : resolve(r || []));
+      }).then((rows) => projectInstants(rows || [], tz));
       let totalFromUSD = 0;
       let totalToUSD = 0;
       let totalFeeUSD = 0;

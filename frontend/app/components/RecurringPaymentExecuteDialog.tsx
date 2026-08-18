@@ -29,11 +29,10 @@ import {
   ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { executeRecurringPayment, type RecurringPayment } from '../lib/api';
+import { useTimeZone, todayInZone } from '../lib/timeZone';
 import { useWallets } from '../lib/hooks';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import MoneyField from './MoneyField';
-
-const todayISODate = () => new Date().toISOString().split('T')[0];
 
 interface RecurringPaymentExecuteDialogProps {
   payment: RecurringPayment | null;
@@ -49,7 +48,9 @@ interface RecurringPaymentExecuteDialogProps {
  */
 export default function RecurringPaymentExecuteDialog({ payment, open, onClose }: RecurringPaymentExecuteDialogProps) {
   const router = useRouter();
+  const { userTimeZone } = useTimeZone();
   const { wallets, loading: walletsLoading } = useWallets();
+  const todayISODate = () => todayInZone(userTimeZone);
 
   const [amount, setAmount] = useState(0);
   const [fee, setFee] = useState(0);
@@ -104,6 +105,7 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
         description: description || undefined,
         date: date || undefined,
         time: time || undefined,
+        tz: userTimeZone,
       });
       close();
       router.push(`/transactions/${res.transaction.id}`);

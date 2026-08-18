@@ -1,53 +1,51 @@
 // src/services/transactions.js — Lógica de negocio de transacciones.
+// Modelo de fecha: UN solo `datetime_utc` (instante absoluto UTC, ISO con Z).
+// El front manda la fecha/hora EN SU ZONA (date "YYYY-MM-DD", time "HH:MM",
+// tz IANA) y aquí se convierte a instante UTC al guardar. Al leer, se proyecta
+// el instante a la zona (ver routes, que llama utcToWallClock).
 const { db } = require('../db');
 const { getOrCreateCategory } = require('./categories');
+const { wallClockToUtc } = require('./timeZoneMap');
+
+// Convierte la fecha/hora "de pared" del usuario a un instante UTC ISO (con Z).
+// Si no se provee fecha u hora, usa "ahora" (instante actual, horario servidor).
+// `tz` debe ser la zona del usuario (IANA). Si falta, se interpreta como UTC.
+function resolveDatetimeUtc(date, time, tz) {
+  const nowIso = new Date().toISOString();
+  const hasDate = typeof date === 'string' && date !== '';
+  if (!hasDate) return nowIso;
+  const hasTime = typeof time === 'string' && time !== '';
+  return wallClockToUtc(date, hasTime ? time : '00:00', tz);
+}
 
 // createTransaction
-function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date, time) {
+// @param {string} tz - zona IANA del usuario (para convertir date+time a UTC).
+function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date, time, tz) {
   return new Promise((resolve, reject) => {
     const commission = Number(fee) || 0;
-    // Fecha + hora de la transacción. El frontend manda `date` como
-    // YYYY-MM-DD y `time` como HH:MM. Si no se proveen, se usa hoy local.
-    // La hora se normaliza a HH:MM (minuto): no se guardan segundos.
-    const now = new Date();
-    const pad2 = (n) => String(n).padStart(2, '0');
-    const defaultDate = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-    const defaultTime = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-    const txDate = typeof date === 'string' && date !== '' ? date : defaultDate;
-    let txTime = defaultTime;
-    if (typeof time === 'string' && time !== '') {
-      // Aceptar HH:MM (o HH:MM:SS, truncando los segundos).
-      txTime = time.slice(0, 5);
-    }
+    const datetimeUtc = resolveDatetimeUtc(date, time, tz);
+
     db.serialize(() => {
-      // 1. Obtener wallet
       db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId], (err, wallet) => {
         if (err) return reject(err);
         if (!wallet) return reject(new Error('Wallet no encontrada'));
-        
-        // 2. Obtener categoría (si no existe, se crea automáticamente)
+
         getOrCreateCategory(categoryName, type).then((category) => {
-            // 3. Validar fondos para gastos: monto + comisión (la comisión es EXTRA al monto)
             const total = amount + commission;
             if (type === 'expense' && wallet.balance < total) {
               return reject(new Error(`Fondos insuficientes. Balance actual: ${wallet.balance} ${wallet.currency}, necesita ${total}`));
             }
-            
-            // 4. Calcular nuevo balance:
-            //    - Gasto: se descuenta monto + comisión.
-            //    - Ingreso: se suma el monto pero la comisión se resta (es un GASTO aparte).
+
             const newBalance = type === 'expense'
               ? wallet.balance - total
               : wallet.balance + amount - commission;
-            
-            // 5. Crear transacción y actualizar balance en transacción
+
             db.run('BEGIN TRANSACTION');
 
-            // 5a. Transacción principal con el monto original (sin comisión)
             db.run(
-              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [walletId, category.id, type, amount, description || '', txDate, txTime, 1.0, amount, 0, null],
+              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [walletId, category.id, type, amount, description || '', datetimeUtc, 1.0, amount, 0, null],
               function(err) {
                 if (err) {
                   db.run('ROLLBACK');
@@ -56,7 +54,6 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                 const transactionId = this.lastID;
 
                 const finish = (feeTransactionId) => {
-                  // Actualizar balance
                   db.run('UPDATE wallets SET balance = ? WHERE id = ?', [newBalance, walletId], (upErr) => {
                     if (upErr) {
                       db.run('ROLLBACK');
@@ -72,32 +69,29 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                         type,
                         newBalance,
                         category: category.name,
-                        fee: commission
+                        fee: commission,
+                        datetime_utc: datetimeUtc,
                       });
                     });
                   });
                 };
 
-                // 5b. Si hay comisión, crear una transacción SEPARADA tipo fee.
-                //     La comisión SIEMPRE es un gasto, aunque el padre sea un ingreso.
                 if (commission > 0) {
                   db.get('SELECT * FROM categories WHERE name = ? AND type = ? AND isActive = 1',
                     ['fee', 'expense'], (fErr, feeCategory) => {
                       const fc = (!fErr && feeCategory) ? feeCategory : category;
                       db.run(
-                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, date, time, exchange_rate, converted_amount, fee, parent_transaction_id)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [walletId, fc.id, 'expense', commission,
                          `Comisión: ${description || category.name}`,
-                         txDate, txTime, 1.0, commission, 0, transactionId],
+                         datetimeUtc, 1.0, commission, 0, transactionId],
                         function(err2) {
                           if (err2) {
                             db.run('ROLLBACK');
                             return reject(err2);
                           }
                           const feeTransactionId = this.lastID;
-
-                          // Recalcular transactions.fee del padre (suma de fees)
                           db.run(
                             `UPDATE transactions SET fee =
                                (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
@@ -110,7 +104,6 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                                 db.run('ROLLBACK');
                                 return reject(feeUpErr);
                               }
-                              // Recalcular exchanges.fee si este padre es el débito de un exchange
                               db.run(
                                 `UPDATE exchanges SET fee =
                                    (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
@@ -142,17 +135,12 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
   });
 }
 
-// Endpoints
-
-
 // Helpers de cadena de transacciones
-// transacción. Devuelve [{id, category}...] de ancestros (sin incluir la raíz
-// consultada). Usada para saber si una transacción pertenece a un exchange.
 function getParentChain(transactionId) {
   return new Promise((resolve, reject) => {
     const chain = [];
     const visit = (id, depth) => {
-      if (depth > 50) return resolve(chain); // tope de seguridad
+      if (depth > 50) return resolve(chain);
       db.get(
         `SELECT id, parent_transaction_id AS parentId, category_id FROM transactions WHERE id = ?`,
         [id],
@@ -169,13 +157,11 @@ function getParentChain(transactionId) {
   });
 }
 
-// Resuelve si una transacción (o cualquiera de sus ancestros) es un miembro
-// directo de un exchange (débito o crédito). Devuelve { exchangeId } o null.
+// Resuelve si una transacción (o cualquiera de sus ancestros) es miembro de un
+// exchange. Devuelve { exchangeId } o null.
 function resolveExchangeForTransaction(transactionId) {
   return new Promise((resolve, reject) => {
     getParentChain(transactionId).then((chain) => {
-      // La cadena incluye la propia transacción + ancestros; buscar el primer
-      // eslabón que sea débito/crédito de un exchange.
       const ids = chain.map((c) => c.id);
       if (ids.length === 0) return resolve(null);
       const placeholders = ids.map(() => '?').join(',');
@@ -196,9 +182,7 @@ function resolveExchangeForTransaction(transactionId) {
 }
 
 
-
 // Helpers promisificados para editar/eliminar
-// === Helpers promisificados para editar/eliminar ===
 function runDb(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
@@ -218,12 +202,6 @@ function allDb(sql, params = []) {
   });
 }
 
-// Ejecuta `fn` (async) dentro de UNA transacción SQL (BEGIN/COMMIT/ROLLBACK).
-// `fn` debe contener SOLO operaciones de escritura (usa runDb/serverDb/etc.).
-// Si `fn` lanza o rechaza, se hace ROLLBACK y se relanza el error.
-// Además serializa las transacciones de escritura en la conexión compartida
-// (cola de promesas) para que dos requests concurrentes no intercalen sus
-// statements dentro de una misma transacción.
 let writeTxQueue = Promise.resolve();
 function withTransaction(fn) {
   const run = () => new Promise((resolve, reject) => {
@@ -239,7 +217,6 @@ function withTransaction(fn) {
         )
         .then(resolve)
         .catch((error) => {
-          // ROLLBACK y relanzar el error original
           db.run('ROLLBACK', () => reject(error));
         });
     });
@@ -249,10 +226,7 @@ function withTransaction(fn) {
   return p;
 }
 
-// Obtiene una transacción con datos de billetera y categoría (incluso si está borrada).
-
-
-// getTransactionRow + getMinChildDate + dtKey + syncParentFee + balanceEffect
+// Obtiene una transacción con datos de billetera y categoría.
 function getTransactionRow(id) {
   return getDb(
     `SELECT
@@ -262,8 +236,7 @@ function getTransactionRow(id) {
        t.type,
        t.amount,
        t.description,
-       t.date,
-       t.time,
+       t.datetime_utc AS datetimeUtc,
        t.fee,
        t.parent_transaction_id AS parentId,
        t.deleted AS deleted,
@@ -279,35 +252,23 @@ function getTransactionRow(id) {
   );
 }
 
-// Fecha mínima entre los hijos (no borrados) de una transacción.
+// Instante (datetime_utc) más reciente entre los hijos no borrados.
 function getMinChildDate(parentId) {
   return getDb(
-    `SELECT MIN(date) AS minDate, MIN(
-       CASE
-         WHEN time IS NOT NULL AND time != '' THEN date || 'T' || time
-         ELSE date || 'T23:59:59'
-       END
-     ) AS minDateTime FROM transactions WHERE parent_transaction_id = ? AND deleted = 0`,
+    `SELECT MIN(datetime_utc) AS minDateTime FROM transactions
+     WHERE parent_transaction_id = ? AND deleted = 0`,
     [parentId]
   );
 }
 
-// Convierte una fecha/hora a un string comparable lexicográficamente.
-// `time` puede ser HH:MM, HH:MM:SS, vacío o null. Si falta, se usa 23:59:59
-// (el final del día) para que una transacción sin hora se considere después de
-// cualquier otra con hora ese mismo día.
-function dtKey(date, time) {
-  const t = (typeof time === 'string' && time !== '') ? time : '23:59:59';
-  const normalized = t.length === 5 ? `${t}:00` : t;
-  return `${date}T${normalized}`;
+// Compara dos instantes UTC (ISO). Devuelve true si a < b lexicográficamente
+// (ISO con Z ordena correctamente). Compatible con la API previa (dtKey).
+function dtKey(isoA, isoB) {
+  return String(isoA || '') < String(isoB || '');
 }
 
-// Comunica la categoría fee/exchange por nombre según tipo de categoría usada.
-
 // Recalcula transactions.fee del padre y exchanges.fee (si el padre es débito de
-// un exchange) a partir de la suma de sus transacciones hijas categoría fee.
-// NOTA: esta variante ejecuta SOLO los UPDATEs, SIN abrir transacción.
-// Debe llamarse DENTRO de un withTransaction (los handlers la envuelven).
+// un exchange). SOLO UPDATEs; debe llamarse DENTRO de un withTransaction.
 async function syncParentFeeSql(parentId) {
   await runDb(
     `UPDATE transactions SET fee = COALESCE((
@@ -329,9 +290,6 @@ async function syncParentFeeSql(parentId) {
   );
 }
 
-// Recalcula fees del padre/exchange, atómico (envuelve syncParentFeeSql en UNA
-// transacción). Útil cuando se llama de forma aislada (p.ej. desde createTransaction
-// u otros flujos que no envuelven todo el bloque).
 function syncParentFee(parentId) {
   return withTransaction(() => syncParentFeeSql(parentId));
 }
@@ -341,5 +299,19 @@ function balanceEffect(type, amount) {
   return type === 'income' ? Number(amount) : -Number(amount);
 }
 
-
-module.exports = { createTransaction, getParentChain, resolveExchangeForTransaction, runDb, getDb, allDb, getTransactionRow, getMinChildDate, dtKey, syncParentFee, syncParentFeeSql, balanceEffect, withTransaction };
+module.exports = {
+  createTransaction,
+  getParentChain,
+  resolveExchangeForTransaction,
+  runDb,
+  getDb,
+  allDb,
+  getTransactionRow,
+  getMinChildDate,
+  dtKey,
+  syncParentFee,
+  syncParentFeeSql,
+  balanceEffect,
+  withTransaction,
+  resolveDatetimeUtc,
+};
