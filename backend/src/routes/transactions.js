@@ -4,7 +4,7 @@ const {
   createTransaction, getTransactionRow, runDb, getDb,
   resolveExchangeForTransaction, getMinChildDate, dtKey, syncParentFeeSql, balanceEffect, withTransaction,
 } = require('../services/transactions');
-const { isValidTime } = require('../services/rates');
+const { isValidTime, normalizeTimeMinute } = require('../services/rates');
 const { getOrCreateCategory, isSystemCategoryName } = require('../services/categories');
 
 module.exports = function registerTransactionRoutes(app) {
@@ -212,7 +212,7 @@ module.exports = function registerTransactionRoutes(app) {
         if (!isValidTime(time)) {
           return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
         }
-        newTime = time.length === 5 ? `${time}:00` : time;
+        newTime = normalizeTimeMinute(time);
       } else if (time === '') {
         newTime = null;
       }
@@ -333,7 +333,7 @@ module.exports = function registerTransactionRoutes(app) {
         if (!isValidTime(time)) {
           return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
         }
-        feeTime = time.length === 5 ? `${time}:00` : time;
+        feeTime = normalizeTimeMinute(time);
       } else if (time === '') {
         feeTime = null;
       }
@@ -398,7 +398,7 @@ module.exports = function registerTransactionRoutes(app) {
         if (!isValidTime(time)) {
           return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
         }
-        assocTime = time.length === 5 ? `${time}:00` : time;
+        assocTime = normalizeTimeMinute(time);
       } else if (time === '') {
         assocTime = null;
       }
