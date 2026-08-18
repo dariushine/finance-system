@@ -56,14 +56,8 @@ import {
 import { useWallets } from '../../lib/hooks';
 import CategoryAutocomplete from '../../components/CategoryAutocomplete';
 import RecurringPaymentForm from '../../components/RecurringPaymentForm';
-
-const formatCurrency = (amount: number, currency: string) => {
-  try {
-    return new Intl.NumberFormat('es-VE', { style: 'currency', currency, minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
-};
+import MoneyField from '../../components/MoneyField';
+import { useNumberFormat } from '../../lib/NumberFormat';
 
 const todayISODate = () => new Date().toISOString().split('T')[0];
 
@@ -82,6 +76,7 @@ export default function RecurringPaymentDetailPage() {
   const searchParams = useSearchParams();
   const id = Number(params.id);
   const theme = useTheme();
+  const { formatCurrency } = useNumberFormat();
 
   const [payment, setPayment] = useState<RecurringPayment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,8 +87,8 @@ export default function RecurringPaymentDetailPage() {
 
   // Formulario para convertir la plantilla en una transacción real.
   const [execOpen, setExecOpen] = useState(false);
-  const [execAmount, setExecAmount] = useState('');
-  const [execFee, setExecFee] = useState('');
+  const [execAmount, setExecAmount] = useState(0);
+  const [execFee, setExecFee] = useState(0);
   const [execDescription, setExecDescription] = useState('');
   const [execWallet, setExecWallet] = useState('');
   const [execDate, setExecDate] = useState(todayISODate());
@@ -126,8 +121,8 @@ export default function RecurringPaymentDetailPage() {
 
   const openExecute = useCallback(() => {
     if (!payment) return;
-    setExecAmount(String(payment.amount));
-    setExecFee(payment.fee ? String(payment.fee) : '');
+    setExecAmount(payment.amount);
+    setExecFee(payment.fee ? payment.fee : 0);
     setExecDescription(payment.description || '');
     setExecWallet(payment.walletId != null ? String(payment.walletId) : '');
     setExecDate(todayISODate());
@@ -159,8 +154,8 @@ export default function RecurringPaymentDetailPage() {
 
   const submitExecute = async () => {
     if (!payment) return;
-    const amount = Number(execAmount);
-    const fee = execFee ? Number(execFee) : 0;
+    const amount = execAmount;
+    const fee = execFee;
     if (!Number.isFinite(amount) || amount <= 0) return setExecError('El monto debe ser mayor a 0.');
     if (!Number.isFinite(fee) || fee < 0) return setExecError('La comisión no puede ser negativa.');
     if (!execWallet) return setExecError('Selecciona una billetera para crear la transacción.');
@@ -353,7 +348,7 @@ export default function RecurringPaymentDetailPage() {
               />
             </Box>
 
-            <TextField label="Monto" type="number" value={execAmount} onChange={(e) => setExecAmount(e.target.value)} fullWidth autoFocus InputProps={{ endAdornment: <span>{currency}</span> }} />
+            <MoneyField label="Monto" value={execAmount} onValueChange={setExecAmount} fullWidth autoFocus currency={currency} />
 
             {/* Opcionales (fecha, hora, comisión) en bloque colapsable, como en el form de transacción */}
             <Box>
@@ -370,7 +365,7 @@ export default function RecurringPaymentDetailPage() {
                 <Box display="flex" flexDirection="column" gap={2} mt={1}>
                   <TextField label="Fecha" type="date" value={execDate} onChange={(e) => setExecDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
                   <TextField label="Hora (opcional)" type="time" value={execTime} onChange={(e) => setExecTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Si la dejas vacía se usa la hora actual" />
-                  <TextField label="Comisión (opcional)" type="number" value={execFee} onChange={(e) => setExecFee(e.target.value)} fullWidth onWheel={(e) => e.currentTarget.blur()} helperText="Se descuenta aparte del monto" InputProps={{ endAdornment: <span>{currency}</span> }} />
+                  <MoneyField label="Comisión (opcional)" value={execFee} onValueChange={setExecFee} fullWidth helperText="Se descuenta aparte del monto" currency={currency} />
                 </Box>
               </Collapse>
             </Box>

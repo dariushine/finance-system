@@ -66,6 +66,7 @@ import {
   WalletReport,
 } from '../../lib/api';
 import theme from '../../theme';
+import { useNumberFormat } from '../../lib/NumberFormat';
 
 const icons: Record<string, ReactNode> = {
   bank: <AccountBalance />,
@@ -93,6 +94,7 @@ const formatUsd = (n: number) =>
 
 export default function WalletDetailPage() {
   const params = useParams<{ id: string }>();
+  const { formatAmount, formatCurrency } = useNumberFormat();
   const router = useRouter();
   const id = Number(params.id);
   const theme = useTheme();
@@ -371,14 +373,14 @@ export default function WalletDetailPage() {
             <Box>
               <Typography variant="caption" color="text.secondary" display="block">Saldo</Typography>
               <Typography variant="h4" color="primary.main" fontWeight="bold">
-                {balance.toLocaleString('es-VE')} {wallet.currency}
+                {formatAmount(balance)} {wallet.currency}
               </Typography>
             </Box>
             {wallet.currency !== 'USD' && (
               <Box>
                 <Typography variant="caption" color="text.secondary" display="block">Equivalente USD</Typography>
                 <Typography variant="h5" fontWeight="bold">
-                  {usdValue != null ? formatUsd(usdValue) : '—'}
+                  {usdValue != null ? formatCurrency(usdValue) : '—'}
                 </Typography>
                 <Box display="flex" alignItems="center" gap={1} mt={0.5}>
                   <Select
@@ -409,7 +411,7 @@ export default function WalletDetailPage() {
                 <Typography variant="body2" color="text.secondary">Ingresos</Typography>
               </Box>
               <Typography variant="h5" color="success.main" fontWeight="bold">
-                {summary ? `${summary.income.toLocaleString('es-VE')} ${wallet.currency}` : '—'}
+                {summary ? `${formatAmount(summary.income)} ${wallet.currency}` : '—'}
               </Typography>
             </CardContent>
           </Card>
@@ -422,7 +424,7 @@ export default function WalletDetailPage() {
                 <Typography variant="body2" color="text.secondary">Egresos</Typography>
               </Box>
               <Typography variant="h5" color="error.main" fontWeight="bold">
-                {summary ? `${summary.expense.toLocaleString('es-VE')} ${wallet.currency}` : '—'}
+                {summary ? `${formatAmount(summary.expense)} ${wallet.currency}` : '—'}
               </Typography>
             </CardContent>
           </Card>
@@ -435,7 +437,7 @@ export default function WalletDetailPage() {
                 <Typography variant="body2" color="text.secondary">Neto</Typography>
               </Box>
               <Typography variant="h5" color={summary && summary.net >= 0 ? 'success.main' : 'error.main'} fontWeight="bold">
-                {summary ? `${summary.net.toLocaleString('es-VE')} ${wallet.currency}` : '—'}
+                {summary ? `${formatAmount(summary.net)} ${wallet.currency}` : '—'}
               </Typography>
             </CardContent>
           </Card>
@@ -538,7 +540,7 @@ export default function WalletDetailPage() {
                       <TableCell>{t.description || '—'}</TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" fontWeight="bold" color={t.type === 'income' ? 'success.main' : 'error.main'}>
-                          {t.type === 'income' ? '+' : '-'}{Number(t.amount).toLocaleString('es-VE')} {wallet.currency}
+                          {t.type === 'income' ? '+' : '-'}{formatAmount(Number(t.amount))} {wallet.currency}
                         </Typography>
                       </TableCell>
                     </TableRow>

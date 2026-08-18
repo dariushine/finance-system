@@ -46,6 +46,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useWallets } from '../lib/hooks';
 import { useHideBalances } from '../lib/hooks/useHideBalances';
+import { useNumberFormat } from '../lib/NumberFormat';
 import BalanceReveal from '../components/BalanceReveal';
 import {
   getDeletedWallets,
@@ -67,12 +68,10 @@ const icons = {
 const iconKeys = ['bank', 'cash', 'card', 'crypto', 'investment'];
 const colors = ['#0077b6', '#e63946', '#2a9d8f', '#588157', '#f0b90b', '#00b4d8', '#9b59b6', '#e76f51'];
 
-const formatUsd = (n: number) =>
-  new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n);
-
 export default function WalletsPage() {
   const router = useRouter();
   const ocultarSaldos = useHideBalances();
+  const { formatAmount, formatCurrency } = useNumberFormat();
   const [rateType, setRateType] = useState<'bcv' | 'paralelo'>('bcv');
   const { wallets, loading, error, refetch } = useWallets(rateType);
 
@@ -225,14 +224,14 @@ export default function WalletsPage() {
                   </Typography>
                   <Box mt={2}>
                     <BalanceReveal
-                      display={`${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
+                      display={`${formatAmount(Number(wallet.balance))} ${wallet.currency}`}
                       variant="h4"
                       color="primary.main"
                       iconSize="medium"
                       captionVariant="body2"
                       caption={
                         wallet.currency !== 'USD' && wallet.usdValue != null
-                          ? `≈ ${formatUsd(wallet.usdValue)} USD${wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}`
+                          ? `≈ ${formatCurrency(wallet.usdValue)} USD${wallet.rate ? ` (tasa ${wallet.rate.toFixed(2)})` : ''}`
                           : wallet.currency === 'USD'
                           ? 'Dólares estadounidenses'
                           : 'Sin tasa disponible'
@@ -284,7 +283,7 @@ export default function WalletsPage() {
                       <Typography variant="body2">
                         {ocultarSaldos
                           ? `••• ${wallet.currency}`
-                          : `${Number(wallet.balance).toLocaleString('es-VE')} ${wallet.currency}`}
+                          : `${formatAmount(Number(wallet.balance))} ${wallet.currency}`}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">{wallet.type}</Typography>
                     </Box>

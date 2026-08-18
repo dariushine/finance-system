@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { parseLocalDate } from '../lib/dates';
+import { useNumberFormat } from '../lib/NumberFormat';
 
 interface Transaction {
   id: number;
@@ -65,14 +66,6 @@ const formatDate = (dateString: string) => {
   }
 };
 
-const formatCurrency = (amount: number, currency: string = 'USD') => {
-  return new Intl.NumberFormat('es-VE', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
-};
-
 const getTypeColor = (type: string) => type === 'income' ? 'success' : 'error';
 const getTypeIcon = (type: string) => type === 'income' ? <IncomeIcon /> : <ExpenseIcon />;
 
@@ -82,11 +75,13 @@ const MobileTransactionItem = memo(function MobileTransactionItem({
   isOpen,
   onToggle,
   onView,
+  formatCurrency,
 }: {
   transaction: Transaction;
   isOpen: boolean;
   onToggle: (id: number) => void;
   onView: (id: number) => void;
+  formatCurrency: (amount: number, currency?: string) => string;
 }) {
   const isIncome = transaction.type === 'income';
 
@@ -164,6 +159,7 @@ const MobileTransactionItem = memo(function MobileTransactionItem({
 export default function RecentTransactions() {
   const router = useRouter();
   const theme = useTheme();
+  const { formatCurrency } = useNumberFormat();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -244,6 +240,7 @@ export default function RecentTransactions() {
                 isOpen={expanded === transaction.id}
                 onToggle={handleToggle}
                 onView={handleView}
+                formatCurrency={formatCurrency}
               />
             ))}
           </Box>

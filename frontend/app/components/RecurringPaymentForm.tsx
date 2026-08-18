@@ -20,6 +20,7 @@ import {
 import { Add, Remove } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 import CategoryAutocomplete from './CategoryAutocomplete';
+import MoneyField from './MoneyField';
 import {
   createRecurringPayment,
   updateRecurringPayment,
@@ -52,11 +53,11 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
   const isEdit = Boolean(initial);
   const [type, setType] = useState<'expense' | 'income'>(initial?.type || 'expense');
   const [name, setName] = useState(initial?.name || '');
-  const [amount, setAmount] = useState(initial ? String(initial.amount) : '');
+  const [amount, setAmount] = useState(initial ? initial.amount : 0);
   const [currency, setCurrency] = useState(initial?.currency || 'USD');
   const [description, setDescription] = useState(initial?.description || '');
   const [wallet, setWallet] = useState(initial?.walletId != null ? String(initial.walletId) : '');
-  const [fee, setFee] = useState(initial?.fee ? String(initial.fee) : '');
+  const [fee, setFee] = useState(initial?.fee ? initial.fee : 0);
   // Categoría: guardamos el nombre (resuelto por valueName) y el id si es existente.
   const [categoryName, setCategoryName] = useState(initial?.categoryName || '');
 
@@ -75,8 +76,8 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsedAmount = Number(amount);
-    const parsedFee = fee ? Number(fee) : 0;
+    const parsedAmount = amount;
+    const parsedFee = fee;
     // Billetera opcional: '' o null = "ninguno"
     const walletObj = wallet ? wallets.find((w) => String(w.id) === wallet) : undefined;
     const finalWalletId = walletObj ? walletObj.id : null;
@@ -187,16 +188,13 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
               disabled={loading}
             />
 
-            <TextField
+            <MoneyField
               label="Monto"
-              type="number"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Ej: 1200"
+              onValueChange={setAmount}
               required
               disabled={loading}
-              onWheel={(e) => e.currentTarget.blur()}
-              InputProps={{ endAdornment: <span>{currency}</span> }}
+              currency={currency}
             />
 
             <FormControl fullWidth required>
@@ -229,15 +227,12 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
               </Select>
             </FormControl>
 
-            <TextField
+            <MoneyField
               label="Comisión (opcional)"
-              type="number"
               value={fee}
-              onChange={(e) => setFee(e.target.value)}
-              placeholder="Ej: 3.75"
+              onValueChange={setFee}
               disabled={loading}
-              onWheel={(e) => e.currentTarget.blur()}
-              InputProps={{ endAdornment: <span>{currency}</span> }}
+              currency={currency}
             />
 
             <CategoryAutocomplete

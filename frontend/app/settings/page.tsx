@@ -8,12 +8,16 @@ import {
   Switch,
   FormControlLabel,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import { VisibilityOff } from '@mui/icons-material';
 import { useHideBalances, setHideBalances } from '../lib/hooks/useHideBalances';
+import { useNumberFormat } from '../lib/NumberFormat';
 
 export default function OpcionesPage() {
   const hidden = useHideBalances();
+  const { separator, setSeparator } = useNumberFormat();
 
   const handleToggle = (checked: boolean) => {
     setHideBalances(checked);
@@ -60,9 +64,24 @@ export default function OpcionesPage() {
         </CardContent>
       </Card>
 
-      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 2 }}>
-        Esta preferencia se guarda en este dispositivo y solo afecta la visualización (no altera ningún dato).
-      </Typography>
+      <Card variant="outlined" sx={{ mt: 2 }}>
+        <CardContent>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+            <Typography variant="h6" fontWeight="bold">
+              Separador de decimales
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={separator}
+              onChange={(_, v) => v && setSeparator(v)}
+            >
+              <ToggleButton value="comma">( , )</ToggleButton>
+              <ToggleButton value="dot">( . )</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+        </CardContent>
+      </Card>
     </Box>
   );
 }
