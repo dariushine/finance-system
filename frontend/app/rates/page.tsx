@@ -308,19 +308,19 @@ export default function RatesPage() {
             <TextField
               label="Tasa BCV (VES/USD)"
               type="text"
-              inputMode="decimal"
               value={form.bcv}
               onChange={(e) => setForm({ ...form, bcv: sanitizeRate(e.target.value) })}
               onPaste={(e) => { e.preventDefault(); setForm({ ...form, bcv: sanitizeRate(e.clipboardData.getData('text')) }); }}
+              slotProps={{ input: { inputMode: 'decimal' } }}
               fullWidth
             />
             <TextField
               label="Tasa paralelo (VES/USD)"
               type="text"
-              inputMode="decimal"
               value={form.paralelo}
               onChange={(e) => setForm({ ...form, paralelo: sanitizeRate(e.target.value) })}
               onPaste={(e) => { e.preventDefault(); setForm({ ...form, paralelo: sanitizeRate(e.clipboardData.getData('text')) }); }}
+              slotProps={{ input: { inputMode: 'decimal' } }}
               fullWidth
             />
           </Box>

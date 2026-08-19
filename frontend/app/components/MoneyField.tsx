@@ -126,7 +126,9 @@ export default function MoneyField({
       onClick={forceCaretEnd}
       onFocus={forceCaretEnd}
       inputRef={inputRef}
-      inputMode="numeric"
+      slotProps={{
+        input: { inputMode: 'numeric' }, // el inputMode debe ir al <input> real (vía slotProps), no como prop del TextField
+      }}
       required={required}
       disabled={disabled}
       autoFocus={autoFocus}
