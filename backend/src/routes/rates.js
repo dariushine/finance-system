@@ -3,6 +3,7 @@ const { db } = require('../db');
 const {
   getExchangeRates, getRateForDate, getTodayRate, upsertRate,
 } = require('../services/rates');
+const { toNum, toRateInt, toRateNum } = require('../services/money');
 
 module.exports = function registerRateRoutes(app) {
   // Balance global por moneda + total en USD (tasas centralizadas).
@@ -14,7 +15,7 @@ module.exports = function registerRateRoutes(app) {
       wallets.forEach((wallet) => {
         const currency = wallet.currency;
         if (!byCurrency[currency]) byCurrency[currency] = { currency, total: 0, walletCount: 0 };
-        byCurrency[currency].total += wallet.balance;
+        byCurrency[currency].total += toNum(wallet.balance); // entero → unidades
         byCurrency[currency].walletCount++;
       });
       let totalUSD = 0;
@@ -25,7 +26,7 @@ module.exports = function registerRateRoutes(app) {
       });
       res.json({
         totalUSD: parseFloat(totalUSD.toFixed(2)),
-        byCurrency: byCurrencyArray,
+        byCurrency: byCurrencyArray.map((d) => ({ ...d, total: parseFloat(d.total.toFixed(2)), usdValue: parseFloat(d.usdValue.toFixed(2)) })),
         timestamp: new Date().toISOString(),
       });
     });
@@ -41,13 +42,15 @@ module.exports = function registerRateRoutes(app) {
     const type = req.query.type === 'paralelo' ? 'paralelo' : 'bcv';
     const date = req.query.date;
     const rate = await getRateForDate(date || new Date().toISOString().split('T')[0], type);
-    res.json({ date: date || new Date().toISOString().split('T')[0], rate, type });
+    res.json({ date: date || new Date().toISOString().split('T')[0], rate: rate != null ? toRateNum(rate) : null, type });
   });
 
   // === CRUD de tasas diarias (daily_rates) ===
   app.get('/api/daily-rates', (req, res) => {
     db.all('SELECT * FROM daily_rates ORDER BY date DESC', (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
+      // bcv/paralelo en enteros → unidades humanas.
+      (rows || []).forEach((r) => { r.bcv = toRateNum(r.bcv); r.paralelo = toRateNum(r.paralelo); });
       res.json({ data: rows || [] });
     });
   });
@@ -77,7 +80,7 @@ module.exports = function registerRateRoutes(app) {
       return res.status(400).json({ error: 'Faltan campos: bcv, paralelo' });
     }
     db.run('UPDATE daily_rates SET bcv = ?, paralelo = ? WHERE id = ?',
-      [Number(bcv), Number(paralelo), req.params.id],
+      [toRateInt(bcv), toRateInt(paralelo), req.params.id],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
         if (this.changes === 0) return res.status(404).json({ error: 'Tasa no encontrada' });

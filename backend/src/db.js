@@ -14,10 +14,17 @@ const path = require('path');
 
 const seedDemoData = process.env.SEED_DEMO_DATA === 'true';
 
-// DB NUEVA dedicada a este modelo. La anterior (finance.db) quedó corrupta por
-// migraciones a medias; esta arranca limpia con el esquema definitivo.
-const dbPath = path.join(__dirname, '..', 'data/finance-timezone.db');
+// El sistema lee SIEMPRE el archivo data/finance.db — nombre estable del
+// sistema, NO renombrar (preferencia de Freddy 19 ago 2026). Si no existe,
+// CREATE TABLE IF NOT EXISTS de abajo la genera limpia desde 0 con el esquema
+// definido aquí.
+const dbPath = path.join(__dirname, '..', 'data/finance.db');
 const db = new sqlite3.Database(dbPath);
+
+// ALMACENAMIENTO DE DINERO (decisión Freddy, 19 ago 2026):
+//   - MONTOS (balance, amount, fee, ...): INTEGER ×100 (centavos). $1.50 → 150.
+//   - TASAS (exchange_rate, rate, bcv/paralelo): INTEGER ×10000. 634.95 → 6349500.
+// La API/front trabajan en unidades; las rutas convierten en el límite (money.js).
 
 // Crear tablas
 db.serialize(() => {
@@ -28,7 +35,7 @@ db.serialize(() => {
     alias TEXT,
     type TEXT NOT NULL,
     currency TEXT NOT NULL,
-    balance DECIMAL(10,2) DEFAULT 0,
+    balance INTEGER DEFAULT 0,
     description TEXT,
     icon TEXT,
     color TEXT,
@@ -70,12 +77,12 @@ db.serialize(() => {
     wallet_id INTEGER NOT NULL,
     category_id INTEGER NOT NULL,
     type TEXT NOT NULL,
-    amount DECIMAL(10,2) NOT NULL,
+    amount INTEGER NOT NULL,
     description TEXT,
     datetime_utc TEXT NOT NULL,
-    exchange_rate DECIMAL(10,4) DEFAULT 1.0,
-    converted_amount DECIMAL(10,2) NOT NULL,
-    fee DECIMAL(10,2) DEFAULT 0,
+    exchange_rate INTEGER DEFAULT 10000,
+    converted_amount INTEGER NOT NULL,
+    fee INTEGER DEFAULT 0,
     parent_transaction_id INTEGER,
     deleted INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -87,7 +94,7 @@ db.serialize(() => {
   db.all(`PRAGMA table_info(transactions)`, (err, cols) => {
     if (err) return;
     const names = (cols || []).map((c) => c.name);
-    if (!names.includes('fee')) db.run(`ALTER TABLE transactions ADD COLUMN fee DECIMAL(10,2) DEFAULT 0`);
+    if (!names.includes('fee')) db.run(`ALTER TABLE transactions ADD COLUMN fee INTEGER DEFAULT 0`);
     if (!names.includes('parent_transaction_id')) db.run(`ALTER TABLE transactions ADD COLUMN parent_transaction_id INTEGER`);
     if (!names.includes('deleted')) db.run(`ALTER TABLE transactions ADD COLUMN deleted INTEGER DEFAULT 0`);
     if (!names.includes('datetime_utc')) {
@@ -107,10 +114,10 @@ db.serialize(() => {
     credit_transaction_id INTEGER NOT NULL,
     from_wallet_id INTEGER NOT NULL,
     to_wallet_id INTEGER NOT NULL,
-    from_amount DECIMAL(10,2) NOT NULL,
-    to_amount DECIMAL(10,2) NOT NULL,
-    rate DECIMAL(10,4) NOT NULL,
-    fee DECIMAL(10,2) DEFAULT 0,
+    from_amount INTEGER NOT NULL,
+    to_amount INTEGER NOT NULL,
+    rate INTEGER NOT NULL,
+    fee INTEGER DEFAULT 0,
     description TEXT,
     deleted INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -124,8 +131,8 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS daily_rates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL UNIQUE,
-    bcv REAL NOT NULL,
-    paralelo REAL NOT NULL,
+    bcv INTEGER NOT NULL,
+    paralelo INTEGER NOT NULL,
     source TEXT DEFAULT 'dolarapi',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -135,8 +142,8 @@ db.serialize(() => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     description TEXT,
-    amount DECIMAL(10,2) NOT NULL,
-    fee DECIMAL(10,2) DEFAULT 0,
+    amount INTEGER NOT NULL,
+    fee INTEGER DEFAULT 0,
     currency TEXT NOT NULL,
     type TEXT NOT NULL,
     category_id INTEGER NOT NULL,
@@ -180,12 +187,12 @@ db.serialize(() => {
     db.get('SELECT COUNT(*) as count FROM wallets', (err, result) => {
       if (!err && result && result.count === 0) {
         const wallets = [
-          ['Cuenta Bancaria USD', 'bank', 'USD', 1000, 'Cuenta bancaria en dólares'],
-          ['Cuenta Bancaria VES', 'bank', 'VES', 50000, 'Cuenta bancaria en bolívares'],
-          ['Efectivo USD', 'cash', 'USD', 200, 'Efectivo en dólares'],
-          ['Efectivo VES', 'cash', 'VES', 100000, 'Efectivo en bolívares'],
-          ['Crypto Wallet', 'crypto', 'USD', 500, 'Wallet de criptomonedas'],
-          ['Tarjeta Prepagada', 'card', 'USD', 100, 'Tarjeta prepagada internacional'],
+          ['Cuenta Bancaria USD', 'bank', 'USD', 100000, 'Cuenta bancaria en dólares'],  // 1000.00
+          ['Cuenta Bancaria VES', 'bank', 'VES', 5000000, 'Cuenta bancaria en bolívares'],  // 50000.00
+          ['Efectivo USD', 'cash', 'USD', 20000, 'Efectivo en dólares'],  // 200.00
+          ['Efectivo VES', 'cash', 'VES', 10000000, 'Efectivo en bolívares'],  // 100000.00
+          ['Crypto Wallet', 'crypto', 'USD', 50000, 'Wallet de criptomonedas'],  // 500.00
+          ['Tarjeta Prepagada', 'card', 'USD', 10000, 'Tarjeta prepagada internacional'],  // 100.00
         ];
         const stmt = db.prepare('INSERT INTO wallets (name, type, currency, balance, description) VALUES (?, ?, ?, ?, ?)');
         wallets.forEach((w) => stmt.run(w));
