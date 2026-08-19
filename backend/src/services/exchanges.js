@@ -40,7 +40,7 @@ async function createFeeForExchange(debit, amount, datetimeUtc, description, tz)
   const fc = category ? category.id : debit.categoryId;
   await runDb(
     `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
-     VALUES (?, ?, 'expense', ?, ?, ?, 1.0, ?, 0, ?)`,
+     VALUES (?, ?, 'expense', ?, ?, ?, 10000, ?, 0, ?)`,
     [debit.walletId, fc, amount, `Comisión: ${description || 'Exchange'}`, datetimeUtc, amount, debit.id]
   );
 }

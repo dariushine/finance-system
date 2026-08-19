@@ -24,6 +24,9 @@ function resolveDatetimeUtc(date, time, tz) {
 
 // createTransaction
 // @param {string} tz - zona IANA del usuario (para convertir date+time a UTC).
+// IMPORTANTE (escala 4): amount y fee entran en ENTEROS de escala 4 (×10000),
+// porque este service opera en enteros internamente (ver money.js). Las rutas
+// que llamen aquí ya deben haber convertido de unidades con toInt().
 function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date, time, tz) {
   return new Promise((resolve, reject) => {
     const commission = Number(fee) || 0;
@@ -37,7 +40,9 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
         getOrCreateCategory(categoryName, type).then((category) => {
             const total = amount + commission;
             if (type === 'expense' && wallet.balance < total) {
-              return reject(new Error(`Fondos insuficientes. Balance actual: ${wallet.balance} ${wallet.currency}, necesita ${total}`));
+              // amount/commission/balance ya están en enteros de escala 4; el
+              // mensaje se muestra en unidades humanas para el usuario.
+              return reject(new Error(`Fondos insuficientes. Balance actual: ${(wallet.balance / 10000)} ${wallet.currency}, necesita ${(total / 10000)}`));
             }
 
             const newBalance = type === 'expense'
@@ -49,7 +54,7 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
             db.run(
               `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [walletId, category.id, type, amount, description || '', datetimeUtc, 1.0, amount, 0, null],
+              [walletId, category.id, type, amount, description || '', datetimeUtc, 10000, amount, 0, null],
               function(err) {
                 if (err) {
                   db.run('ROLLBACK');
@@ -89,7 +94,7 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [walletId, fc.id, 'expense', commission,
                          `Comisión: ${description || category.name}`,
-                         datetimeUtc, 1.0, commission, 0, transactionId],
+                         datetimeUtc, 10000, commission, 0, transactionId],
                         function(err2) {
                           if (err2) {
                             db.run('ROLLBACK');
@@ -299,6 +304,7 @@ function syncParentFee(parentId) {
 }
 
 // Efecto de una transacción sobre el balance de la billetera.
+// Operan en enteros de escala 4 (amount ya viene en enteros).
 function balanceEffect(type, amount) {
   return type === 'income' ? Number(amount) : -Number(amount);
 }

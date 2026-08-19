@@ -2,14 +2,19 @@
 const wallets = require('../services/wallets');
 const { getUserTimeZone } = require('../services/settings');
 const { isValidTimeZone } = require('../services/timeZoneMap');
+const { decodeMoney, decodeMoneyList, toInt, toNum } = require('../services/money');
 
 const err = (res, e) => res.status(e.status || 500).json({ error: e.message });
+const toNumSafe = (v) => (v == null ? v : toNum(v));
+
+// Campos de dinero que se devuelven en unidades (int→unidades) al front.
+const WALLET_MONEY = ['balance'];
 
 module.exports = function registerWalletRoutes(app) {
   app.get('/api/wallets', async (req, res) => {
     try {
       const rows = await wallets.listWallets();
-      res.json(rows);
+      res.json(decodeMoneyList(rows, WALLET_MONEY));
     } catch (e) { err(res, e); }
   });
 
@@ -17,7 +22,7 @@ module.exports = function registerWalletRoutes(app) {
   app.get('/api/wallets/deleted', async (req, res) => {
     try {
       const rows = await wallets.listWallets({ deleted: true });
-      res.json(rows);
+      res.json(decodeMoneyList(rows, WALLET_MONEY));
     } catch (e) { err(res, e); }
   });
 
@@ -26,15 +31,17 @@ module.exports = function registerWalletRoutes(app) {
     try {
       const wallet = await wallets.getWalletById(Number(req.params.id), 1);
       if (!wallet) return res.status(404).json({ error: 'Billetera no encontrada' });
-      res.json(wallet);
+      res.json(decodeMoney(wallet, WALLET_MONEY));
     } catch (e) { err(res, e); }
   });
 
   // Crear una billetera
   app.post('/api/wallets', async (req, res) => {
     try {
-      const row = await wallets.createWallet(req.body || {});
-      res.status(201).json(row);
+      const body = { ...(req.body || {}) };
+      if (body.balance != null) body.balance = toInt(body.balance); // unidades → entero
+      const row = await wallets.createWallet(body);
+      res.status(201).json(decodeMoney(row, WALLET_MONEY));
     } catch (e) { err(res, e); }
   });
 
@@ -42,7 +49,7 @@ module.exports = function registerWalletRoutes(app) {
   app.put('/api/wallets/:id', async (req, res) => {
     try {
       const row = await wallets.updateWalletMeta(Number(req.params.id), req.body || {});
-      res.json(row);
+      res.json(decodeMoney(row, WALLET_MONEY));
     } catch (e) { err(res, e); }
   });
 
@@ -58,7 +65,7 @@ module.exports = function registerWalletRoutes(app) {
   app.put('/api/wallets/:id/reactivate', async (req, res) => {
     try {
       const row = await wallets.reactivateWallet(Number(req.params.id));
-      res.json(row);
+      res.json(decodeMoney(row, WALLET_MONEY));
     } catch (e) { err(res, e); }
   });
 
@@ -69,6 +76,15 @@ module.exports = function registerWalletRoutes(app) {
       let tz = q.tz;
       if (!tz || !isValidTimeZone(tz)) tz = await getUserTimeZone();
       const report = await wallets.getWalletReport(Number(req.params.id), { ...q, tz });
+      // Convertir montos a unidades (int→unidades) en balance, summary y transacciones.
+      report.wallet = decodeMoney(report.wallet, WALLET_MONEY);
+      report.summary = {
+        ...report.summary,
+        income: toNumSafe(report.summary.income),
+        expense: toNumSafe(report.summary.expense),
+        net: toNumSafe(report.summary.net),
+      };
+      (report.transactions || []).forEach((t) => { t.amount = toNumSafe(t.amount); if (t.fee != null) t.fee = toNumSafe(t.fee); });
       res.json(report);
     } catch (e) { err(res, e); }
   });

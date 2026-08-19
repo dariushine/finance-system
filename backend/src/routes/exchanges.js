@@ -12,6 +12,19 @@ const {
 const { getUserTimeZone } = require('../services/settings');
 const { rangeToInstants, projectInstants } = require('../services/timeUtil');
 const { wallClockToUtc, isValidTimeZone } = require('../services/timeZoneMap');
+const { toInt, toNum, decodeMoneyList } = require('../services/money');
+
+// Convierte los campos de dinero de un objeto transacción (int→unidades).
+function decodeTx(tx) {
+  tx.amount = toNum(tx.amount);
+  if (tx.newBalance != null) tx.newBalance = toNum(tx.newBalance);
+  if (tx.fee != null) tx.fee = toNum(tx.fee);
+  return tx;
+}
+
+// Campos de dinero de un exchange (int→unidades al front).
+const EX_MONEY = ['fromAmount', 'toAmount', 'fee', 'rate'];
+const EX_DETAIL_MONEY = ['from_amount', 'to_amount', 'fee', 'rate', 'fromAmount', 'toAmount'];
 
 async function effectiveTz(q, body) {
   const c = (body && body.tz) || (q && q.tz) || null;
@@ -63,19 +76,26 @@ module.exports = function registerExchangeRoutes(app) {
       if (!fromWallet) throw new Error('Billetera origen no encontrada');
       if (!toWallet) throw new Error('Billetera destino no encontrada');
 
-      const commission = Number(fee) || 0;
-      const fromTotal = fromAmount + commission;
+      // Montos del body vienen en unidades humanas → enteros de escala 4.
+      const fromUnits = Number(fromAmount);
+      const toUnits = Number(toAmount);
+      const commission = toInt(fee);
+      const fromAmountInt = toInt(fromUnits);
+      const toAmountInt = toInt(toUnits);
+      const fromTotal = fromAmountInt + commission;
       if (fromWallet.balance < fromTotal) {
-        throw new Error(`Fondos insuficientes en ${fromWallet.name}. Balance actual: ${fromWallet.balance} ${fromWallet.currency}, necesita ${fromTotal}`);
+        throw new Error(`Fondos insuficientes en ${fromWallet.name}. Balance actual: ${toNum(fromWallet.balance)} ${fromWallet.currency}, necesita ${toNum(fromTotal)}`);
       }
-      const rate = toAmount / fromAmount;
+      // Tasa en escala 4: (to/from) en unidades → entero. Evita dividir enteros
+      // y perder precisión; toInt maneja el redondeo.
+      const rate = toInt(toUnits / fromUnits);
 
       const debitTransaction = await createTransaction(
-        fromWalletId, 'exchange_out', 'expense', fromAmount,
+        fromWalletId, 'exchange_out', 'expense', fromAmountInt,
         `${description || 'Exchange'} → ${toWallet.name}`, commission, txDate, txTime, tzEff
       );
       const creditTransaction = await createTransaction(
-        toWalletId, 'exchange_in', 'income', toAmount,
+        toWalletId, 'exchange_in', 'income', toAmountInt,
         `${description || 'Exchange'} ← ${fromWallet.name}`, 0, txDate, txTime, tzEff
       );
 
@@ -83,7 +103,7 @@ module.exports = function registerExchangeRoutes(app) {
         `INSERT INTO exchanges (debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id,
          from_amount, to_amount, rate, fee, description)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [debitTransaction.id, creditTransaction.id, fromWalletId, toWalletId, fromAmount, toAmount, rate, commission, description || ''],
+        [debitTransaction.id, creditTransaction.id, fromWalletId, toWalletId, fromAmountInt, toAmountInt, rate, commission, description || ''],
         function (err) {
           if (err) {
             console.error('Error registrando exchange:', err);
@@ -95,16 +115,19 @@ module.exports = function registerExchangeRoutes(app) {
             message: 'Exchange registrado exitosamente',
             exchange: {
               id: exchangeId,
-              rate,
+              rate: toNum(rate),
               fromWallet: fromWallet.name,
               toWallet: toWallet.name,
-              fromAmount,
-              toAmount,
+              fromAmount: toNum(fromAmountInt),
+              toAmount: toNum(toAmountInt),
               fromCurrency: fromWallet.currency,
               toCurrency: toWallet.currency,
               description: description || '',
             },
-            transactions: { debit: debitTransaction, credit: creditTransaction },
+            transactions: {
+              debit: decodeTx({ ...debitTransaction }),
+              credit: decodeTx({ ...creditTransaction }),
+            },
           });
         }
       );
@@ -161,7 +184,15 @@ module.exports = function registerExchangeRoutes(app) {
       const total = await new Promise((resv, rej) =>
         db.get(`SELECT COUNT(*) AS total FROM exchanges e LEFT JOIN transactions dt ON dt.id = e.debit_transaction_id WHERE ${conditions.join(' AND ')}`, params.slice(0, -2), (e, r) => (e ? rej(e) : resv(r)))
       );
-      res.json({ data: projectInstants(rows, tzEff), total: total?.total || 0, page, limit, tz: tzEff });
+      // Montos/tasas del exchange a unidades (int→unidades, escala 4).
+      const projected = projectInstants(rows, tzEff) || [];
+      projected.forEach((r) => {
+        r.fromAmount = toNum(r.fromAmount);
+        r.toAmount = toNum(r.toAmount);
+        r.rate = toNum(r.rate);
+        if (r.fee != null) r.fee = toNum(r.fee);
+      });
+      res.json({ data: projected, total: total?.total || 0, page, limit, tz: tzEff });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -198,7 +229,12 @@ module.exports = function registerExchangeRoutes(app) {
         WHERE e.id = ? AND e.deleted = 0`;
       const row = await new Promise((resv, rej) => db.get(query, [id], (e, r) => (e ? rej(e) : resv(r))));
       if (!row) return res.status(404).json({ error: 'Exchange no encontrado' });
-      res.json(projectRow(row, tzEff));
+      const detail = projectRow(row, tzEff) || row;
+      if (detail.fromAmount != null) detail.fromAmount = toNum(detail.fromAmount);
+      if (detail.toAmount != null) detail.toAmount = toNum(detail.toAmount);
+      if (detail.rate != null) detail.rate = toNum(detail.rate);
+      if (detail.fee != null) detail.fee = toNum(detail.fee);
+      res.json(detail);
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -242,26 +278,26 @@ module.exports = function registerExchangeRoutes(app) {
         [debit.id, credit.id]
       );
 
-      let newFromAmount = Number(ex.fromAmount);
-      let newToAmount = Number(ex.toAmount);
+      let newFromAmountInt = Number(ex.fromAmount);
+      let newToAmountInt = Number(ex.toAmount);
       if (fromAmount != null && fromAmount !== '') {
-        const parsed = Number(fromAmount);
-        if (!Number.isFinite(parsed) || parsed <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
-        newFromAmount = parsed;
+        const units = Number(fromAmount);
+        if (!Number.isFinite(units) || units <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+        newFromAmountInt = toInt(units); // unidades → entero
       }
       if (toAmount != null && toAmount !== '') {
-        const parsed = Number(toAmount);
-        if (!Number.isFinite(parsed) || parsed <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
-        newToAmount = parsed;
+        const units = Number(toAmount);
+        if (!Number.isFinite(units) || units <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+        newToAmountInt = toInt(units);
       }
 
-      let newFee = Number(ex.fee) || 0;
+      let newFeeInt = Number(ex.fee) || 0;
       let feeChanged = false;
       if (fee != null && fee !== '') {
-        const parsed = Number(fee);
-        if (!Number.isFinite(parsed) || parsed < 0) return res.status(400).json({ error: 'La comisión no puede ser negativa' });
-        newFee = parsed;
-        feeChanged = newFee !== (Number(ex.fee) || 0);
+        const units = Number(fee);
+        if (!Number.isFinite(units) || units < 0) return res.status(400).json({ error: 'La comisión no puede ser negativa' });
+        newFeeInt = toInt(units);
+        feeChanged = newFeeInt !== (Number(ex.fee) || 0);
       }
 
       // Nueva fecha/hora → instante UTC (conserva la del débito si no se cambia).
@@ -285,40 +321,45 @@ module.exports = function registerExchangeRoutes(app) {
       }
       const newDescription = description !== undefined ? (description || '') : ex.description;
 
-      const newFromTotal = newFromAmount + newFee;
+      const newFromTotal = newFromAmountInt + newFeeInt;
       if (fromWalletBalanceBefore < newFromTotal) {
-        return res.status(400).json({ error: `Fondos insuficientes en la billetera origen. Balance: ${fromWalletBalanceBefore}, requiere ${newFromTotal}` });
+        return res.status(400).json({ error: `Fondos insuficientes en la billetera origen. Balance: ${toNum(fromWalletBalanceBefore)}, requiere ${toNum(newFromTotal)}` });
       }
 
       const prevFromFeeTotal = prevFees.reduce((s, f) => s + Number(f.amount), 0);
       const oldFromEffect = -(Number(ex.fromAmount)) - prevFromFeeTotal;
       const oldToEffect = Number(ex.toAmount);
-      const newFromEffect = -(newFromAmount) - newFee;
-      const newToEffect = newToAmount;
+      const newFromEffect = -(newFromAmountInt) - newFeeInt;
+      const newToEffect = newToAmountInt;
       const fromDelta = newFromEffect - oldFromEffect;
       const toDelta = newToEffect - oldToEffect;
+
+      // Tasa en escala 4 a partir de unidades (newTo/newFrom) para evitar dividir
+      // enteros y perder precisión.
+      const toUnits = toNum(newToAmountInt);
+      const fromUnitsV = toNum(newFromAmountInt);
+      const newRate = fromUnitsV !== 0 ? toInt(toUnits / fromUnitsV) : 0;
 
       await withTransaction(async () => {
         await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [fromWalletBalanceBefore + fromDelta, ex.fromWalletId]);
         await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [toWalletBalanceBefore + toDelta, ex.toWalletId]);
 
-        const newRate = newToAmount / newFromAmount;
         const debitDesc = `${newDescription || 'Exchange'} → ${creditWalletName || 'destino'}`;
-        await runDb('UPDATE transactions SET amount = ?, description = ?, datetime_utc = ? WHERE id = ?', [newFromAmount, debitDesc, newDatetimeUtc, debit.id]);
+        await runDb('UPDATE transactions SET amount = ?, description = ?, datetime_utc = ? WHERE id = ?', [newFromAmountInt, debitDesc, newDatetimeUtc, debit.id]);
         const creditDesc = `${newDescription || 'Exchange'} ← ${debitWalletName || 'origen'}`;
-        await runDb('UPDATE transactions SET amount = ?, description = ?, datetime_utc = ? WHERE id = ?', [newToAmount, creditDesc, newDatetimeUtc, credit.id]);
+        await runDb('UPDATE transactions SET amount = ?, description = ?, datetime_utc = ? WHERE id = ?', [newToAmountInt, creditDesc, newDatetimeUtc, credit.id]);
 
         let feesAlive = [...prevFees];
         if (feeChanged) {
-          if (newFee > 0 && prevFees.length === 0) {
-            await createFeeForExchange(debit, newFee, newDatetimeUtc, newDescription, tzEff);
+          if (newFeeInt > 0 && prevFees.length === 0) {
+            await createFeeForExchange(debit, newFeeInt, newDatetimeUtc, newDescription, tzEff);
             feesAlive = [];
-          } else if (newFee === 0) {
+          } else if (newFeeInt === 0) {
             for (const f of prevFees) await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
             feesAlive = [];
           } else {
             const firstFee = prevFees[0];
-            await runDb('UPDATE transactions SET amount = ? WHERE id = ?', [newFee, firstFee.id]);
+            await runDb('UPDATE transactions SET amount = ? WHERE id = ?', [newFeeInt, firstFee.id]);
             for (const f of prevFees.slice(1)) await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
             feesAlive = [firstFee];
           }
@@ -329,7 +370,7 @@ module.exports = function registerExchangeRoutes(app) {
 
         await runDb(
           `UPDATE exchanges SET from_amount = ?, to_amount = ?, rate = ?, fee = ?, description = ? WHERE id = ?`,
-          [newFromAmount, newToAmount, newRate, newFee, newDescription || '', id]
+          [newFromAmountInt, newToAmountInt, newRate, newFeeInt, newDescription || '', id]
         );
         await syncParentFeeSql(debit.id);
       });

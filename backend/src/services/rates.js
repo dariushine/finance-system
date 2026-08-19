@@ -1,5 +1,6 @@
 // src/services/rates.js — Tasas (dolarapi, daily_rates, tasa efectiva).
 const { db } = require('../db');
+const { toInt, toNum } = require('./money');
 
 // Consultar las tasas oficial (BCV) y paralelo de Dolarapi
 function fetchRatesFromApi() {
@@ -30,14 +31,16 @@ function fetchRatesFromApi() {
   });
 }
 
-// Guardar (o actualizar) la tasa para una fecha
+// Guardar (o actualizar) la tasa para una fecha.
+// bcv/paralelo llegan en UNIDADES HUMANAS (desde la API o el body) y se
+// guardan como enteros de escala 4 (×10000) en la columna INTEGER.
 function upsertRate(date, bcv, paralelo, source) {
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT INTO daily_rates (date, bcv, paralelo, source)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(date) DO UPDATE SET bcv = excluded.bcv, paralelo = excluded.paralelo, source = excluded.source`,
-      [date, bcv, paralelo, source || 'dolarapi'],
+      [date, toInt(bcv), toInt(paralelo), source || 'dolarapi'],
       (err) => err ? reject(err) : resolve()
     );
   });
@@ -57,7 +60,8 @@ async function getTodayRate() {
   });
 
   if (fromDb) {
-    return { ...fromDb, fromDb: true };
+    // De BD vienen enteros de escala 4 → unidades humanas para el front.
+    return { ...fromDb, bcv: toNum(fromDb.bcv), paralelo: toNum(fromDb.paralelo), fromDb: true };
   }
 
   // 2. No está en BD: pedir a la API
@@ -68,6 +72,7 @@ async function getTodayRate() {
 
   try {
     await upsertRate(today, api.bcv, api.paralelo, 'dolarapi');
+    // Los valores de la API ya vienen en unidades humanas.
     return { date: today, bcv: api.bcv, paralelo: api.paralelo, fromDb: false };
   } catch (err) {
     return { error: 'No se pudo guardar la tasa en la base de datos.' };

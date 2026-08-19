@@ -12,6 +12,7 @@ const { getOrCreateCategory, isSystemCategoryName } = require('../services/categ
 const { getUserTimeZone } = require('../services/settings');
 const { rangeToInstants, projectInstants } = require('../services/timeUtil');
 const { wallClockToUtc, isValidTimeZone } = require('../services/timeZoneMap');
+const { toInt, toNum } = require('../services/money');
 
 // tz efectivo: el de la request (query/body); sino, la zona del usuario.
 async function effectiveTz(q, body) {
@@ -45,8 +46,14 @@ module.exports = function registerTransactionRoutes(app) {
       if (!isValidTime(time)) {
         return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
       }
-      const result = await createTransaction(walletId, categoryName, type, amount, description, fee, date, time, tz);
-      res.json({ success: true, message: `Transacción de ${type} registrada exitosamente`, transaction: result });
+      const result = await createTransaction(walletId, categoryName, type, toInt(amount), description, toInt(fee), date, time, tz);
+      // La respuesta vuelve en unidades (int→unidades) para el front.
+      res.json({ success: true, message: `Transacción de ${type} registrada exitosamente`, transaction: {
+        ...result,
+        amount: toNum(result.amount),
+        fee: toNum(result.fee),
+        newBalance: toNum(result.newBalance),
+      } });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -97,7 +104,10 @@ module.exports = function registerTransactionRoutes(app) {
       const total = await new Promise((resv, rej) =>
         db.get(`SELECT COUNT(*) AS total FROM transactions t WHERE ${conditions.join(' AND ')}`, params.slice(0, -2), (e, r) => (e ? rej(e) : resv(r)))
       );
-      res.json({ data: projectInstants(rows, tzEff), total: total?.total || 0, page, limit, tz: tzEff });
+      // Convertir montos a unidades para el front (int→unidades, escala 4).
+      const projected = projectInstants(rows, tzEff) || [];
+      projected.forEach((r) => { r.amount = toNum(r.amount); if (r.fee != null) r.fee = toNum(r.fee); });
+      res.json({ data: projected, total: total?.total || 0, page, limit, tz: tzEff });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -197,8 +207,14 @@ module.exports = function registerTransactionRoutes(app) {
       res.json({
         ...projected,
         datetimeUtc: transaction.datetimeUtc,
-        balanceAfter: balanceAfter != null ? parseFloat(balanceAfter.toFixed(2)) : null,
-        children: projectInstants(children || [], tzEff),
+        amount: toNum(projected.amount),
+        fee: toNum(projected.fee),
+        balanceAfter: balanceAfter != null ? toNum(balanceAfter) : null,
+        children: (projectInstants(children || [], tzEff) || []).map((c) => {
+          c.amount = toNum(c.amount);
+          if (c.fee != null) c.fee = toNum(c.fee);
+          return c;
+        }),
         exchangeId: info ? info.exchangeId : null,
         isExchangeMember: !!info,
       });
@@ -275,7 +291,7 @@ module.exports = function registerTransactionRoutes(app) {
         if (!Number.isFinite(parsed) || parsed <= 0) {
           return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
         }
-        newAmount = parsed;
+        newAmount = toInt(parsed); // body en unidades → entero de escala 4
         amountChanged = newAmount !== Number(t.amount);
       }
 
@@ -310,7 +326,10 @@ module.exports = function registerTransactionRoutes(app) {
       });
 
       const updated = await getTransactionRow(id);
-      res.json({ success: true, message: 'Transacción actualizada', transaction: projectRow(updated, tzEff) });
+      const updatedProj = projectRow(updated, tzEff) || updated;
+      updatedProj.amount = toNum(updatedProj.amount);
+      if (updatedProj.fee != null) updatedProj.fee = toNum(updatedProj.fee);
+      res.json({ success: true, message: 'Transacción actualizada', transaction: updatedProj });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -360,10 +379,11 @@ module.exports = function registerTransactionRoutes(app) {
       }
       const { amount, date, time, tz } = req.body;
       const tzEff = await effectiveTz(null, req.body);
-      const feeAmount = Number(amount);
-      if (!Number.isFinite(feeAmount) || feeAmount <= 0) {
+      const feeUnits = Number(amount);
+      if (!Number.isFinite(feeUnits) || feeUnits <= 0) {
         return res.status(400).json({ error: 'El monto de la comisión debe ser mayor a 0' });
       }
+      const feeAmount = toInt(feeUnits); // unidades → entero de escala 4
       if (typeof date !== 'string' || date === '') {
         return res.status(400).json({ error: 'La fecha es obligatoria (YYYY-MM-DD)' });
       }
@@ -387,13 +407,13 @@ module.exports = function registerTransactionRoutes(app) {
       const feeCat = await getDb("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1", []);
       if (!feeCat) return res.status(400).json({ error: 'Categoría fee no disponible' });
       if (Number(t.walletBalance) < feeAmount) {
-        return res.status(400).json({ error: `Fondos insuficientes. Balance actual: ${t.walletBalance} ${t.currency}, necesita ${feeAmount}` });
+        return res.status(400).json({ error: `Fondos insuficientes. Balance actual: ${toNum(t.walletBalance)} ${t.currency}, necesita ${toNum(feeAmount)}` });
       }
       const ins = await withTransaction(async () => {
         await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) - feeAmount, t.walletId]);
         const inserted = await runDb(
           `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
-           VALUES (?, ?, 'expense', ?, ?, ?, 1.0, ?, 0, ?)`,
+           VALUES (?, ?, 'expense', ?, ?, ?, 10000, ?, 0, ?)`,
           [t.walletId, feeCat.id, feeAmount, `Comisión: ${t.description || t.category}`, feeDatetimeUtc, feeAmount, id]
         );
         await syncParentFeeSql(id);
@@ -420,10 +440,11 @@ module.exports = function registerTransactionRoutes(app) {
       }
       const { amount, type, categoryName, description, date, time, tz } = req.body;
       const tzEff = await effectiveTz(null, req.body);
-      const parsedAmount = Number(amount);
-      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      const parsedUnits = Number(amount);
+      if (!Number.isFinite(parsedUnits) || parsedUnits <= 0) {
         return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
       }
+      const parsedAmount = toInt(parsedUnits); // unidades → entero de escala 4
       if (type !== 'income' && type !== 'expense') {
         return res.status(400).json({ error: 'type debe ser income o expense' });
       }
@@ -453,13 +474,13 @@ module.exports = function registerTransactionRoutes(app) {
       }
       const effect = balanceEffect(type, parsedAmount);
       if (effect < 0 && Number(t.walletBalance) < parsedAmount) {
-        return res.status(400).json({ error: `Fondos insuficientes. Balance actual: ${t.walletBalance} ${t.currency}, necesita ${parsedAmount}` });
+        return res.status(400).json({ error: `Fondos insuficientes. Balance actual: ${toNum(t.walletBalance)} ${t.currency}, necesita ${toNum(parsedAmount)}` });
       }
       const ins = await withTransaction(async () => {
         await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) + effect, t.walletId]);
         return runDb(
           `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
-           VALUES (?, ?, ?, ?, ?, ?, 1.0, ?, 0, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, 10000, ?, 0, ?)`,
           [t.walletId, cat.id, type, parsedAmount, description || '', assocDatetimeUtc, parsedAmount, id]
         );
       });
