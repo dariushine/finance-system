@@ -5,7 +5,7 @@ import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select
 import { SwapHoriz, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 import MoneyField from './MoneyField';
-import { useTimeZone, todayInZone } from '../lib/timeZone';
+import { useTimeZone, todayInZone, nowTimeInZone } from '../lib/timeZone';
 
 interface ExchangeFormProps {
   onSuccess?: () => void;
@@ -22,8 +22,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   // Fecha del exchange (débito/crédito): por defecto hoy EN LA ZONA DEL USUARIO.
   const todayISODate = todayInZone(userTimeZone);
   const [date, setDate] = useState(todayISODate);
-  // Hora opcional (HH:MM). Vacía => backend usa hora local actual.
-  const [time, setTime] = useState('');
+  // Hora del exchange (HH:MM). Prellenada con la hora actual en la zona del usuario.
+  const [time, setTime] = useState(nowTimeInZone(userTimeZone));
   const [loading, setLoading] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
@@ -80,7 +80,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         fee: rateData.commission || undefined,
         description: description || undefined,
         date: date || undefined,
-        time: time || undefined,
+        time,
         tz: userTimeZone,
       };
       
@@ -114,7 +114,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setFee(0);
       setDescription('');
       setDate(todayInZone(userTimeZone));
-      setTime('');
+      setTime(nowTimeInZone(userTimeZone));
 
       // Notificar éxito al componente padre
       onSuccess?.();
@@ -239,14 +239,15 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   />
 
                   <TextField
-                    label="Hora (opcional)"
+                    label="Hora"
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     disabled={loading}
+                    required
                     fullWidth
                     InputLabelProps={{ shrink: true }}
-                    helperText="Si la dejas vacía se usa la hora actual"
+                    helperText="Hora de la operación"
                   />
 
                   <MoneyField

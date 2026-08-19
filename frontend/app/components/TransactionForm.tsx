@@ -10,7 +10,7 @@ import { useWallets } from '../lib/hooks';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import MoneyField from './MoneyField';
 import type { Category } from '../lib/api';
-import { useTimeZone, todayInZone } from '../lib/timeZone';
+import { useTimeZone, todayInZone, nowTimeInZone } from '../lib/timeZone';
 
 interface TransactionFormProps {
   onSuccess?: () => void;
@@ -27,8 +27,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   // Fecha de la transacción: por defecto hoy EN LA ZONA DEL USUARIO.
   const todayISODate = todayInZone(userTimeZone);
   const [date, setDate] = useState(todayISODate);
-  // Hora opcional (HH:MM). Por defecto vacía => backend usa hora local actual.
-  const [time, setTime] = useState('');
+  // Hora de la transacción (HH:MM). Prellenada con la hora actual en la zona del usuario.
+  const [time, setTime] = useState(nowTimeInZone(userTimeZone));
   const [loading, setLoading] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,8 +73,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           // Fecha opcional: solo se envía si es distinta de hoy, para no romper
           // llamadas que dependen del default backend.
           date: date || undefined,
-          // Hora opcional (HH:MM). Backend la acepta o usa la hora local.
-          time: time || undefined,
+          // Hora siempre enviada (prellenada con la hora actual en la zona del usuario).
+          time,
           tz: userTimeZone,
         }),
       });
@@ -92,7 +92,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       setSelectedCategory(null);
       setDescription('');
       setDate(todayInZone(userTimeZone));
-      setTime('');
+      setTime(nowTimeInZone(userTimeZone));
       setSuccess(true);
       onSuccess?.();
     } catch (err) {
@@ -172,13 +172,14 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                   />
 
                   <TextField
-                    label="Hora (opcional)"
+                    label="Hora"
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     disabled={loading}
+                    required
                     InputLabelProps={{ shrink: true }}
-                    helperText="Si la dejas vacía se usa la hora actual"
+                    helperText="Hora de la operación"
                   />
 
                   <MoneyField
