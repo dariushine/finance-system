@@ -595,7 +595,6 @@ export default function TransactionDetailPage() {
               value={editForm.time}
               onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
               fullWidth
-              required
               InputLabelProps={{ shrink: true }}
               helperText="Se aplica la misma regla de fecha a la hora"
             />
@@ -662,13 +661,12 @@ export default function TransactionDetailPage() {
               currency={currency}
             />
             <TextField
-              label="Fecha (opcional)"
+              label="Fecha"
               type="date"
               value={feeDate}
               onChange={(e) => setFeeDate(e.target.value)}
               fullWidth
               InputLabelProps={{ shrink: true }}
-              helperText="Por defecto la de la transacción; no puede ser anterior"
             />
             <TextField
               label="Hora"
@@ -676,10 +674,11 @@ export default function TransactionDetailPage() {
               value={feeTime}
               onChange={(e) => setFeeTime(e.target.value)}
               fullWidth
-              required
               InputLabelProps={{ shrink: true }}
-              helperText="Por defecto la de la transacción; no puede ser anterior"
             />
+            <Typography variant="caption" color="text.secondary">
+              La fecha no puede ser anterior a la de la transacción padre.
+            </Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -731,13 +730,12 @@ export default function TransactionDetailPage() {
               fullWidth
             />
             <TextField
-              label="Fecha (opcional)"
+              label="Fecha"
               type="date"
               value={assocForm.date}
               onChange={(e) => setAssocForm({ ...assocForm, date: e.target.value })}
               fullWidth
               InputLabelProps={{ shrink: true }}
-              helperText="Por defecto la de la transacción; no puede ser anterior"
             />
             <TextField
               label="Hora"
@@ -745,10 +743,11 @@ export default function TransactionDetailPage() {
               value={assocForm.time}
               onChange={(e) => setAssocForm({ ...assocForm, time: e.target.value })}
               fullWidth
-              required
               InputLabelProps={{ shrink: true }}
-              helperText="Por defecto la de la transacción; no puede ser anterior"
             />
+            <Typography variant="caption" color="text.secondary">
+              La fecha no puede ser anterior a la de la transacción padre.
+            </Typography>
           </Stack>
         </DialogContent>
         <DialogActions>

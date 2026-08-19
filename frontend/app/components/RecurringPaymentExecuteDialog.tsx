@@ -148,7 +148,7 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
               onClick={() => setShowOptional((v) => !v)}
               sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
             >
-              <Typography variant="body2">Opcionales</Typography>
+              <Typography variant="body2">Avanzado</Typography>
               <IconButton size="small" sx={{ ml: 0.5 }}>
                 {showOptional ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
               </IconButton>
@@ -156,7 +156,7 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
             <Collapse in={showOptional}>
               <Box display="flex" flexDirection="column" gap={2} mt={1}>
                 <TextField label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
-                <TextField label="Hora" type="time" value={time} onChange={(e) => setTime(e.target.value)} required fullWidth InputLabelProps={{ shrink: true }} helperText="Hora de la operación" />
+                <TextField label="Hora" type="time" value={time} onChange={(e) => setTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Hora de la operación" />
                 <MoneyField label="Comisión (opcional)" value={fee} onValueChange={setFee} fullWidth helperText="Se descuenta aparte del monto" currency={currency} />
               </Box>
             </Collapse>

@@ -149,7 +149,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                 onClick={() => setShowOptional((v) => !v)}
                 sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
               >
-                <Typography variant="body2">Opcionales</Typography>
+                <Typography variant="body2">Avanzado</Typography>
                 <IconButton size="small" sx={{ ml: 0.5 }}>
                   {showOptional ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
                 </IconButton>
@@ -163,7 +163,6 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     disabled={loading}
-                    required
                     InputLabelProps={{ shrink: true }}
                     error={date > todayISODate}
                     helperText={date > todayISODate
@@ -177,7 +176,6 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     disabled={loading}
-                    required
                     InputLabelProps={{ shrink: true }}
                     helperText="Hora de la operación"
                   />

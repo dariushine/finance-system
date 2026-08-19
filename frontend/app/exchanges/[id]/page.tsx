@@ -49,7 +49,7 @@ import {
   TransactionDetail,
 } from '../../lib/api';
 import { useNumberFormat } from '../../lib/NumberFormat';
-import { useTimeZone } from '../../lib/timeZone';
+import { useTimeZone, nowTimeInZone } from '../../lib/timeZone';
 import MoneyField from '../../components/MoneyField';
 
 const formatTimeOnly = (time?: string | null) => {
@@ -143,7 +143,7 @@ export default function ExchangeDetailPage() {
       fee: exchange.fee ? exchange.fee : 0,
       description: exchange.description || '',
       date: exchange.date || todayISODate(),
-      time: exchange.time ? exchange.time.slice(0, 5) : '',
+      time: exchange.time ? exchange.time.slice(0, 5) : nowTimeInZone(userTimeZone),
     });
     setEditOpen(true);
   };
@@ -165,7 +165,7 @@ export default function ExchangeDetailPage() {
       if (!Number.isFinite(fee) || fee < 0) throw new Error('La comisión no puede ser negativa');
       payload.fee = fee;
       if (editForm.date) payload.date = editForm.date;
-      payload.time = editForm.time || undefined;
+      payload.time = editForm.time;
       const res = await updateExchange(exchange.id, payload, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al editar el exchange');
       notice('Exchange actualizado');
@@ -432,7 +432,7 @@ export default function ExchangeDetailPage() {
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Hora (opcional)"
+              label="Hora"
               type="time"
               value={editForm.time}
               onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}

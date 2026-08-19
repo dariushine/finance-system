@@ -214,7 +214,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                 onClick={() => setShowOptional((v) => !v)}
                 sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
               >
-                <Typography variant="body2">Opcionales</Typography>
+                <Typography variant="body2">Avanzado</Typography>
                 <IconButton size="small" sx={{ ml: 0.5 }}>
                   {showOptional ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
                 </IconButton>
@@ -229,7 +229,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     disabled={loading}
-                    required
                     fullWidth
                     InputLabelProps={{ shrink: true }}
                     error={date > todayISODate}
@@ -244,7 +243,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     disabled={loading}
-                    required
                     fullWidth
                     InputLabelProps={{ shrink: true }}
                     helperText="Hora de la operación"

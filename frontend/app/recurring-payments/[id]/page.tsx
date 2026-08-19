@@ -58,7 +58,7 @@ import CategoryAutocomplete from '../../components/CategoryAutocomplete';
 import RecurringPaymentForm from '../../components/RecurringPaymentForm';
 import MoneyField from '../../components/MoneyField';
 import { useNumberFormat } from '../../lib/NumberFormat';
-import { useTimeZone } from '../../lib/timeZone';
+import { useTimeZone, nowTimeInZone } from '../../lib/timeZone';
 
 const todayISODate = () => new Date().toISOString().split('T')[0];
 
@@ -94,7 +94,7 @@ export default function RecurringPaymentDetailPage() {
   const [execDescription, setExecDescription] = useState('');
   const [execWallet, setExecWallet] = useState('');
   const [execDate, setExecDate] = useState(todayISODate());
-  const [execTime, setExecTime] = useState('');
+  const [execTime, setExecTime] = useState(nowTimeInZone(userTimeZone));
   const [execCategory, setExecCategory] = useState('');
   const [execSaving, setExecSaving] = useState(false);
   const [execError, setExecError] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export default function RecurringPaymentDetailPage() {
     setExecDescription(payment.description || '');
     setExecWallet(payment.walletId != null ? String(payment.walletId) : '');
     setExecDate(todayISODate());
-    setExecTime('');
+    setExecTime(nowTimeInZone(userTimeZone));
     setExecCategory(payment.categoryName);
     setExecError(null);
     setExecOpen(true);
@@ -173,7 +173,7 @@ export default function RecurringPaymentDetailPage() {
         overrideWalletId: Number(execWallet),
         description: execDescription || undefined,
         date: execDate || undefined,
-        time: execTime || undefined,
+        time: execTime,
         tz: userTimeZone,
       });
       setExecOpen(false);
@@ -359,7 +359,7 @@ export default function RecurringPaymentDetailPage() {
                 onClick={() => setExecShowOptional((v) => !v)}
                 sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
               >
-                <Typography variant="body2">Opcionales</Typography>
+                <Typography variant="body2">Avanzado</Typography>
                 <IconButton size="small" sx={{ ml: 0.5 }}>
                   {execShowOptional ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                 </IconButton>
@@ -367,7 +367,7 @@ export default function RecurringPaymentDetailPage() {
               <Collapse in={execShowOptional}>
                 <Box display="flex" flexDirection="column" gap={2} mt={1}>
                   <TextField label="Fecha" type="date" value={execDate} onChange={(e) => setExecDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
-                  <TextField label="Hora (opcional)" type="time" value={execTime} onChange={(e) => setExecTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Si la dejas vacía se usa la hora actual" />
+                  <TextField label="Hora" type="time" value={execTime} onChange={(e) => setExecTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Hora de la operación" />
                   <MoneyField label="Comisión (opcional)" value={execFee} onValueChange={setExecFee} fullWidth helperText="Se descuenta aparte del monto" currency={currency} />
                 </Box>
               </Collapse>
