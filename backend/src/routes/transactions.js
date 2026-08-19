@@ -33,13 +33,19 @@ module.exports = function registerTransactionRoutes(app) {
       if (!walletId || !categoryName || !type || !amount) {
         return res.status(400).json({ error: 'Faltan campos requeridos: walletId, categoryName, type, amount' });
       }
-      if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      if (typeof date !== 'string' || date === '') {
+        return res.status(400).json({ error: 'La fecha es obligatoria (YYYY-MM-DD)' });
+      }
+      if (typeof time !== 'string' || time === '') {
+        return res.status(400).json({ error: 'La hora es obligatoria (HH:MM)' });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
       }
-      if (time != null && time !== '' && !isValidTime(time)) {
+      if (!isValidTime(time)) {
         return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
       }
-      const result = await createTransaction(walletId, categoryName, type, amount, description, fee, date, time || null, tz);
+      const result = await createTransaction(walletId, categoryName, type, amount, description, fee, date, time, tz);
       res.json({ success: true, message: `Transacción de ${type} registrada exitosamente`, transaction: result });
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -218,12 +224,26 @@ module.exports = function registerTransactionRoutes(app) {
       const { description, amount, date, time, categoryName, tz } = req.body;
       const tzEff = await effectiveTz(null, req.body);
 
-      let newDatetimeUtc = t.datetimeUtc;
-      const hasNewDate = date != null && date !== '';
-      if (hasNewDate) {
+      // La fecha/hora en edición siempre viajan juntas (el front prellena la
+      // hora previa si no cambias). Si viene una, exige ambas completas.
+      if ((date != null && date !== '') || (time != null && time !== '')) {
+        if (typeof date !== 'string' || date === '') {
+          return res.status(400).json({ error: 'La fecha es obligatoria (YYYY-MM-DD)' });
+        }
+        if (typeof time !== 'string' || time === '') {
+          return res.status(400).json({ error: 'La hora es obligatoria (HH:MM)' });
+        }
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
           return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
         }
+        if (!isValidTime(time)) {
+          return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+        }
+      }
+
+      let newDatetimeUtc = t.datetimeUtc;
+      const hasNewDate = date != null && date !== '';
+      if (hasNewDate) {
         // Si solo se cambia la fecha, conserva la hora previa proyectada en tzEff.
         const prevWall = projectRow({ datetimeUtc: t.datetimeUtc }, tzEff) || {};
         const newTime = (time != null && time !== '') ? normalizeTimeMinute(time) : (prevWall.time || '00:00');
@@ -344,16 +364,22 @@ module.exports = function registerTransactionRoutes(app) {
       if (!Number.isFinite(feeAmount) || feeAmount <= 0) {
         return res.status(400).json({ error: 'El monto de la comisión debe ser mayor a 0' });
       }
-
-      const prevWall = projectRow({ datetimeUtc: t.datetimeUtc }, tzEff) || {};
-      const feeDate = (date != null && date !== '') ? date : prevWall.date;
-      const feeTime = (time != null && time !== '') ? normalizeTimeMinute(time) : (prevWall.time || '00:00');
-      if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      if (typeof date !== 'string' || date === '') {
+        return res.status(400).json({ error: 'La fecha es obligatoria (YYYY-MM-DD)' });
+      }
+      if (typeof time !== 'string' || time === '') {
+        return res.status(400).json({ error: 'La hora es obligatoria (HH:MM)' });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
       }
-      if (time != null && time !== '' && !isValidTime(time)) {
+      if (!isValidTime(time)) {
         return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
       }
+
+      const prevWall = projectRow({ datetimeUtc: t.datetimeUtc }, tzEff) || {};
+      const feeDate = date;
+      const feeTime = normalizeTimeMinute(time);
       const feeDatetimeUtc = wallClockToUtc(feeDate, feeTime, tzEff);
       if (feeDatetimeUtc < t.datetimeUtc) {
         return res.status(400).json({ error: 'La fecha/hora de la comisión no puede ser anterior a la de su transacción.' });
@@ -404,17 +430,23 @@ module.exports = function registerTransactionRoutes(app) {
       if (isSystemCategoryName(categoryName)) {
         return res.status(400).json({ error: 'No puedes usar categorías del sistema (fee, exchange).' });
       }
+      if (typeof date !== 'string' || date === '') {
+        return res.status(400).json({ error: 'La fecha es obligatoria (YYYY-MM-DD)' });
+      }
+      if (typeof time !== 'string' || time === '') {
+        return res.status(400).json({ error: 'La hora es obligatoria (HH:MM)' });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
+      }
+      if (!isValidTime(time)) {
+        return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+      }
       const cat = await getOrCreateCategory(categoryName, type);
 
       const prevWall = projectRow({ datetimeUtc: t.datetimeUtc }, tzEff) || {};
-      const assocDate = (date != null && date !== '') ? date : prevWall.date;
-      const assocTime = (time != null && time !== '') ? normalizeTimeMinute(time) : (prevWall.time || '00:00');
-      if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
-      }
-      if (time != null && time !== '' && !isValidTime(time)) {
-        return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
-      }
+      const assocDate = date;
+      const assocTime = normalizeTimeMinute(time);
       const assocDatetimeUtc = wallClockToUtc(assocDate, assocTime, tzEff);
       if (assocDatetimeUtc < t.datetimeUtc) {
         return res.status(400).json({ error: 'La fecha/hora de la transacción asociada no puede ser anterior a la de su padre.' });

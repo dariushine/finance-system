@@ -155,8 +155,8 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
             </Box>
             <Collapse in={showOptional}>
               <Box display="flex" flexDirection="column" gap={2} mt={1}>
-                <TextField label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} required sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }} fullWidth InputLabelProps={{ shrink: true }} />
-                <TextField label="Hora" type="time" value={time} onChange={(e) => setTime(e.target.value)} required sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }} fullWidth InputLabelProps={{ shrink: true }} helperText="Hora de la operación" />
+                <TextField label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} required fullWidth InputLabelProps={{ shrink: true }} />
+                <TextField label="Hora" type="time" value={time} onChange={(e) => setTime(e.target.value)} required fullWidth InputLabelProps={{ shrink: true }} helperText="Hora de la operación" />
                 <MoneyField label="Comisión (opcional)" value={fee} onValueChange={setFee} fullWidth helperText="Se descuenta aparte del monto" currency={currency} />
               </Box>
             </Collapse>

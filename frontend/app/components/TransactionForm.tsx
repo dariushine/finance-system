@@ -164,7 +164,6 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                     onChange={(e) => setDate(e.target.value)}
                     disabled={loading}
                     required
-                    sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
                     InputLabelProps={{ shrink: true }}
                     error={date > todayISODate}
                     helperText={date > todayISODate
@@ -179,7 +178,6 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                     onChange={(e) => setTime(e.target.value)}
                     disabled={loading}
                     required
-                    sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
                     InputLabelProps={{ shrink: true }}
                     helperText="Hora de la operación"
                   />

@@ -230,7 +230,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     onChange={(e) => setDate(e.target.value)}
                     disabled={loading}
                     required
-                    sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
                     fullWidth
                     InputLabelProps={{ shrink: true }}
                     error={date > todayISODate}
@@ -246,7 +245,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                     onChange={(e) => setTime(e.target.value)}
                     disabled={loading}
                     required
-                    sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
                     fullWidth
                     InputLabelProps={{ shrink: true }}
                     helperText="Hora de la operación"

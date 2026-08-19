@@ -41,14 +41,20 @@ module.exports = function registerExchangeRoutes(app) {
       if (fromAmount <= 0 || toAmount <= 0) {
         return res.status(400).json({ error: 'Los montos deben ser mayores a 0' });
       }
-      if (date != null && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      if (typeof date !== 'string' || date === '') {
+        return res.status(400).json({ error: 'La fecha es obligatoria (YYYY-MM-DD)' });
+      }
+      if (typeof time !== 'string' || time === '') {
+        return res.status(400).json({ error: 'La hora es obligatoria (HH:MM)' });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
       }
-      if (time != null && time !== '' && !isValidTime(time)) {
+      if (!isValidTime(time)) {
         return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
       }
-      const txDate = typeof date === 'string' && date !== '' ? date : undefined;
-      const txTime = typeof time === 'string' && time !== '' ? normalizeTimeMinute(time) : undefined;
+      const txDate = date;
+      const txTime = normalizeTimeMinute(time);
 
       const [fromWallet, toWallet] = await Promise.all([
         new Promise((resolve, reject) => db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [fromWalletId], (err, row) => (err ? reject(err) : resolve(row)))),
@@ -261,12 +267,20 @@ module.exports = function registerExchangeRoutes(app) {
       // Nueva fecha/hora → instante UTC (conserva la del débito si no se cambia).
       let newDatetimeUtc = debit.datetimeUtc;
       if (date != null && date !== '' || (time != null && time !== '')) {
-        const prevWall = projectRow({ datetimeUtc: debit.datetimeUtc }, tzEff) || {};
-        const newDate = (date != null && date !== '') ? date : prevWall.date;
-        if (newDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+        if (typeof date !== 'string' || date === '') {
+          return res.status(400).json({ error: 'La fecha es obligatoria (YYYY-MM-DD)' });
+        }
+        if (typeof time !== 'string' || time === '') {
+          return res.status(400).json({ error: 'La hora es obligatoria (HH:MM)' });
+        }
+        const newDate = date;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
           return res.status(400).json({ error: 'Fecha inválida, use formato YYYY-MM-DD' });
         }
-        const newTime = (time != null && time !== '') ? normalizeTimeMinute(time) : (prevWall.time || '00:00');
+        if (!isValidTime(time)) {
+          return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
+        }
+        const newTime = normalizeTimeMinute(time);
         newDatetimeUtc = wallClockToUtc(newDate, newTime, tzEff);
       }
       const newDescription = description !== undefined ? (description || '') : ex.description;
