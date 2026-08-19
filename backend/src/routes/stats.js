@@ -107,7 +107,9 @@ module.exports = function registerStatsRoutes(app) {
         const params = [...dateParams];
         let dateFilterStr = '';
         if (dateFilter) {
-          dateFilterStr = ` AND ${dateFilter}`;
+          // En esta query la tabla de transacciones se aliasa `dt` (JOIN a debit),
+          // no `t`; por eso reescribimos el filtro de rango sobre dt.datetime_utc.
+          dateFilterStr = ' AND dt.datetime_utc >= ? AND dt.datetime_utc < ?';
         }
         db.all(`SELECT
             e.from_amount AS fromAmount,
