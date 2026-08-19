@@ -127,7 +127,7 @@ export default function MoneyField({
       onFocus={forceCaretEnd}
       inputRef={inputRef}
       slotProps={{
-        input: { inputMode: 'numeric' }, // el inputMode debe ir al <input> real (vía slotProps), no como prop del TextField
+        htmlInput: { inputMode: 'numeric' }, // los atributos del <input> nativo van por htmlInput
       }}
       required={required}
       disabled={disabled}

@@ -311,7 +311,7 @@ export default function RatesPage() {
               value={form.bcv}
               onChange={(e) => setForm({ ...form, bcv: sanitizeRate(e.target.value) })}
               onPaste={(e) => { e.preventDefault(); setForm({ ...form, bcv: sanitizeRate(e.clipboardData.getData('text')) }); }}
-              slotProps={{ input: { inputMode: 'decimal' } }}
+              slotProps={{ htmlInput: { inputMode: 'decimal' } }}
               fullWidth
             />
             <TextField
@@ -320,7 +320,7 @@ export default function RatesPage() {
               value={form.paralelo}
               onChange={(e) => setForm({ ...form, paralelo: sanitizeRate(e.target.value) })}
               onPaste={(e) => { e.preventDefault(); setForm({ ...form, paralelo: sanitizeRate(e.clipboardData.getData('text')) }); }}
-              slotProps={{ input: { inputMode: 'decimal' } }}
+              slotProps={{ htmlInput: { inputMode: 'decimal' } }}
               fullWidth
             />
           </Box>
