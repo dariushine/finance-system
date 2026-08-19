@@ -329,6 +329,7 @@ module.exports = function registerTransactionRoutes(app) {
       const updatedProj = projectRow(updated, tzEff) || updated;
       updatedProj.amount = toNum(updatedProj.amount);
       if (updatedProj.fee != null) updatedProj.fee = toNum(updatedProj.fee);
+      if (updatedProj.walletBalance != null) updatedProj.walletBalance = toNum(updatedProj.walletBalance);
       res.json({ success: true, message: 'Transacción actualizada', transaction: updatedProj });
     } catch (e) {
       res.status(500).json({ error: e.message });
