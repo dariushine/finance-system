@@ -5,17 +5,21 @@
 // el instante a la zona (ver routes, que llama utcToWallClock).
 const { db } = require('../db');
 const { getOrCreateCategory } = require('./categories');
-const { wallClockToUtc } = require('./timeZoneMap');
+const { wallClockToUtc, utcToWallClock } = require('./timeZoneMap');
 
 // Convierte la fecha/hora "de pared" del usuario a un instante UTC ISO (con Z).
 // Si no se provee fecha u hora, usa "ahora" (instante actual, horario servidor).
+// Si se provee fecha pero no hora, usa la hora actual del reloj del usuario
+// (en su zona tz) sobre la fecha dada, en lugar de quedarse en 00:00.
 // `tz` debe ser la zona del usuario (IANA). Si falta, se interpreta como UTC.
 function resolveDatetimeUtc(date, time, tz) {
   const nowIso = new Date().toISOString();
   const hasDate = typeof date === 'string' && date !== '';
   if (!hasDate) return nowIso;
   const hasTime = typeof time === 'string' && time !== '';
-  return wallClockToUtc(date, hasTime ? time : '00:00', tz);
+  if (hasTime) return wallClockToUtc(date, time, tz);
+  const nowWall = utcToWallClock(new Date(), tz); // hora actual en la zona del usuario
+  return wallClockToUtc(date, nowWall.time, tz);
 }
 
 // createTransaction
