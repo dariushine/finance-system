@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, Typography, Box, CircularProgress, Chip } from '@mui/material';
+import { Card, CardContent, Typography, Box, CircularProgress, Chip, useMediaQuery, useTheme } from '@mui/material';
 import { AttachMoney, TrendingUp, ErrorOutline } from '@mui/icons-material';
 import { financeApi, Stats } from '../services/financeApi';
 import BalanceReveal from './BalanceReveal';
@@ -13,6 +13,9 @@ interface DailyRate { date: string; bcv: number; paralelo: number }
 export default function BalanceCard() {
   const { formatAmount } = useNumberFormat();
   const { userTimeZone } = useTimeZone();
+  const theme = useTheme();
+  // En desktop el menú superior ya muestra las tasas; los chips solo van en móvil.
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'), { defaultMatches: true });
   const [stats, setStats] = useState<Stats | null>(null);
   const [rate, setRate] = useState<DailyRate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,8 +46,9 @@ export default function BalanceCard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Tasa del día (para los chips dentro de la tarjeta de balance)
+  // Tasa del día (solo móvil, para los chips). En desktop el menú superior ya la muestra.
   useEffect(() => {
+    if (!isMobile) return;
     let active = true;
     fetch('/api/daily-rates/today')
       .then(async (res) => {
@@ -101,17 +105,19 @@ export default function BalanceCard() {
           </Box>
         </Box>
 
-        {/* Chips de tasas (estilo menú superior), dentro de la tarjeta de balance */}
-        <Box display="flex" gap={1} flexWrap="wrap" mt={2}>
-          {rate ? (
-            <>
-              <Chip size="small" label={`BCV: ${rate.bcv.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
-              <Chip size="small" label={`Paralelo: ${rate.paralelo.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
-            </>
-          ) : (
-            <Chip size="small" label="Tasas —" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
-          )}
-        </Box>
+        {/* Chips de tasas (solo móvil, donde no hay panel superior) */}
+        {isMobile && (
+          <Box display="flex" gap={1} flexWrap="wrap" mt={2}>
+            {rate ? (
+              <>
+                <Chip size="small" label={`BCV: ${rate.bcv.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
+                <Chip size="small" label={`Paralelo: ${rate.paralelo.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
+              </>
+            ) : (
+              <Chip size="small" label="Tasas —" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
+            )}
+          </Box>
+        )}
       </CardContent>
     </Card>
   );
