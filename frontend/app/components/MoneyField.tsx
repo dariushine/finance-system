@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TextField } from '@mui/material';
 import { useNumberFormat } from '../lib/NumberFormat';
 
@@ -39,6 +39,8 @@ export default function MoneyField({
   const { formatNumber } = useNumberFormat();
   // Monto en centavos (entero), como el "buffer" oculto del teclado bancario.
   const [cents, setCents] = useState<number>(() => Math.round((value || 0) * 100));
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pastingRef = useRef(false);
 
   // Sincronizar cuando el valor cambia desde afuera (prefill de edición o reset).
   useEffect(() => {
@@ -51,43 +53,82 @@ export default function MoneyField({
     onValueChange(newCents / 100);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // Atajos de edición y navegación se dejan pasar (copiar, pegar, seleccionar, tab, flechas, enter).
-    if (e.ctrlKey || e.metaKey) return;
-    if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      commit(Math.floor(cents / 10));
-      return;
+  // El caret SIEMPRE va al final (último dígito). Así tipear y pegar es determinista:
+  // nunca depende de en qué parte del 0,00 haces clic o dónde inserta el navegador.
+  const forceCaretEnd = () => {
+    const el = inputRef.current;
+    if (el && document.activeElement === el) {
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
     }
-
-    if (/^\d$/.test(e.key)) {
-      e.preventDefault();
-      const next = cents * 10 + Number(e.key);
-      if (next <= 999999999999) commit(next); // límite de 12 dígitos en centavos
-      return;
-    }
-
-    // Cualquier otra tecla (letras, signos, espacios, coma/punto decimal) se ignora.
-    e.preventDefault();
   };
 
+  // Tras cada re-render del valor, devolvemos el caret al final.
+  useEffect(() => {
+    forceCaretEnd();
+  }, [cents]);
+
+  // Texto escrito (teclado físico o virtual): el caret ya está al final, así que
+  // los dígitos que quedan tras quitar separadores son el buffer completo correcto.
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Si viene de un pegado, lo maneja onPaste (full replace); no lo procesemos aquí.
+    if (pastingRef.current) return;
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 12); // límite de 12 dígitos en centavos
+    commit(Math.min(digits ? Number(digits) : 0, 999999999999));
+    forceCaretEnd();
+  };
+
+  // Convierte un texto pegado a centavos, interpretándolo como un VALOR real
+  // (no dígito a dígito) y reemplaza todo el campo.
+  // Clave: SIEMPRE el último separador (coma o punto) es el decimal si va seguido
+  // de 1-2 dígitos, sin importar el separador configurado — porque a veces se copia
+  // de un sitio que usa punto y a veces de uno que usa coma.
+  //   '2000'          → 200000 (2000,00)
+  //   '10,000,000,50' → toma el ',50' como decimales → 10000000,50
+  //   '2.000.000,50'  → toma el ',50' → 2000000,50
+  //   '1000.5'        → toma el '.5' → 1000,50
+  //   '500'           → 500,00
+  const parseToCents = (raw: string): number => {
+    let s = raw.trim();
+    if (!s) return 0;
+    // Si el texto termina en [.,] + 1-2 dígitos, ese es el separador decimal real.
+    const m = s.match(/([.,])(\d{1,2})$/);
+    if (m && m.index !== undefined) {
+      // Quitar TODOS los demás separadores de la parte entera y usar '.' como decimal.
+      const intPart = s.slice(0, m.index).replace(/[.,]/g, '');
+      s = intPart + '.' + m[2];
+    } else {
+      // Sin decimales finales: todos los separadores son de miles → se eliminan.
+      s = s.replace(/[.,]/g, '');
+    }
+    const num = parseFloat(s);
+    if (!Number.isFinite(num) || num < 0) return 0;
+    return Math.round(num * 100);
+  };
+
+  // Pegar un monto: se interpreta como valor completo (no dígito a dígito) y reemplaza
+  // todo el campo, sin depender del cursor. La bandera pastingRef evita que el onChange
+  // posterior doble-procese (comportamiento del navegador móvil si no cancela del todo).
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 12);
-    if (digits) commit(Math.min(Number(digits), 999999999999));
-    // Si no hay dígitos (ej. pegar texto con solo letras), el valor no cambia.
+    pastingRef.current = true;
+    commit(parseToCents(e.clipboardData.getData('text')));
+    // Restablecer tras el ciclo de render para no bloquear el siguiente tipeo.
+    setTimeout(() => { pastingRef.current = false; forceCaretEnd(); }, 0);
   };
 
   return (
     <TextField
       label={label}
       value={formatNumber(cents / 100)}
-      onChange={() => {}}
-      onKeyDown={handleKeyDown}
+      onChange={handleChange}
       onPaste={handlePaste}
-      inputMode="numeric"
+      onClick={forceCaretEnd}
+      onFocus={forceCaretEnd}
+      inputRef={inputRef}
+      slotProps={{
+        htmlInput: { inputMode: 'numeric' }, // los atributos del <input> nativo van por htmlInput
+      }}
       required={required}
       disabled={disabled}
       autoFocus={autoFocus}
