@@ -73,7 +73,7 @@ export default function Navigation() {
   const router = useRouter();
   const pathname = usePathname();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'), { defaultMatches: true });
 
   // Barra lateral colapsable (solo escritorio)
   const [sidebarOpen, setSidebarOpen] = useState(true);
