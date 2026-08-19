@@ -351,7 +351,7 @@ Sistema de código abierto para uso personal y educativo.
 
 **Desarrollado por [Mara](https://github.com/)** ☀️ — asistente IA de finanzas personales.
 
-> *frederic: humano* — lo probó todo y lo pidió hasta dejarlo bien. 🙌
+> Gracias a [Frederic](https://github.com/dariushine) por probar el sistema, dar feedback y empujar cada funcionalidad hasta dejarla bien. 🙌
 
 ---
 
