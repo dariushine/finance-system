@@ -51,41 +51,27 @@ export default function MoneyField({
     onValueChange(newCents / 100);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // Atajos de edición y navegación se dejan pasar (copiar, pegar, seleccionar, tab, flechas, enter).
-    if (e.ctrlKey || e.metaKey) return;
-    if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      commit(Math.floor(cents / 10));
-      return;
-    }
-
-    if (/^\d$/.test(e.key)) {
-      e.preventDefault();
-      const next = cents * 10 + Number(e.key);
-      if (next <= 999999999999) commit(next); // límite de 12 dígitos en centavos
-      return;
-    }
-
-    // Cualquier otra tecla (letras, signos, espacios, coma/punto decimal) se ignora.
-    e.preventDefault();
+  // Lee los dígitos del texto escrito. Funciona igual con teclado físico Y virtual
+  // (Gboard/Android/iOS), porque usa onChange real en vez de interceptar keydown.
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Quedarse solo con los dígitos: omite separadores, letras, signos y la coma/punto decimal.
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 12); // límite de 12 dígitos en centavos
+    commit(Math.min(digits ? Number(digits) : 0, 999999999999));
   };
 
+  // El pegado también lo maneja onChange (el evento paste nativo ya inserta el texto
+  // y luego onChange le quita lo que no sean dígitos). Solo filtramos aquí por claridad.
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 12);
-    if (digits) commit(Math.min(Number(digits), 999999999999));
-    // Si no hay dígitos (ej. pegar texto con solo letras), el valor no cambia.
+    commit(Math.min(digits ? Number(digits) : 0, 999999999999));
   };
 
   return (
     <TextField
       label={label}
       value={formatNumber(cents / 100)}
-      onChange={() => {}}
-      onKeyDown={handleKeyDown}
+      onChange={handleChange}
       onPaste={handlePaste}
       inputMode="numeric"
       required={required}
