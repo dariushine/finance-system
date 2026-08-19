@@ -14,9 +14,11 @@ const path = require('path');
 
 const seedDemoData = process.env.SEED_DEMO_DATA === 'true';
 
-// DB NUEVA dedicada a este modelo. La anterior (finance.db) quedó corrupta por
-// migraciones a medias; esta arranca limpia con el esquema definitivo.
-const dbPath = path.join(__dirname, '..', 'data/finance-timezone.db');
+// El sistema lee SIEMPRE el archivo data/finance.db — nombre estable del
+// sistema, NO renombrar (preferencia de Freddy 19 ago 2026). Si no existe,
+// CREATE TABLE IF NOT EXISTS de abajo la genera limpia desde 0 con el esquema
+// definido aquí.
+const dbPath = path.join(__dirname, '..', 'data/finance.db');
 const db = new sqlite3.Database(dbPath);
 
 // ALMACENAMIENTO DE DINERO (decisión Freddy, 19 ago 2026):
