@@ -36,7 +36,7 @@ export default function MoneyField({
   fullWidth,
   helperText,
 }: MoneyFieldProps) {
-  const { formatNumber } = useNumberFormat();
+  const { formatNumber, separator } = useNumberFormat();
   // Monto en centavos (entero), como el "buffer" oculto del teclado bancario.
   const [cents, setCents] = useState<number>(() => Math.round((value || 0) * 100));
 
@@ -59,12 +59,31 @@ export default function MoneyField({
     commit(Math.min(digits ? Number(digits) : 0, 999999999999));
   };
 
-  // El pegado también lo maneja onChange (el evento paste nativo ya inserta el texto
-  // y luego onChange le quita lo que no sean dígitos). Solo filtramos aquí por claridad.
+  // Convierte un texto pegado a centavos, interpretándolo como un VALOR real
+  // (no como dígitos estilo banca). Respeta el separador de decimales elegido.
+  // - '2000'      → 200000 centavos (2000,00)   [antes daba 20,00]
+  // - '2000,50'   → 200050 (comma) / '2,000.50' → 200050 (dot)
+  // - '2.000'     → 200000 (comma: el punto es miles) / '2,000' → 200000 (dot)
+  const parseToCents = (raw: string): number => {
+    let s = raw.trim();
+    if (!s) return 0;
+    let normalized: string;
+    if (separator === 'comma') {
+      // decimal = coma, miles = punto → '2.000,50' → quitar puntos, coma→punto
+      normalized = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      // decimal = punto, miles = coma → '2,000.50' → quitar comas
+      normalized = s.replace(/,/g, '');
+    }
+    const num = parseFloat(normalized);
+    if (!Number.isFinite(num) || num < 0) return 0;
+    return Math.round(num * 100);
+  };
+
+  // Pegar un monto: se interpreta como valor completo (no dígito a dígito).
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 12);
-    commit(Math.min(digits ? Number(digits) : 0, 999999999999));
+    commit(parseToCents(e.clipboardData.getData('text')));
   };
 
   return (
