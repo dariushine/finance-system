@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TextField } from '@mui/material';
 import { useNumberFormat } from '../lib/NumberFormat';
 
@@ -39,6 +39,8 @@ export default function MoneyField({
   const { formatNumber, separator } = useNumberFormat();
   // Monto en centavos (entero), como el "buffer" oculto del teclado bancario.
   const [cents, setCents] = useState<number>(() => Math.round((value || 0) * 100));
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pastingRef = useRef(false);
 
   // Sincronizar cuando el valor cambia desde afuera (prefill de edición o reset).
   useEffect(() => {
@@ -51,12 +53,29 @@ export default function MoneyField({
     onValueChange(newCents / 100);
   };
 
-  // Lee los dígitos del texto escrito. Funciona igual con teclado físico Y virtual
-  // (Gboard/Android/iOS), porque usa onChange real en vez de interceptar keydown.
+  // El caret SIEMPRE va al final (último dígito). Así tipear y pegar es determinista:
+  // nunca depende de en qué parte del 0,00 haces clic o dónde inserta el navegador.
+  const forceCaretEnd = () => {
+    const el = inputRef.current;
+    if (el && document.activeElement === el) {
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+    }
+  };
+
+  // Tras cada re-render del valor, devolvemos el caret al final.
+  useEffect(() => {
+    forceCaretEnd();
+  }, [cents]);
+
+  // Texto escrito (teclado físico o virtual): el caret ya está al final, así que
+  // los dígitos que quedan tras quitar separadores son el buffer completo correcto.
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Quedarse solo con los dígitos: omite separadores, letras, signos y la coma/punto decimal.
+    // Si viene de un pegado, lo maneja onPaste (full replace); no lo procesemos aquí.
+    if (pastingRef.current) return;
     const digits = e.target.value.replace(/\D/g, '').slice(0, 12); // límite de 12 dígitos en centavos
     commit(Math.min(digits ? Number(digits) : 0, 999999999999));
+    forceCaretEnd();
   };
 
   // Convierte un texto pegado a centavos, interpretándolo como un VALOR real
@@ -80,10 +99,15 @@ export default function MoneyField({
     return Math.round(num * 100);
   };
 
-  // Pegar un monto: se interpreta como valor completo (no dígito a dígito).
+  // Pegar un monto: se interpreta como valor completo (no dígito a dígito) y reemplaza
+  // todo el campo, sin depender del cursor. La bandera pastingRef evita que el onChange
+  // posterior doble-procese (comportamiento del navegador móvil si no cancela del todo).
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
+    pastingRef.current = true;
     commit(parseToCents(e.clipboardData.getData('text')));
+    // Restablecer tras el ciclo de render para no bloquear el siguiente tipeo.
+    setTimeout(() => { pastingRef.current = false; forceCaretEnd(); }, 0);
   };
 
   return (
@@ -92,6 +116,9 @@ export default function MoneyField({
       value={formatNumber(cents / 100)}
       onChange={handleChange}
       onPaste={handlePaste}
+      onClick={forceCaretEnd}
+      onFocus={forceCaretEnd}
+      inputRef={inputRef}
       inputMode="numeric"
       required={required}
       disabled={disabled}
