@@ -105,11 +105,11 @@ export default function BalanceCard() {
         <Box display="flex" gap={1} flexWrap="wrap" mt={2}>
           {rate ? (
             <>
-              <Chip size="small" label={`BCV: ${rate.bcv.toFixed(2)}`} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.12)' }} variant="outlined" />
-              <Chip size="small" label={`Paralelo: ${rate.paralelo.toFixed(2)}`} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.12)' }} variant="outlined" />
+              <Chip size="small" label={`BCV: ${rate.bcv.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
+              <Chip size="small" label={`Paralelo: ${rate.paralelo.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
             </>
           ) : (
-            <Chip size="small" label="Tasas —" sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }} variant="outlined" />
+            <Chip size="small" label="Tasas —" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
           )}
         </Box>
       </CardContent>
