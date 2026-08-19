@@ -10,17 +10,33 @@ import {
   Stack,
   ToggleButton,
   ToggleButtonGroup,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import { VisibilityOff } from '@mui/icons-material';
 import { useHideBalances, setHideBalances } from '../lib/hooks/useHideBalances';
 import { useNumberFormat } from '../lib/NumberFormat';
+import { useTimeZone, TIME_ZONE_OPTIONS } from '../lib/timeZone';
+import { useState } from 'react';
 
 export default function OpcionesPage() {
   const hidden = useHideBalances();
   const { separator, setSeparator } = useNumberFormat();
+  const { userTimeZone, setUserTimeZone, loaded } = useTimeZone();
+  const [saving, setSaving] = useState(false);
 
   const handleToggle = (checked: boolean) => {
     setHideBalances(checked);
+  };
+
+  const handleUserTz = async (v: string) => {
+    setSaving(true);
+    await setUserTimeZone(v);
+    setSaving(false);
   };
 
   return (
@@ -79,6 +95,40 @@ export default function OpcionesPage() {
               <ToggleButton value="comma">( , )</ToggleButton>
               <ToggleButton value="dot">( . )</ToggleButton>
             </ToggleButtonGroup>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ mt: 2 }}>
+        <CardContent>
+          <Stack spacing={2}>
+            <Typography variant="h6" fontWeight="bold">
+              Zona horaria
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              La zona horaria del usuario se usa para mostrar las fechas y horas de
+              tus operaciones. El servidor guarda un único instante UTC y lo
+              proyecta a esta zona.
+            </Typography>
+
+            <FormControl size="small" fullWidth disabled={!loaded}>
+              <InputLabel>Zona horaria</InputLabel>
+              <Select
+                label="Zona horaria"
+                value={saving ? '' : userTimeZone}
+                onChange={(e) => handleUserTz(e.target.value as string)}
+              >
+                {TIME_ZONE_OPTIONS.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {saving && (
+              <Stack direction="row" alignItems="center" gap={1}>
+                <CircularProgress size={16} />
+                <Typography variant="caption" color="text.secondary">Guardando…</Typography>
+              </Stack>
+            )}
           </Stack>
         </CardContent>
       </Card>

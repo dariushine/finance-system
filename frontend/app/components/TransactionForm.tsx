@@ -10,23 +10,25 @@ import { useWallets } from '../lib/hooks';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import MoneyField from './MoneyField';
 import type { Category } from '../lib/api';
+import { useTimeZone, todayInZone, nowTimeInZone } from '../lib/timeZone';
 
 interface TransactionFormProps {
   onSuccess?: () => void;
 }
 
 export default function TransactionForm({ onSuccess }: TransactionFormProps) {
+  const { userTimeZone } = useTimeZone();
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState(0);
   const [fee, setFee] = useState(0);
   const [wallet, setWallet] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
-  // Fecha de la transacción: por defecto hoy (UTC, formato YYYY-MM-DD).
-  const todayISODate = new Date().toISOString().split('T')[0];
+  // Fecha de la transacción: por defecto hoy EN LA ZONA DEL USUARIO.
+  const todayISODate = todayInZone(userTimeZone);
   const [date, setDate] = useState(todayISODate);
-  // Hora opcional (HH:MM). Por defecto vacía => backend usa hora local actual.
-  const [time, setTime] = useState('');
+  // Hora de la transacción (HH:MM). Prellenada con la hora actual en la zona del usuario.
+  const [time, setTime] = useState(nowTimeInZone(userTimeZone));
   const [loading, setLoading] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +73,9 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           // Fecha opcional: solo se envía si es distinta de hoy, para no romper
           // llamadas que dependen del default backend.
           date: date || undefined,
-          // Hora opcional (HH:MM). Backend la acepta o usa la hora local.
-          time: time || undefined,
+          // Hora siempre enviada (prellenada con la hora actual en la zona del usuario).
+          time,
+          tz: userTimeZone,
         }),
       });
 
@@ -88,8 +91,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       setCategory('');
       setSelectedCategory(null);
       setDescription('');
-      setDate(todayISODate);
-      setTime('');
+      setDate(todayInZone(userTimeZone));
+      setTime(nowTimeInZone(userTimeZone));
       setSuccess(true);
       onSuccess?.();
     } catch (err) {
@@ -146,7 +149,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                 onClick={() => setShowOptional((v) => !v)}
                 sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
               >
-                <Typography variant="body2">Opcionales</Typography>
+                <Typography variant="body2">Detalles</Typography>
                 <IconButton size="small" sx={{ ml: 0.5 }}>
                   {showOptional ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
                 </IconButton>
@@ -169,13 +172,14 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                   />
 
                   <TextField
-                    label="Hora (opcional)"
+                    label="Hora"
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     disabled={loading}
+                    required
                     InputLabelProps={{ shrink: true }}
-                    helperText="Si la dejas vacía se usa la hora actual"
+                    helperText="Hora de la operación"
                   />
 
                   <MoneyField

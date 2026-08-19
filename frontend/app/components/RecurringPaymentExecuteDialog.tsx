@@ -29,11 +29,10 @@ import {
   ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { executeRecurringPayment, type RecurringPayment } from '../lib/api';
+import { useTimeZone, todayInZone, nowTimeInZone } from '../lib/timeZone';
 import { useWallets } from '../lib/hooks';
 import CategoryAutocomplete from './CategoryAutocomplete';
 import MoneyField from './MoneyField';
-
-const todayISODate = () => new Date().toISOString().split('T')[0];
 
 interface RecurringPaymentExecuteDialogProps {
   payment: RecurringPayment | null;
@@ -49,14 +48,16 @@ interface RecurringPaymentExecuteDialogProps {
  */
 export default function RecurringPaymentExecuteDialog({ payment, open, onClose }: RecurringPaymentExecuteDialogProps) {
   const router = useRouter();
+  const { userTimeZone } = useTimeZone();
   const { wallets, loading: walletsLoading } = useWallets();
+  const todayISODate = () => todayInZone(userTimeZone);
 
   const [amount, setAmount] = useState(0);
   const [fee, setFee] = useState(0);
   const [description, setDescription] = useState('');
   const [wallet, setWallet] = useState('');
   const [date, setDate] = useState(todayISODate());
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState(nowTimeInZone(userTimeZone));
   const [category, setCategory] = useState('');
   const [showOptional, setShowOptional] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -69,7 +70,7 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
     setDescription(payment.description || '');
     setWallet(payment.walletId != null ? String(payment.walletId) : '');
     setDate(todayISODate());
-    setTime('');
+    setTime(nowTimeInZone(userTimeZone));
     setCategory(payment.categoryName);
     setShowOptional(false);
     setError(null);
@@ -103,7 +104,8 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
         overrideWalletId: Number(wallet),
         description: description || undefined,
         date: date || undefined,
-        time: time || undefined,
+        time,
+        tz: userTimeZone,
       });
       close();
       router.push(`/transactions/${res.transaction.id}`);
@@ -146,15 +148,15 @@ export default function RecurringPaymentExecuteDialog({ payment, open, onClose }
               onClick={() => setShowOptional((v) => !v)}
               sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
             >
-              <Typography variant="body2">Opcionales</Typography>
+              <Typography variant="body2">Detalles</Typography>
               <IconButton size="small" sx={{ ml: 0.5 }}>
                 {showOptional ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
               </IconButton>
             </Box>
             <Collapse in={showOptional}>
               <Box display="flex" flexDirection="column" gap={2} mt={1}>
-                <TextField label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
-                <TextField label="Hora (opcional)" type="time" value={time} onChange={(e) => setTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Si la dejas vacía se usa la hora actual" />
+                <TextField label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} required fullWidth InputLabelProps={{ shrink: true }} />
+                <TextField label="Hora" type="time" value={time} onChange={(e) => setTime(e.target.value)} required fullWidth InputLabelProps={{ shrink: true }} helperText="Hora de la operación" />
                 <MoneyField label="Comisión (opcional)" value={fee} onValueChange={setFee} fullWidth helperText="Se descuenta aparte del monto" currency={currency} />
               </Box>
             </Collapse>

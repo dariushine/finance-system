@@ -2,6 +2,30 @@
 // Usa rewrites de Next.js: /api → backend:3002/api
 export const API_URL = '/api';
 
+// Settings (zona horaria) — GET /api/settings y PUT por clave.
+// El backend SIEMPRE corre en UTC; solo la zona del usuario es configurable.
+export interface Settings {
+  user_timezone?: string | null;
+  defaults?: { user_timezone?: string };
+}
+
+export async function getSettings(): Promise<Settings> {
+  const response = await fetch(`${API_URL}/settings`);
+  if (!response.ok) throw new Error('No se pudieron cargar las configuraciones');
+  return response.json();
+}
+
+export async function setUserTimeZone(timezone: string): Promise<Settings> {
+  const response = await fetch(`${API_URL}/settings/user_timezone`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timezone }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo guardar la zona horaria');
+  return body;
+}
+
 // Wallet API
 export interface Wallet {
   id: number;
@@ -199,12 +223,13 @@ export interface WalletReport {
 // Reporte de una billetera con rango de fechas
 export async function getWalletReport(
   id: number | string,
-  opts?: { from?: string; to?: string; period?: string }
+  opts?: { from?: string; to?: string; period?: string; tz?: string }
 ): Promise<WalletReport> {
   const params = new URLSearchParams();
   if (opts?.from) params.append('from', opts.from);
   if (opts?.to) params.append('to', opts.to);
   if (opts?.period) params.append('period', opts.period);
+  if (opts?.tz) params.append('tz', opts.tz);
   const qs = params.toString();
   const response = await fetch(`${API_URL}/wallets/${id}/report${qs ? `?${qs}` : ''}`);
   if (!response.ok) throw new Error('Failed to load wallet report');
@@ -226,12 +251,14 @@ export async function getEffectiveRate(type: 'bcv' | 'paralelo' = 'bcv', date?: 
 export async function getTransactions(
   wallet_id?: number, 
   category?: string,
-  date?: string
+  date?: string,
+  tz?: string
 ): Promise<Transaction[]> {
   const params = new URLSearchParams();
   if (wallet_id) params.append('wallet_id', wallet_id.toString());
   if (category) params.append('category', category);
   if (date) params.append('date', date);
+  if (tz) params.append('tz', tz);
   
   const response = await fetch(`${API_URL}/transactions?${params}`);
   if (!response.ok) throw new Error('Failed to load transactions');
@@ -239,8 +266,9 @@ export async function getTransactions(
 }
 
 // Obtener el detalle de una transacción (incluye balanceAfter y transacciones hijas)
-export async function getTransaction(id: number | string): Promise<TransactionDetail> {
-  const response = await fetch(`${API_URL}/transactions/${id}`);
+export async function getTransaction(id: number | string, tz?: string): Promise<TransactionDetail> {
+  const qs = tz ? `?tz=${encodeURIComponent(tz)}` : '';
+  const response = await fetch(`${API_URL}/transactions/${id}${qs}`);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body?.error || 'No se pudo cargar la transacción');
@@ -251,12 +279,13 @@ export async function getTransaction(id: number | string): Promise<TransactionDe
 // Editar una transacción (descripción, monto, fecha, categoría)
 export async function updateTransaction(
   id: number | string,
-  data: { description?: string; amount?: number; date?: string; time?: string; categoryName?: string }
+  data: { description?: string; amount?: number; date?: string; time?: string; categoryName?: string },
+  tz?: string
 ): Promise<any> {
   const response = await fetch(`${API_URL}/transactions/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(tz ? { ...data, tz } : data),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo editar la transacción');
@@ -274,12 +303,13 @@ async function deleteTransaction(id: number | string): Promise<any> {
 // Agregar una comisión (fee) a una transacción
 export async function addTransactionFee(
   id: number | string,
-  data: { amount: number; date?: string; time?: string }
+  data: { amount: number; date?: string; time?: string },
+  tz?: string
 ): Promise<any> {
   const response = await fetch(`${API_URL}/transactions/${id}/fee`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(tz ? { ...data, tz } : data),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo agregar la comisión');
@@ -289,12 +319,13 @@ export async function addTransactionFee(
 // Crear una transacción asociada (hija)
 export async function createAssociatedTransaction(
   id: number | string,
-  data: { amount: number; type: 'income' | 'expense'; categoryName: string; description?: string; date?: string; time?: string }
+  data: { amount: number; type: 'income' | 'expense'; categoryName: string; description?: string; date?: string; time?: string },
+  tz?: string
 ): Promise<any> {
   const response = await fetch(`${API_URL}/transactions/${id}/associate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(tz ? { ...data, tz } : data),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo crear la transacción asociada');
@@ -304,8 +335,9 @@ export async function createAssociatedTransaction(
 export { deleteTransaction };
 
 // Obtener detalle de un exchange (GET /api/exchanges/:id)
-export async function getExchange(id: number | string): Promise<ExchangeDetail> {
-  const response = await fetch(`${API_URL}/exchanges/${id}`);
+export async function getExchange(id: number | string, tz?: string): Promise<ExchangeDetail> {
+  const qs = tz ? `?tz=${encodeURIComponent(tz)}` : '';
+  const response = await fetch(`${API_URL}/exchanges/${id}${qs}`);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body?.error || 'No se pudo cargar el exchange');
@@ -316,12 +348,13 @@ export async function getExchange(id: number | string): Promise<ExchangeDetail> 
 // Editar un exchange (montos, fee, fecha/hora, descripción). Billeteras fijas.
 export async function updateExchange(
   id: number | string,
-  data: { fromAmount?: number; toAmount?: number; fee?: number; description?: string; date?: string; time?: string }
+  data: { fromAmount?: number; toAmount?: number; fee?: number; description?: string; date?: string; time?: string },
+  tz?: string
 ): Promise<any> {
   const response = await fetch(`${API_URL}/exchanges/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(tz ? { ...data, tz } : data),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo editar el exchange');
@@ -337,11 +370,11 @@ export async function deleteExchange(id: number | string): Promise<any> {
 }
 
 // POST transaction API
-export async function postTransaction(data: Transaction): Promise<Transaction> {
+export async function postTransaction(data: Transaction, tz?: string): Promise<Transaction> {
   const response = await fetch(`${API_URL}/transactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
+    body: JSON.stringify(tz ? { ...data, tz } : data)
   });
   if (!response.ok) throw new Error('Failed to save transaction');
   return response.json();
@@ -355,7 +388,9 @@ export async function postExchange(exchange: {
   toAmount: number; 
   marketRate?: number; 
   description?: string; 
-}): Promise<any> {
+  date?: string; 
+  time?: string; 
+}, tz?: string): Promise<any> {
   const response = await fetch(`${API_URL}/exchanges`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -365,7 +400,10 @@ export async function postExchange(exchange: {
       fromAmount: exchange.fromAmount,
       toAmount: exchange.toAmount,
       marketRate: exchange.marketRate,
-      description: exchange.description
+      description: exchange.description,
+      date: exchange.date,
+      time: exchange.time,
+      ...(tz ? { tz } : {}),
     })
   });
   
@@ -533,6 +571,7 @@ export async function deleteRecurringPayment(id: number | string): Promise<any> 
 export interface ExecuteRecurringInput {
   date?: string;
   time?: string;
+  tz?: string;
   overrideAmount?: number;
   overrideFee?: number;
   overrideCategoryName?: string;

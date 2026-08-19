@@ -115,7 +115,7 @@ async function executeRecurringPayment(id, options = {}) {
   const row = await q(`${RECURRING_SELECT} WHERE rp.id = ? AND rp.isActive = 1`, [id]);
   if (!row) throw new Error('Pago frecuente no encontrado');
 
-  const { date, time, overrideAmount, overrideCategoryName, overrideWalletId, overrideFee, description } = options;
+  const { date, time, tz, overrideAmount, overrideCategoryName, overrideWalletId, overrideFee, description } = options;
   const amount = overrideAmount != null ? Number(overrideAmount) : row.amount;
   const type = row.type; // el tipo pertenece a la plantilla y no cambia al realizarla
   const categoryName = overrideCategoryName || row.categoryName;
@@ -129,7 +129,7 @@ async function executeRecurringPayment(id, options = {}) {
   if (!Number.isFinite(fee) || fee < 0) throw new Error('La comisión no puede ser negativa');
   if (!walletId) throw new Error('Selecciona una billetera para realizar el pago');
 
-  const transaction = await createTransaction(walletId, categoryName, type, amount, finalDescription, fee, date, time);
+  const transaction = await createTransaction(walletId, categoryName, type, amount, finalDescription, fee, date, time, tz);
   return { transaction };
 }
 

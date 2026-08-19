@@ -49,6 +49,7 @@ import {
   TransactionDetail,
 } from '../../lib/api';
 import { useNumberFormat } from '../../lib/NumberFormat';
+import { useTimeZone, nowTimeInZone } from '../../lib/timeZone';
 import MoneyField from '../../components/MoneyField';
 
 const formatTimeOnly = (time?: string | null) => {
@@ -74,6 +75,7 @@ const todayISODate = () => new Date().toISOString().split('T')[0];
 export default function ExchangeDetailPage() {
   const params = useParams<{ id: string }>();
   const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const router = useRouter();
   const id = Number(params.id);
   const theme = useTheme();
@@ -104,7 +106,7 @@ export default function ExchangeDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getExchange(id);
+      const data = await getExchange(id, userTimeZone);
       setExchange(data);
 
       // Cargar las transacciones que componen el exchange:
@@ -141,7 +143,7 @@ export default function ExchangeDetailPage() {
       fee: exchange.fee ? exchange.fee : 0,
       description: exchange.description || '',
       date: exchange.date || todayISODate(),
-      time: exchange.time ? exchange.time.slice(0, 5) : '',
+      time: exchange.time ? exchange.time.slice(0, 5) : nowTimeInZone(userTimeZone),
     });
     setEditOpen(true);
   };
@@ -163,8 +165,8 @@ export default function ExchangeDetailPage() {
       if (!Number.isFinite(fee) || fee < 0) throw new Error('La comisión no puede ser negativa');
       payload.fee = fee;
       if (editForm.date) payload.date = editForm.date;
-      payload.time = editForm.time || undefined;
-      const res = await updateExchange(exchange.id, payload);
+      payload.time = editForm.time;
+      const res = await updateExchange(exchange.id, payload, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al editar el exchange');
       notice('Exchange actualizado');
       setEditOpen(false);
@@ -427,14 +429,16 @@ export default function ExchangeDetailPage() {
               value={editForm.date}
               onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
               fullWidth
+              required
               InputLabelProps={{ shrink: true }}
             />
             <TextField
-              label="Hora (opcional)"
+              label="Hora"
               type="time"
               value={editForm.time}
               onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
               fullWidth
+              required
               InputLabelProps={{ shrink: true }}
             />
             <TextField

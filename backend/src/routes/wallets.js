@@ -1,5 +1,7 @@
 // src/routes/wallets.js — Endpoints HTTP de billeteras (delegan en services).
 const wallets = require('../services/wallets');
+const { getUserTimeZone } = require('../services/settings');
+const { isValidTimeZone } = require('../services/timeZoneMap');
 
 const err = (res, e) => res.status(e.status || 500).json({ error: e.message });
 
@@ -63,7 +65,10 @@ module.exports = function registerWalletRoutes(app) {
   // Reporte de una billetera
   app.get('/api/wallets/:id/report', async (req, res) => {
     try {
-      const report = await wallets.getWalletReport(Number(req.params.id), req.query || {});
+      const q = req.query || {};
+      let tz = q.tz;
+      if (!tz || !isValidTimeZone(tz)) tz = await getUserTimeZone();
+      const report = await wallets.getWalletReport(Number(req.params.id), { ...q, tz });
       res.json(report);
     } catch (e) { err(res, e); }
   });

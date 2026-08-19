@@ -5,23 +5,25 @@ import { Card, CardContent, Typography, TextField, Button, Box, MenuItem, Select
 import { SwapHoriz, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useWallets } from '../lib/hooks';
 import MoneyField from './MoneyField';
+import { useTimeZone, todayInZone, nowTimeInZone } from '../lib/timeZone';
 
 interface ExchangeFormProps {
   onSuccess?: () => void;
 }
 
 export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
+  const { userTimeZone } = useTimeZone();
   const [fromWalletId, setFromWalletId] = useState<number | ''>('');
   const [toWalletId, setToWalletId] = useState<number | ''>('');
   const [fromAmount, setFromAmount] = useState(0);
   const [toAmount, setToAmount] = useState(0);
   const [fee, setFee] = useState(0);
   const [description, setDescription] = useState('');
-  // Fecha del exchange (débito/crédito): por defecto hoy.
-  const todayISODate = new Date().toISOString().split('T')[0];
+  // Fecha del exchange (débito/crédito): por defecto hoy EN LA ZONA DEL USUARIO.
+  const todayISODate = todayInZone(userTimeZone);
   const [date, setDate] = useState(todayISODate);
-  // Hora opcional (HH:MM). Vacía => backend usa hora local actual.
-  const [time, setTime] = useState('');
+  // Hora del exchange (HH:MM). Prellenada con la hora actual en la zona del usuario.
+  const [time, setTime] = useState(nowTimeInZone(userTimeZone));
   const [loading, setLoading] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
@@ -78,7 +80,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         fee: rateData.commission || undefined,
         description: description || undefined,
         date: date || undefined,
-        time: time || undefined,
+        time,
+        tz: userTimeZone,
       };
       
       // Hacer la llamada al endpoint de exchanges
@@ -110,8 +113,8 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setToAmount(0);
       setFee(0);
       setDescription('');
-      setDate(todayISODate);
-      setTime('');
+      setDate(todayInZone(userTimeZone));
+      setTime(nowTimeInZone(userTimeZone));
 
       // Notificar éxito al componente padre
       onSuccess?.();
@@ -211,7 +214,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                 onClick={() => setShowOptional((v) => !v)}
                 sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
               >
-                <Typography variant="body2">Opcionales</Typography>
+                <Typography variant="body2">Detalles</Typography>
                 <IconButton size="small" sx={{ ml: 0.5 }}>
                   {showOptional ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
                 </IconButton>
@@ -236,14 +239,15 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   />
 
                   <TextField
-                    label="Hora (opcional)"
+                    label="Hora"
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     disabled={loading}
+                    required
                     fullWidth
                     InputLabelProps={{ shrink: true }}
-                    helperText="Si la dejas vacía se usa la hora actual"
+                    helperText="Hora de la operación"
                   />
 
                   <MoneyField

@@ -6,9 +6,11 @@ import { AttachMoney, TrendingUp, ErrorOutline } from '@mui/icons-material';
 import { financeApi, Stats } from '../services/financeApi';
 import BalanceReveal from './BalanceReveal';
 import { useNumberFormat } from '../lib/NumberFormat';
+import { useTimeZone } from '../lib/timeZone';
 
 export default function BalanceCard() {
   const { formatAmount } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export default function BalanceCard() {
       try {
         setLoading(true);
         const [statsData] = await Promise.all([
-          financeApi.getStats(true),
+          financeApi.getStats(true, userTimeZone),
         ]);
         setStats(statsData);
         setLastUpdated(new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }));

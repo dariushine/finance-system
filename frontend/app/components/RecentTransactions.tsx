@@ -36,6 +36,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { parseLocalDate } from '../lib/dates';
 import { useNumberFormat } from '../lib/NumberFormat';
+import { useTimeZone } from '../lib/timeZone';
 
 interface Transaction {
   id: number;
@@ -160,6 +161,7 @@ export default function RecentTransactions() {
   const router = useRouter();
   const theme = useTheme();
   const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [expanded, setExpanded] = useState<number | false>(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -170,7 +172,7 @@ export default function RecentTransactions() {
   const load = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/transactions?limit=100');
+      const response = await fetch(`/api/transactions?limit=100&tz=${encodeURIComponent(userTimeZone)}`);
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'No se pudieron cargar las transacciones');
       const list: Transaction[] = Array.isArray(payload) ? payload : payload.data || [];

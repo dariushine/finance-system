@@ -43,6 +43,7 @@ import {
 } from '@mui/icons-material';
 import { API_URL } from '../lib/api';
 import { useNumberFormat } from '../lib/NumberFormat';
+import { useTimeZone } from '../lib/timeZone';
 
 // Simularemos gráficos con componentes MUI por ahora
 // En producción, usaríamos Recharts o Chart.js
@@ -215,6 +216,7 @@ const WalletRow = memo(function WalletRow({
 export default function ReportsPage() {
   const theme = useTheme();
   const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [monthlyExpanded, setMonthlyExpanded] = useState<number | false>(false);
   const [categoryExpanded, setCategoryExpanded] = useState<number | false>(false);
@@ -240,7 +242,7 @@ export default function ReportsPage() {
     try {
       setLoading(true);
       // El rango se pasa al backend: period=1m|3m|6m|1y|all
-      const statsResponse = await fetch(`${API_URL}/stats?rate=${rateType}&period=${timeRange}`);
+      const statsResponse = await fetch(`${API_URL}/stats?rate=${rateType}&period=${timeRange}&tz=${encodeURIComponent(userTimeZone)}`);
       const walletsResponse = await fetch(`${API_URL}/wallets`);
 
       if (!statsResponse.ok) {

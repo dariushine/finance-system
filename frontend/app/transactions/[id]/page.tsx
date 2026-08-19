@@ -61,6 +61,7 @@ import CategoryAutocomplete from '../../components/CategoryAutocomplete';
 import MoneyField from '../../components/MoneyField';
 import type { Category } from '../../lib/api';
 import { useNumberFormat } from '../../lib/NumberFormat';
+import { useTimeZone, nowTimeInZone } from '../../lib/timeZone';
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '—';
@@ -91,6 +92,7 @@ const SYSTEM_CATEGORIES = ['fee', 'exchange_out', 'exchange_in'];
 
 export default function TransactionDetailPage() {
   const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = Number(params.id);
@@ -132,7 +134,7 @@ export default function TransactionDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getTransaction(id);
+      const data = await getTransaction(id, userTimeZone);
       setTx(data);
     } catch (e: any) {
       setError(e?.message || 'Error al cargar la transacción');
@@ -166,7 +168,7 @@ export default function TransactionDetailPage() {
       description: tx.description || '',
       amount: tx.amount,
       date: tx.date || todayISODate(),
-      time: tx.time ? tx.time.slice(0, 5) : '',
+      time: tx.time ? tx.time.slice(0, 5) : nowTimeInZone(userTimeZone),
     });
     setEditCategory(tx.category);
     setEditOpen(true);
@@ -180,12 +182,12 @@ export default function TransactionDetailPage() {
       const amount = editForm.amount;
       if (Number.isFinite(amount) && amount > 0) payload.amount = amount;
       if (editForm.date) payload.date = editForm.date;
-      payload.time = editForm.time || undefined;
+      payload.time = editForm.time;
       // Categoría editable solo en no-fee y no-exchange
       if (!isFee && editCategory !== tx.category && !SYSTEM_CATEGORIES.includes(editCategory)) {
         payload.categoryName = editCategory;
       }
-      const res = await updateTransaction(id, payload);
+      const res = await updateTransaction(id, payload, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al editar');
       notice('Transacción actualizada');
       setEditOpen(false);
@@ -223,7 +225,7 @@ export default function TransactionDetailPage() {
     if (isFee) { notice('No puedes agregar comisión a una comisión (fee).', 'warning'); return; }
     setFeeAmount(0);
     setFeeDate(tx.date || todayISODate());
-    setFeeTime(tx.time ? tx.time.slice(0, 5) : '');
+    setFeeTime(tx.time ? tx.time.slice(0, 5) : nowTimeInZone(userTimeZone));
     setFeeOpen(true);
   };
 
@@ -233,7 +235,7 @@ export default function TransactionDetailPage() {
     try {
       const amount = feeAmount;
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto de la comisión debe ser mayor a 0');
-      const res = await addTransactionFee(id, { amount, date: feeDate || undefined, time: feeTime || undefined });
+      const res = await addTransactionFee(id, { amount, date: feeDate || undefined, time: feeTime }, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al agregar comisión');
       notice('Comisión agregada');
       setFeeOpen(false);
@@ -250,7 +252,7 @@ export default function TransactionDetailPage() {
     if (!tx) return;
     if (blockIfExchange()) return;
     if (isFee) { notice('No puedes crear transacciones asociadas a una comisión (fee).', 'warning'); return; }
-    setAssocForm({ amount: 0, type: 'expense', categoryName: '', description: '', date: tx.date || todayISODate(), time: tx.time ? tx.time.slice(0, 5) : '' });
+    setAssocForm({ amount: 0, type: 'expense', categoryName: '', description: '', date: tx.date || todayISODate(), time: tx.time ? tx.time.slice(0, 5) : nowTimeInZone(userTimeZone) });
     setAssocOpen(true);
   };
 
@@ -267,8 +269,8 @@ export default function TransactionDetailPage() {
         categoryName: assocForm.categoryName,
         description: assocForm.description || undefined,
         date: assocForm.date || undefined,
-        time: assocForm.time || undefined,
-      });
+        time: assocForm.time,
+      }, userTimeZone);
       if (!res?.success) throw new Error(res?.error || 'Error al crear asociada');
       notice('Transacción asociada creada');
       setAssocOpen(false);
@@ -584,15 +586,17 @@ export default function TransactionDetailPage() {
               value={editForm.date}
               onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
               fullWidth
+              required
               InputLabelProps={{ shrink: true }}
               helperText="No puede ser anterior a su padre ni posterior a sus asociadas"
             />
             <TextField
-              label="Hora (opcional)"
+              label="Hora"
               type="time"
               value={editForm.time}
               onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
               fullWidth
+              required
               InputLabelProps={{ shrink: true }}
               helperText="Se aplica la misma regla de fecha a la hora"
             />
@@ -659,23 +663,26 @@ export default function TransactionDetailPage() {
               currency={currency}
             />
             <TextField
-              label="Fecha (opcional)"
+              label="Fecha"
               type="date"
               value={feeDate}
               onChange={(e) => setFeeDate(e.target.value)}
               fullWidth
+              required
               InputLabelProps={{ shrink: true }}
-              helperText="Por defecto la de la transacción; no puede ser anterior"
             />
             <TextField
-              label="Hora (opcional)"
+              label="Hora"
               type="time"
               value={feeTime}
               onChange={(e) => setFeeTime(e.target.value)}
               fullWidth
+              required
               InputLabelProps={{ shrink: true }}
-              helperText="Por defecto la de la transacción; no puede ser anterior"
             />
+            <Typography variant="caption" color="text.secondary">
+              La fecha no puede ser anterior a la de la transacción padre.
+            </Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -727,23 +734,26 @@ export default function TransactionDetailPage() {
               fullWidth
             />
             <TextField
-              label="Fecha (opcional)"
+              label="Fecha"
               type="date"
               value={assocForm.date}
               onChange={(e) => setAssocForm({ ...assocForm, date: e.target.value })}
               fullWidth
+              required
               InputLabelProps={{ shrink: true }}
-              helperText="Por defecto la de la transacción; no puede ser anterior"
             />
             <TextField
-              label="Hora (opcional)"
+              label="Hora"
               type="time"
               value={assocForm.time}
               onChange={(e) => setAssocForm({ ...assocForm, time: e.target.value })}
               fullWidth
+              required
               InputLabelProps={{ shrink: true }}
-              helperText="Por defecto la de la transacción; no puede ser anterior"
             />
+            <Typography variant="caption" color="text.secondary">
+              La fecha no puede ser anterior a la de la transacción padre.
+            </Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
