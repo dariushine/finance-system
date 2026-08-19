@@ -19,10 +19,10 @@ const seedDemoData = process.env.SEED_DEMO_DATA === 'true';
 const dbPath = path.join(__dirname, '..', 'data/finance-timezone.db');
 const db = new sqlite3.Database(dbPath);
 
-// ALMACENAMIENTO DE DINERO (decisión Freddy, 19 ago 2026): escala 4 enteros.
-// La API/front trabajan en unidades ($1.50); la BD guarda enteros ×10000
-// ($1.50 → 15000) para aritmética exacta. Los servicios operan en enteros;
-// las rutas hacen la conversión en el límite con money.js.
+// ALMACENAMIENTO DE DINERO (decisión Freddy, 19 ago 2026):
+//   - MONTOS (balance, amount, fee, ...): INTEGER ×100 (centavos). $1.50 → 150.
+//   - TASAS (exchange_rate, rate, bcv/paralelo): INTEGER ×10000. 634.95 → 6349500.
+// La API/front trabajan en unidades; las rutas convierten en el límite (money.js).
 
 // Crear tablas
 db.serialize(() => {
@@ -185,12 +185,12 @@ db.serialize(() => {
     db.get('SELECT COUNT(*) as count FROM wallets', (err, result) => {
       if (!err && result && result.count === 0) {
         const wallets = [
-          ['Cuenta Bancaria USD', 'bank', 'USD', 10000000, 'Cuenta bancaria en dólares'],  // 1000.00
-          ['Cuenta Bancaria VES', 'bank', 'VES', 500000000, 'Cuenta bancaria en bolívares'],  // 50000.00
-          ['Efectivo USD', 'cash', 'USD', 2000000, 'Efectivo en dólares'],  // 200.00
-          ['Efectivo VES', 'cash', 'VES', 1000000000, 'Efectivo en bolívares'],  // 100000.00
-          ['Crypto Wallet', 'crypto', 'USD', 5000000, 'Wallet de criptomonedas'],  // 500.00
-          ['Tarjeta Prepagada', 'card', 'USD', 1000000, 'Tarjeta prepagada internacional'],  // 100.00
+          ['Cuenta Bancaria USD', 'bank', 'USD', 100000, 'Cuenta bancaria en dólares'],  // 1000.00
+          ['Cuenta Bancaria VES', 'bank', 'VES', 5000000, 'Cuenta bancaria en bolívares'],  // 50000.00
+          ['Efectivo USD', 'cash', 'USD', 20000, 'Efectivo en dólares'],  // 200.00
+          ['Efectivo VES', 'cash', 'VES', 10000000, 'Efectivo en bolívares'],  // 100000.00
+          ['Crypto Wallet', 'crypto', 'USD', 50000, 'Wallet de criptomonedas'],  // 500.00
+          ['Tarjeta Prepagada', 'card', 'USD', 10000, 'Tarjeta prepagada internacional'],  // 100.00
         ];
         const stmt = db.prepare('INSERT INTO wallets (name, type, currency, balance, description) VALUES (?, ?, ?, ?, ?)');
         wallets.forEach((w) => stmt.run(w));

@@ -3,7 +3,7 @@ const { db } = require('../db');
 const {
   getExchangeRates, getRateForDate, getTodayRate, upsertRate,
 } = require('../services/rates');
-const { toInt, toNum } = require('../services/money');
+const { toNum, toRateInt, toRateNum } = require('../services/money');
 
 module.exports = function registerRateRoutes(app) {
   // Balance global por moneda + total en USD (tasas centralizadas).
@@ -42,7 +42,7 @@ module.exports = function registerRateRoutes(app) {
     const type = req.query.type === 'paralelo' ? 'paralelo' : 'bcv';
     const date = req.query.date;
     const rate = await getRateForDate(date || new Date().toISOString().split('T')[0], type);
-    res.json({ date: date || new Date().toISOString().split('T')[0], rate: rate != null ? toNum(rate) : null, type });
+    res.json({ date: date || new Date().toISOString().split('T')[0], rate: rate != null ? toRateNum(rate) : null, type });
   });
 
   // === CRUD de tasas diarias (daily_rates) ===
@@ -50,7 +50,7 @@ module.exports = function registerRateRoutes(app) {
     db.all('SELECT * FROM daily_rates ORDER BY date DESC', (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       // bcv/paralelo en enteros → unidades humanas.
-      (rows || []).forEach((r) => { r.bcv = toNum(r.bcv); r.paralelo = toNum(r.paralelo); });
+      (rows || []).forEach((r) => { r.bcv = toRateNum(r.bcv); r.paralelo = toRateNum(r.paralelo); });
       res.json({ data: rows || [] });
     });
   });
@@ -80,7 +80,7 @@ module.exports = function registerRateRoutes(app) {
       return res.status(400).json({ error: 'Faltan campos: bcv, paralelo' });
     }
     db.run('UPDATE daily_rates SET bcv = ?, paralelo = ? WHERE id = ?',
-      [toInt(bcv), toInt(paralelo), req.params.id],
+      [toRateInt(bcv), toRateInt(paralelo), req.params.id],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
         if (this.changes === 0) return res.status(404).json({ error: 'Tasa no encontrada' });

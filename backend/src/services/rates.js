@@ -1,6 +1,6 @@
 // src/services/rates.js — Tasas (dolarapi, daily_rates, tasa efectiva).
 const { db } = require('../db');
-const { toInt, toNum } = require('./money');
+const { toRateInt, toRateNum } = require('./money');
 
 // Consultar las tasas oficial (BCV) y paralelo de Dolarapi
 function fetchRatesFromApi() {
@@ -40,7 +40,7 @@ function upsertRate(date, bcv, paralelo, source) {
       `INSERT INTO daily_rates (date, bcv, paralelo, source)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(date) DO UPDATE SET bcv = excluded.bcv, paralelo = excluded.paralelo, source = excluded.source`,
-      [date, toInt(bcv), toInt(paralelo), source || 'dolarapi'],
+      [date, toRateInt(bcv), toRateInt(paralelo), source || 'dolarapi'],
       (err) => err ? reject(err) : resolve()
     );
   });
@@ -60,8 +60,8 @@ async function getTodayRate() {
   });
 
   if (fromDb) {
-    // De BD vienen enteros de escala 4 → unidades humanas para el front.
-    return { ...fromDb, bcv: toNum(fromDb.bcv), paralelo: toNum(fromDb.paralelo), fromDb: true };
+    // De BD vienen enteros de escala 4 (tasa ×10000) → unidades humanas.
+    return { ...fromDb, bcv: toRateNum(fromDb.bcv), paralelo: toRateNum(fromDb.paralelo), fromDb: true };
   }
 
   // 2. No está en BD: pedir a la API

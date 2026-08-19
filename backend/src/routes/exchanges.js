@@ -12,7 +12,7 @@ const {
 const { getUserTimeZone } = require('../services/settings');
 const { rangeToInstants, projectInstants } = require('../services/timeUtil');
 const { wallClockToUtc, isValidTimeZone } = require('../services/timeZoneMap');
-const { toInt, toNum, decodeMoneyList } = require('../services/money');
+const { toInt, toNum, toRateInt, toRateNum, decodeMoneyList } = require('../services/money');
 
 // Convierte los campos de dinero de un objeto transacción (int→unidades).
 function decodeTx(tx) {
@@ -86,9 +86,8 @@ module.exports = function registerExchangeRoutes(app) {
       if (fromWallet.balance < fromTotal) {
         throw new Error(`Fondos insuficientes en ${fromWallet.name}. Balance actual: ${toNum(fromWallet.balance)} ${fromWallet.currency}, necesita ${toNum(fromTotal)}`);
       }
-      // Tasa en escala 4: (to/from) en unidades → entero. Evita dividir enteros
-      // y perder precisión; toInt maneja el redondeo.
-      const rate = toInt(toUnits / fromUnits);
+      // Tasa en escala 4 (×10000): (to/from) en unidades → entero. toRateInt.
+      const rate = toRateInt(toUnits / fromUnits);
 
       const debitTransaction = await createTransaction(
         fromWalletId, 'exchange_out', 'expense', fromAmountInt,
@@ -115,7 +114,7 @@ module.exports = function registerExchangeRoutes(app) {
             message: 'Exchange registrado exitosamente',
             exchange: {
               id: exchangeId,
-              rate: toNum(rate),
+              rate: toRateNum(rate),
               fromWallet: fromWallet.name,
               toWallet: toWallet.name,
               fromAmount: toNum(fromAmountInt),
@@ -189,7 +188,7 @@ module.exports = function registerExchangeRoutes(app) {
       projected.forEach((r) => {
         r.fromAmount = toNum(r.fromAmount);
         r.toAmount = toNum(r.toAmount);
-        r.rate = toNum(r.rate);
+        r.rate = toRateNum(r.rate);
         if (r.fee != null) r.fee = toNum(r.fee);
       });
       res.json({ data: projected, total: total?.total || 0, page, limit, tz: tzEff });
@@ -232,7 +231,7 @@ module.exports = function registerExchangeRoutes(app) {
       const detail = projectRow(row, tzEff) || row;
       if (detail.fromAmount != null) detail.fromAmount = toNum(detail.fromAmount);
       if (detail.toAmount != null) detail.toAmount = toNum(detail.toAmount);
-      if (detail.rate != null) detail.rate = toNum(detail.rate);
+      if (detail.rate != null) detail.rate = toRateNum(detail.rate);
       if (detail.fee != null) detail.fee = toNum(detail.fee);
       res.json(detail);
     } catch (e) {
@@ -334,11 +333,10 @@ module.exports = function registerExchangeRoutes(app) {
       const fromDelta = newFromEffect - oldFromEffect;
       const toDelta = newToEffect - oldToEffect;
 
-      // Tasa en escala 4 a partir de unidades (newTo/newFrom) para evitar dividir
-      // enteros y perder precisión.
+      // Tasa en escala 4: (to/from) en unidades → entero ×10000 (toRateInt).
       const toUnits = toNum(newToAmountInt);
       const fromUnitsV = toNum(newFromAmountInt);
-      const newRate = fromUnitsV !== 0 ? toInt(toUnits / fromUnitsV) : 0;
+      const newRate = fromUnitsV !== 0 ? toRateInt(toUnits / fromUnitsV) : 0;
 
       await withTransaction(async () => {
         await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [fromWalletBalanceBefore + fromDelta, ex.fromWalletId]);

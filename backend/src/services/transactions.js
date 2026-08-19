@@ -24,7 +24,7 @@ function resolveDatetimeUtc(date, time, tz) {
 
 // createTransaction
 // @param {string} tz - zona IANA del usuario (para convertir date+time a UTC).
-// IMPORTANTE (escala 4): amount y fee entran en ENTEROS de escala 4 (×10000),
+// IMPORTANTE (dinero): amount y fee entran en ENTEROS de CENTAVOS (×100),
 // porque este service opera en enteros internamente (ver money.js). Las rutas
 // que llamen aquí ya deben haber convertido de unidades con toInt().
 function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date, time, tz) {
@@ -40,9 +40,9 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
         getOrCreateCategory(categoryName, type).then((category) => {
             const total = amount + commission;
             if (type === 'expense' && wallet.balance < total) {
-              // amount/commission/balance ya están en enteros de escala 4; el
-              // mensaje se muestra en unidades humanas para el usuario.
-              return reject(new Error(`Fondos insuficientes. Balance actual: ${(wallet.balance / 10000)} ${wallet.currency}, necesita ${(total / 10000)}`));
+              // amount/commission/balance ya están en enteros de centavos (×100);
+              // el mensaje se muestra en unidades humanas para el usuario.
+              return reject(new Error(`Fondos insuficientes. Balance actual: ${(wallet.balance / 100)} ${wallet.currency}, necesita ${(total / 100)}`));
             }
 
             const newBalance = type === 'expense'
@@ -304,7 +304,7 @@ function syncParentFee(parentId) {
 }
 
 // Efecto de una transacción sobre el balance de la billetera.
-// Operan en enteros de escala 4 (amount ya viene en enteros).
+// Operan en enteros de CENTAVOS (×100) (amount ya viene en enteros).
 function balanceEffect(type, amount) {
   return type === 'income' ? Number(amount) : -Number(amount);
 }

@@ -4,7 +4,7 @@ const { getRateForDate } = require('../services/rates');
 const { rangeToInstants, projectInstants } = require('../services/timeUtil');
 const { getUserTimeZone } = require('../services/settings');
 const { isValidTimeZone } = require('../services/timeZoneMap');
-const { toNum } = require('../services/money');
+const { toNum, rawVesAmountToUsd } = require('../services/money');
 
 module.exports = function registerStatsRoutes(app) {
   app.get('/api/stats', async (req, res) => {
@@ -64,11 +64,11 @@ module.exports = function registerStatsRoutes(app) {
         const usdValue = await (async () => {
           if (row.currency === 'VES') {
             const rate = await getRate(row.date);
-            // amount y rate están en escala 4 (INTEGER): el ×10000 del numerador
-            // y denominador se cancela → resultado en USD (unidades humanas).
-            return rate ? Number(row.amount) / rate : 0;
+            // amount está en centavos (×100), rate en ×10000: escalas distintas,
+            // usa rawVesAmountToUsd para compensar. Resultado en USD (unidades).
+            return rate ? rawVesAmountToUsd(row.amount, rate) : 0;
           }
-          // USD: el monto está en escala 4 → unidades humanas antes de sumar.
+          // USD: el monto está en centavos (×100) → unidades humanas.
           return toNum(row.amount) || 0;
         })();
 
@@ -140,16 +140,16 @@ module.exports = function registerStatsRoutes(app) {
       };
       for (const ex of exchangeRows) {
         const fromUsd = ex.fromCurrency === 'VES' && ex.rate != null && ex.rate !== 0
-          ? Number(ex.fromAmount) / Number(ex.rate)
+          ? rawVesAmountToUsd(ex.fromAmount, ex.rate)
           : (ex.fromCurrency === 'VES' ? 0 : toNum(ex.fromAmount) || 0);
         const toUsd = ex.toCurrency === 'VES' && ex.rate != null && ex.rate !== 0
-          ? Number(ex.toAmount) / Number(ex.rate)
+          ? rawVesAmountToUsd(ex.toAmount, ex.rate)
           : (ex.toCurrency === 'VES' ? 0 : toNum(ex.toAmount) || 0);
         totalFromUSD += fromUsd;
         totalToUSD += toUsd;
         if (ex.fee) {
           const feeUsd = ex.fromCurrency === 'VES' && ex.rate != null && ex.rate !== 0
-            ? Number(ex.fee) / Number(ex.rate)
+            ? rawVesAmountToUsd(ex.fee, ex.rate)
             : toNum(ex.fee) || 0;
           totalFeeUSD += feeUsd;
         }

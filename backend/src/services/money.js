@@ -1,71 +1,86 @@
-// src/services/money.js — Conversión de dinero en los límites API↔DB (escala 4).
+// src/services/money.js — Conversión de dinero en los límites API↔DB.
 //
 // DECISIÓN DE DISEÑO (Freddy, 19 ago 2026):
-//   - La API y el frontend trabajan en UNIDADES HUMANAS ($1.50, 634.95 VES/USD).
-//   - La base de datos guarda ENTEROS de escala 4 (×10000): $1.50 → 15000,
-//     tasa 634.95 → 6349500. Aritmética INTEGER exacta (sin ruido flotante).
-//   - SOLO las rutas (límite API↔DB) llaman a estos helpers. Los services
-//     operan y devuelven enteros internamente; el front no cambia.
+//   - MONTOS/SALDOS (balance, amount, fee, converted_amount, from_amount,
+//     to_amount): escala ×100 (centavos). $1.50 → 150, 1.50 VES → 150.
+//   - TASAS (exchange_rate, rate, daily_rates.bcv/paralelo): escala ×10000.
+//     634.95 → 6349500. La tasa lleva más precisión natural.
+//   - La API y el front trabajan en UNIDADES HUMANAS ($1.50). Solo las rutas
+//     (límite API↔DB) convierten; los services operan en enteros; el front no
+//     cambia.
 //
-// MOTIVO DE LA ESCALA 4 (vs centavos):
-//   - Int64 en SQLite llega a 9,223,372,036,854,775,807 → con ×10000 el monto
-//     máximo almacenable es ~922,337,203,685,477 unidades (~922 billones).
-//   - Margen indesbordable incluso bajo hiperinflación venezolana real.
-//   - Escala fija 4 es consistente para montos y tasas de cambio.
+// POR QUÉ DOS ESCALAS: los montos de una moneda y la tasa de cambio son datos
+// distintos. Centavos (×100) basta para lo que la UI escribe (2 decimales) y es
+// legible/estándar. La tasa necesita 4 decimales para no perder precisión en la
+// conversión. Utilizar la misma escala para ambos forzaba un compromiso.
+//
+// RECORDATORIO (cambio 2→escala): si en el futuro una redenominación exige más
+// finura, se sube VES a ×10000; USD puede quedarse en ×100.
 
-const SCALE = 10000;
-const SCALE_F = 10000; // número (para división exacta en JS, ver toNum)
+// ===== MONTOS (×100 = centavos) =====
+const MONEY_SCALE = 100;
 
-// Unidades humanas → entero de escala 4. SIEMPRE se redondea primero y luego se
-// escala (round-then-scale): así el ruido flotante de entrada (ej. 15.30000004)
-// no se multiplica como error. Redondea al múltiplo de 1/10000 más cercano.
+// Unidades humanas → entero de centavos. Always round-then-scale.
 function toInt(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
-  return Math.round((n + Number.EPSILON) * SCALE);
+  return Math.round((n + Number.EPSILON) * MONEY_SCALE);
 }
-
-// Entero de escala 4 → unidades humanas. Divide por 10000.
+// Entero de centavos → unidades humanas.
 function toNum(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
-  return n / SCALE_F;
+  return n / MONEY_SCALE;
 }
 
-// Verdaderos positivos/negativos a partir de un monto humano o entero.
-// Útil en validaciones que comparan con 0 (ej. "debe ser mayor a 0").
-function isPositiveUnits(v) {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0;
+// ===== TASAS (×10000) =====
+const RATE_SCALE = 10000;
+// Unidades humanas de tasa → entero de escala 4.
+function toRateInt(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round((n + Number.EPSILON) * RATE_SCALE);
 }
-function isNonNegativeUnits(v) {
-  const n = Number(v);
-  return Number.isFinite(n) && n >= 0;
+// Entero de escala 4 de tasa → unidades humanas.
+function toRateNum(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return n / RATE_SCALE;
 }
 
-// Decodifica una fila (u objeto) de BD: devuelve una copia con los campos
-// `fields` (nombres de keys del objeto) convertidos de entero a unidades.
-// NO muta el original.
+// Convierte un monto VES (en terreno de MONTOS, ×100) a USD, dado el rate
+// (en terreno de TASAS, ×10000). Almacenado: rawAmount = VES*100,
+// rawRate = VESperUSD*10000. Entonces rawAmount/rawRate devuelve USD*0.01:
+// hay que re-escalar por RATE_SCALE/MONEY_SCALE = 100.
+function rawVesAmountToUsd(rawAmount, rawRate) {
+  const a = Number(rawAmount);
+  const r = Number(rawRate);
+  if (!Number.isFinite(a) || !Number.isFinite(r) || r === 0) return 0;
+  return (a * (RATE_SCALE / MONEY_SCALE)) / r;
+}
+
+// Decodifica una fila (u objeto) de BD: copia con los campos `fields`
+// convertidos de CENTAVOS (×100) → unidades humanas. NO muta el original.
 function decodeMoney(obj, fields) {
   if (!obj || typeof obj !== 'object') return obj;
   const out = { ...obj };
-  for (const f of fields) {
-    if (f in out) out[f] = toNum(out[f]);
-  }
+  for (const f of fields) if (f in out) out[f] = toNum(out[f]);
   return out;
 }
-
-// Igual que decodeMoney pero para arrays de filas.
 function decodeMoneyList(rows, fields) {
   return (rows || []).map((r) => decodeMoney(r, fields));
 }
 
 module.exports = {
-  SCALE,
+  MONEY_SCALE,
+  RATE_SCALE,
   toInt,
   toNum,
-  isPositiveUnits,
-  isNonNegativeUnits,
+  toRateInt,
+  toRateNum,
+  rawVesAmountToUsd,
+  isPositiveUnits: (v) => { const n = Number(v); return Number.isFinite(n) && n > 0; },
+  isNonNegativeUnits: (v) => { const n = Number(v); return Number.isFinite(n) && n >= 0; },
   decodeMoney,
   decodeMoneyList,
 };
