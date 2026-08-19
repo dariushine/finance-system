@@ -162,6 +162,7 @@ export default function RecurringPaymentDetailPage() {
     if (!Number.isFinite(fee) || fee < 0) return setExecError('La comisión no puede ser negativa.');
     if (!execWallet) return setExecError('Selecciona una billetera para crear la transacción.');
     if (!execCategory.trim()) return setExecError('Escribe o selecciona una categoría.');
+    if (!execDate || !execTime) return setExecError('La fecha y la hora son obligatorias.');
 
     setExecSaving(true);
     setExecError(null);
@@ -359,15 +360,15 @@ export default function RecurringPaymentDetailPage() {
                 onClick={() => setExecShowOptional((v) => !v)}
                 sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', userSelect: 'none', '&:hover': { color: 'text.primary' } }}
               >
-                <Typography variant="body2">Avanzado</Typography>
+                <Typography variant="body2">Detalles</Typography>
                 <IconButton size="small" sx={{ ml: 0.5 }}>
                   {execShowOptional ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                 </IconButton>
               </Box>
               <Collapse in={execShowOptional}>
                 <Box display="flex" flexDirection="column" gap={2} mt={1}>
-                  <TextField label="Fecha" type="date" value={execDate} onChange={(e) => setExecDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
-                  <TextField label="Hora" type="time" value={execTime} onChange={(e) => setExecTime(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText="Hora de la operación" />
+                  <TextField label="Fecha" type="date" value={execDate} onChange={(e) => setExecDate(e.target.value)} required sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }} fullWidth InputLabelProps={{ shrink: true }} />
+                  <TextField label="Hora" type="time" value={execTime} onChange={(e) => setExecTime(e.target.value)} required sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }} fullWidth InputLabelProps={{ shrink: true }} helperText="Hora de la operación" />
                   <MoneyField label="Comisión (opcional)" value={execFee} onValueChange={setExecFee} fullWidth helperText="Se descuenta aparte del monto" currency={currency} />
                 </Box>
               </Collapse>

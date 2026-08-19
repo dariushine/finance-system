@@ -176,6 +176,10 @@ export default function TransactionDetailPage() {
 
   const saveEdit = async () => {
     if (!tx) return;
+    if (!editForm.date || !editForm.time) {
+      notice('La fecha y la hora son obligatorias.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const payload: any = { description: editForm.description };
@@ -231,6 +235,10 @@ export default function TransactionDetailPage() {
 
   const saveFee = async () => {
     if (!tx) return;
+    if (!feeDate || !feeTime) {
+      notice('La fecha y la hora son obligatorias.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const amount = feeAmount;
@@ -258,6 +266,10 @@ export default function TransactionDetailPage() {
 
   const saveAssoc = async () => {
     if (!tx) return;
+    if (!assocForm.date || !assocForm.time) {
+      notice('La fecha y la hora son obligatorias.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const amount = assocForm.amount;
@@ -586,6 +598,8 @@ export default function TransactionDetailPage() {
               value={editForm.date}
               onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
               fullWidth
+              required
+              sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
               InputLabelProps={{ shrink: true }}
               helperText="No puede ser anterior a su padre ni posterior a sus asociadas"
             />
@@ -595,6 +609,8 @@ export default function TransactionDetailPage() {
               value={editForm.time}
               onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
               fullWidth
+              required
+              sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
               InputLabelProps={{ shrink: true }}
               helperText="Se aplica la misma regla de fecha a la hora"
             />
@@ -666,6 +682,8 @@ export default function TransactionDetailPage() {
               value={feeDate}
               onChange={(e) => setFeeDate(e.target.value)}
               fullWidth
+              required
+              sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
               InputLabelProps={{ shrink: true }}
             />
             <TextField
@@ -674,6 +692,8 @@ export default function TransactionDetailPage() {
               value={feeTime}
               onChange={(e) => setFeeTime(e.target.value)}
               fullWidth
+              required
+              sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
               InputLabelProps={{ shrink: true }}
             />
             <Typography variant="caption" color="text.secondary">
@@ -735,6 +755,8 @@ export default function TransactionDetailPage() {
               value={assocForm.date}
               onChange={(e) => setAssocForm({ ...assocForm, date: e.target.value })}
               fullWidth
+              required
+              sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
               InputLabelProps={{ shrink: true }}
             />
             <TextField
@@ -743,6 +765,8 @@ export default function TransactionDetailPage() {
               value={assocForm.time}
               onChange={(e) => setAssocForm({ ...assocForm, time: e.target.value })}
               fullWidth
+              required
+              sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
               InputLabelProps={{ shrink: true }}
             />
             <Typography variant="caption" color="text.secondary">

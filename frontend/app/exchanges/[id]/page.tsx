@@ -152,6 +152,10 @@ export default function ExchangeDetailPage() {
 
   const saveEdit = async () => {
     if (!exchange) return;
+    if (!editForm.date || !editForm.time) {
+      notice('La fecha y la hora son obligatorias.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const payload: any = { description: editForm.description };
@@ -429,6 +433,8 @@ export default function ExchangeDetailPage() {
               value={editForm.date}
               onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
               fullWidth
+              required
+              sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
               InputLabelProps={{ shrink: true }}
             />
             <TextField
@@ -437,6 +443,8 @@ export default function ExchangeDetailPage() {
               value={editForm.time}
               onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
               fullWidth
+              required
+              sx={{ '& .MuiFormLabel-asterisk': { display: 'none' } }}
               InputLabelProps={{ shrink: true }}
             />
             <TextField
