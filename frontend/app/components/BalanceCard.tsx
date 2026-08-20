@@ -7,6 +7,7 @@ import { financeApi, Stats } from '../services/financeApi';
 import BalanceReveal from './BalanceReveal';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
+import { useOnDataChanged } from '../lib/dataEvents';
 
 interface DailyRate { date: string; bcv: number; paralelo: number }
 
@@ -22,29 +23,32 @@ export default function BalanceCard() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [statsData] = await Promise.all([
-          financeApi.getStats(true, userTimeZone),
-        ]);
-        setStats(statsData);
-        setLastUpdated(new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }));
-        setError(null);
-      } catch (err) {
-        setError('Error al cargar datos del backend');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [statsData] = await Promise.all([
+        financeApi.getStats(true, userTimeZone),
+      ]);
+      setStats(statsData);
+      setLastUpdated(new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }));
+      setError(null);
+    } catch (err) {
+      setError('Error al cargar datos del backend');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
     // Refresh every 60 seconds
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Recargar cuando se crea/edita/borra algo (FAB u otra acción).
+  useOnDataChanged(fetchData, []);
 
   // Tasa del día (solo móvil, para los chips). En desktop el menú superior ya la muestra.
   useEffect(() => {

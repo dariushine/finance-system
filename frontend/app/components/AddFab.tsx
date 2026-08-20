@@ -19,6 +19,7 @@ import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import TransactionForm from './TransactionForm';
 import ExchangeForm from './ExchangeForm';
+import { notifyDataChanged } from '../lib/dataEvents';
 
 export default function AddFab() {
   const [open, setOpen] = useState(false);
@@ -33,7 +34,8 @@ export default function AddFab() {
   const handleClose = () => setOpen(false);
 
   const handleSuccess = (msg: string) => {
-    router.refresh();    // refresca las cards de balance / listas
+    router.refresh();      // refresca server components
+    notifyDataChanged();   // avisa a las páginas client para que recarguen sus datos
     setOpen(false);       // cierra el diálogo tras una operación exitosa
     setSuccessMsg(msg);   // muestra un aviso a nivel de app (sobrevive al cierre)
   };

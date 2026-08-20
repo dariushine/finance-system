@@ -204,6 +204,8 @@ export interface WalletTransaction {
   amount: number;
   description?: string;
   date: string;
+  /** Hora (HH:MM) en la zona del usuario, la manda el backend proyectada. */
+  time?: string | null;
   category: string;
   createdAt?: string;
 }

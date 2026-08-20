@@ -68,6 +68,7 @@ import {
 import theme from '../../theme';
 import { useNumberFormat } from '../../lib/NumberFormat';
 import { useTimeZone } from '../../lib/timeZone';
+import { useOnDataChanged } from '../../lib/dataEvents';
 
 const icons: Record<string, ReactNode> = {
   bank: <AccountBalance />,
@@ -211,6 +212,9 @@ export default function WalletDetailPage() {
     if (id) loadReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, period]);
+
+  // Recargar el reporte al crear/editar/borrar (FAB u otra acción).
+  useOnDataChanged(() => { if (id) loadReport(); }, [id, loadReport]);
 
   useEffect(() => {
     chargeRate();
@@ -530,7 +534,8 @@ export default function WalletDetailPage() {
                       onClick={() => router.push(`/transactions/${t.id}`)}
                       sx={{ cursor: 'pointer' }}
                     >
-                      <TableCell>{t.date}</TableCell>
+                      {/* Fecha (y hora si la trae) de la transacción en la zona del usuario */}
+                      <TableCell>{t.time ? `${t.date} · ${t.time.slice(0, 5)}` : t.date}</TableCell>
                       <TableCell>
                         <Chip
                           size="small"

@@ -11,6 +11,7 @@ import { useRef } from 'react';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useWallets } from '../lib/hooks';
+import { useOnDataChanged } from '../lib/dataEvents';
 import theme from '../theme';
 import BalanceReveal from './BalanceReveal';
 import { useNumberFormat } from '../lib/NumberFormat';
@@ -33,8 +34,11 @@ export default function WalletList() {
   // solo en móvil (1 tarjeta por fila) el salto de altura molesta.
   const isSmallScreens = useMediaQuery(theme.breakpoints.down('md'));
   const cardRef = useRef<HTMLDivElement>(null);
-  const { wallets, loading, error } = useWallets();
+  const { wallets, loading, error, refetch } = useWallets();
   const [page, setPage] = useState(1);
+
+  // Recargar las billeteras cuando se crea/edita/borra algo (FAB u otra acción).
+  useOnDataChanged(refetch, []);
 
   // Ocultar del dashboard las billeteras marcadas (hideInDashboard).
   // Las marcas se configuran en la edición de la billetera.
