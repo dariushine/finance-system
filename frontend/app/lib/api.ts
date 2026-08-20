@@ -477,24 +477,6 @@ export async function reactivateCategory(id: number | string): Promise<Category>
   return body;
 }
 
-// Balance API
-export interface Balance {
-  total: number;
-  byCurrency: Record<string, number>;
-  byWallet: Array<{
-    walletId: number;
-    walletName: string;
-    currency: string;
-    balance: number;
-  }>;
-}
-
-export async function getBalance(): Promise<Balance> {
-  const response = await apiFetch(`${API_URL}/balance`);
-  if (!response.ok) throw new Error('Failed to load balance');
-  return response.json();
-}
-
 // Recurring Payments API
 
 export interface RecurringPayment {
