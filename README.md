@@ -234,14 +234,25 @@ docker compose down            # detiene (conserva la DB en backend/data)
 docker compose down -v         # detiene (borra volúmenes anónimos; el bind backend/data queda)
 ```
 
-### Opción 2: Desarrollo (hot reload — sin rebuildear)
+### Opción 2: Desarrollo (hot reload)
 
-Usa el override `docker-compose.dev.yml` para iterar sin `docker compose build`. **NO** es para producción.
+Usa el override `docker-compose.dev.yml` para iterar sin rebuildear cuando solo editas código. **NO** es para producción.
+
+**Solo editas código (hot reload, sin rebuild):**
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
+
+**Si agregás o modificás dependencias (`package.json`) — siempre reconstruir y limpiar volúmenes:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+> ⚠️ El `--build` instala las dependencias nuevas dentro del contenedor (el `npm install` del `Dockerfile`). Sin `--build`, la imagen/volumen anterior sigue usando las deps viejas y verás errores como `Module not found: Can't resolve 'jose'`. El `down -v` borra los volúmenes anónimos (`node_modules`/`.next`); el bind `backend/data` se conserva.
 
 | Servicio | Cómo corre | Efecto |
 |---|---|---|
