@@ -281,10 +281,6 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
             {error || walletsError}
           </Alert>
         )}
-
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-          💡 La moneda se sincroniza con la billetera preferida (si eliges una). La categoría se crea si no existe.
-        </Typography>
       </CardContent>
 
       <Snackbar
