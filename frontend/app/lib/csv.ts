@@ -1,5 +1,3 @@
-import ExcelJS from 'exceljs';
-
 // Utilidades compartidas de exportación CSV.
 //
 // Reglas aplicadas (consistente para todos los exports):
@@ -28,74 +26,6 @@ export function formatCSVDateTime(date?: string | null, time?: string | null): s
   if (!d) return '';
   const t = time ? time.slice(0, 5) : '';
   return t ? `${d} ${t}` : d;
-}
-
-/*
- * ===== Export XLSX (con exceljs) =====
- * Los encabezados aquí SÍ pueden llevar tildes/ñ (XLSX es un formato binario
- * con codificación correcta, a diferencia del CSV en crudo).
- */
-
-const XLSX_HEADER_STYLE = {
-  font: { bold: true, color: { argb: 'FFFFFFFF' } },
-  fill: { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF455A64' } },
-  alignment: { vertical: 'middle' as const },
-};
-
-/** Descarga un archivo XLSX a partir del encabezado + filas. */
-export async function downloadXLSX(
-  filename: string,
-  sheetName: string,
-  header: string[],
-  rows: unknown[][],
-  numberColumns: number[] = []
-): Promise<void> {
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'Finance App';
-  const ws = wb.addWorksheet(sheetName);
-
-  const headerRow = ws.addRow(header);
-  headerRow.eachCell((cell) => {
-    cell.font = XLSX_HEADER_STYLE.font;
-    cell.fill = XLSX_HEADER_STYLE.fill as any;
-    cell.alignment = XLSX_HEADER_STYLE.alignment;
-  });
-
-  rows.forEach((r) => {
-    ws.addRow(r);
-  });
-
-  // Formatea como número las columnas indicadas (montos/fechas numéricas).
-  ws.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return; // encabezado
-    numberColumns.forEach((colIdx) => {
-      const cell = row.getCell(colIdx);
-      if (cell.value !== '' && cell.value != null && typeof cell.value !== 'number') {
-        const n = Number(String(cell.value));
-        if (Number.isFinite(n)) cell.value = n;
-      }
-    });
-  });
-
-  // Ajuste de ancho de columnas.
-  header.forEach((_, i) => {
-    const col = ws.getColumn(i + 1);
-    let maxLen = header[i].length;
-    ws.eachRow((row) => {
-      const v = row.getCell(i + 1).value;
-      if (v != null) maxLen = Math.max(maxLen, String(v).length);
-    });
-    col.width = Math.min(Math.max(maxLen + 2, 8), 40);
-  });
-
-  const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 /** Escapa un valor para CSV (comillas, comas, saltos de línea, tabs). */
