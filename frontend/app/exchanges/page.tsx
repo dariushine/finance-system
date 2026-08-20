@@ -39,7 +39,7 @@ import { useOnDataChanged } from '../lib/dataEvents';
 import DateRangeFilter from '../components/DateRangeFilter';
 import EmptyState from '../components/EmptyState';
 import { CurrencyExchange as ExchangeIcon } from '@mui/icons-material';
-import { downloadCSV, formatCSVDate, formatCSVDateTime } from '../lib/csv';
+import { downloadCSV, downloadXLSX, formatCSVDate } from '../lib/csv';
 
 interface Exchange {
   id: number;
@@ -263,6 +263,21 @@ export default function ExchangesPage() {
     downloadCSV(`exchanges_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
   };
 
+  const exportToXLSX = () => {
+    const headers = ['Desde', 'Hacia', 'Débito', 'Crédito', 'Tasa', 'Fee', 'Fecha', 'Hora'];
+    const rows = exchanges.map(ex => [
+      ex.fromWalletName || `Billetera ${ex.fromWalletId}`,
+      ex.toWalletName || `Billetera ${ex.toWalletId}`,
+      ex.fromAmount,
+      ex.toAmount,
+      ex.rate.toFixed(4),
+      ex.fee && ex.fee > 0 ? ex.fee.toFixed(2) : '',
+      formatCSVDate(ex.date || (ex.createdAt ? ex.createdAt.slice(0, 10) : '')),
+      ex.time ? ex.time.slice(0, 5) : '',
+    ]);
+    downloadXLSX(`exchanges_${new Date().toISOString().split('T')[0]}.xlsx`, 'Exchanges', headers, rows, [2, 3, 4, 5]);
+  };
+
   if (loading && !exchanges.length) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -284,13 +299,8 @@ export default function ExchangesPage() {
           </Typography>
         </Box>
         <Box display="flex" gap={1}>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={exportToCSV}
-          >
-            Exportar
-          </Button>
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToCSV}>CSV</Button>
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToXLSX}>XLSX</Button>
         </Box>
       </Box>
 

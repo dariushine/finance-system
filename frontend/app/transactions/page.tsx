@@ -17,7 +17,7 @@ import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
 import { useRouter } from 'next/navigation';
 import { useOnDataChanged } from '../lib/dataEvents';
-import { downloadCSV, formatCSVDateTime } from '../lib/csv';
+import { downloadCSV, downloadXLSX, formatCSVDateTime } from '../lib/csv';
 
 // Fecha + hora (HH:MM) de la transacción proyectada en la zona del usuario.
 // El backend manda `time` en cada fila de la lista; si falta, solo fecha.
@@ -160,6 +160,23 @@ export default function TransactionsPage() {
     downloadCSV(`transacciones_${new Date().toISOString().split('T')[0]}.csv`, header, rows);
   };
 
+  const exportXLSX = () => {
+    const header = ['ID', 'Fecha', 'Hora', 'Categoría', 'Tipo', 'Billetera', 'Crédito', 'Débito', 'Moneda', 'Descripción'];
+    const rows = transactions.map((t) => [
+      t.id,
+      formatCSVDateTime(t.date, null), // solo fecha dd/MM/aaaa
+      t.time ? t.time.slice(0, 5) : '', // hora
+      t.category,
+      t.type === 'income' ? 'Ingreso' : 'Gasto',
+      t.walletName || '',
+      t.type === 'income' ? t.amount : '', // crédito
+      t.type === 'expense' ? t.amount : '', // débito
+      t.walletCurrency || '',
+      t.description || '',
+    ]);
+    downloadXLSX(`transacciones_${new Date().toISOString().split('T')[0]}.xlsx`, 'Transacciones', header, rows, [6, 7]);
+  };
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2} flexWrap="wrap" mb={3}>
@@ -168,7 +185,8 @@ export default function TransactionsPage() {
           <Typography variant="body1" color="text.secondary">Historial de ingresos y gastos.</Typography>
         </Box>
         <Box display="flex" gap={1} flexWrap="wrap">
-          <Button variant="outlined" startIcon={<Download />} onClick={exportCSV}>Exportar</Button>
+          <Button variant="outlined" startIcon={<Download />} onClick={exportCSV}>CSV</Button>
+          <Button variant="outlined" startIcon={<Download />} onClick={exportXLSX}>XLSX</Button>
         </Box>
       </Box>
 

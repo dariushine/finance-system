@@ -69,7 +69,7 @@ import theme from '../../theme';
 import { useNumberFormat } from '../../lib/NumberFormat';
 import { useTimeZone } from '../../lib/timeZone';
 import { useOnDataChanged } from '../../lib/dataEvents';
-import { downloadCSV, formatCSVDate } from '../../lib/csv';
+import { downloadCSV, downloadXLSX, formatCSVDate } from '../../lib/csv';
 
 const icons: Record<string, ReactNode> = {
   bank: <AccountBalance />,
@@ -239,8 +239,7 @@ export default function WalletDetailPage() {
   const startIndex = page * rowsPerPage;
   const pagedTransactions = reportTransactions.slice(startIndex, startIndex + rowsPerPage);
 
-  const exportCSV = () => {
-    const header = ['ID', 'Fecha', 'Hora', 'Tipo', 'Categoria', 'Descripcion', 'Credito', 'Debito', 'Saldo'];
+  const buildCSVRows = () => {
     // Saldo después de cada transacción: running sum anclado al balance real de la
     // billetera (misma lógica que el detalle). Las filas del reporte vienen ordenadas
     // DESC (más reciente primero); volteamos a ASC para acumular.
@@ -253,18 +252,29 @@ export default function WalletDetailPage() {
       cumulative += t.type === 'income' ? Number(t.amount) : -Number(t.amount);
       balanceAfter.set(t.id, (walletBalance - totalNet + cumulative).toFixed(2));
     }
-    const rows = reportTransactions.map((t) => [
-      t.id,
-      formatCSVDate(t.date),
-      t.time ? t.time.slice(0, 5) : '',
-      t.type === 'income' ? 'Ingreso' : 'Egreso',
-      t.category,
-      t.description || '',
-      t.type === 'income' ? String(t.amount) : '', // crédito
-      t.type === 'expense' ? String(t.amount) : '', // débito
-      balanceAfter.get(t.id) ?? '',
-    ]);
+    return reportTransactions.map((t) => ({
+      id: t.id,
+      date: formatCSVDate(t.date),
+      time: t.time ? t.time.slice(0, 5) : '',
+      type: t.type === 'income' ? 'Ingreso' : 'Egreso',
+      category: t.category,
+      description: t.description || '',
+      credit: t.type === 'income' ? t.amount : '',
+      debit: t.type === 'expense' ? t.amount : '',
+      balance: balanceAfter.get(t.id) ?? '',
+    }));
+  };
+
+  const exportCSV = () => {
+    const header = ['ID', 'Fecha', 'Hora', 'Tipo', 'Categoria', 'Descripcion', 'Credito', 'Debito', 'Saldo'];
+    const rows = buildCSVRows().map((r) => [r.id, r.date, r.time, r.type, r.category, r.description, r.credit, r.debit, r.balance]);
     downloadCSV(`billetera_${id}_transacciones_${new Date().toISOString().split('T')[0]}.csv`, header, rows);
+  };
+
+  const exportXLSX = () => {
+    const header = ['ID', 'Fecha', 'Hora', 'Tipo', 'Categoría', 'Descripción', 'Crédito', 'Débito', 'Saldo'];
+    const rows = buildCSVRows().map((r) => [r.id, r.date, r.time, r.type, r.category, r.description, r.credit, r.debit, r.balance]);
+    downloadXLSX(`billetera_${id}_transacciones_${new Date().toISOString().split('T')[0]}.xlsx`, 'Transacciones', header, rows, [6, 7, 8]);
   };
 
   const openEdit = () => {
@@ -470,9 +480,8 @@ export default function WalletDetailPage() {
               {summary && <Chip size="small" label={`${summary.transactionCount}`} />}
             </Box>
             <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
-              <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportCSV} disabled={reportTransactions.length === 0}>
-                Exportar
-              </Button>
+              <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportCSV} disabled={reportTransactions.length === 0}>CSV</Button>
+              <Button size="small" variant="outlined" startIcon={<Download />} onClick={exportXLSX} disabled={reportTransactions.length === 0}>XLSX</Button>
               <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 180 } }}>
                 <InputLabel>Período</InputLabel>
                 <Select value={period} label="Período" onChange={(e) => {
