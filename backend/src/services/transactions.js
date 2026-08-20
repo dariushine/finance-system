@@ -52,9 +52,9 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
             db.run('BEGIN TRANSACTION');
 
             db.run(
-              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [walletId, category.id, type, amount, description || '', datetimeUtc, 10000, amount, 0, null],
+              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [walletId, category.id, type, amount, description || '', datetimeUtc, 0, null],
               function(err) {
                 if (err) {
                   db.run('ROLLBACK');
@@ -90,11 +90,11 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                     ['fee', 'expense'], (fErr, feeCategory) => {
                       const fc = (!fErr && feeCategory) ? feeCategory : category;
                       db.run(
-                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                         [walletId, fc.id, 'expense', commission,
                          `Comisión: ${description || category.name}`,
-                         datetimeUtc, 10000, commission, 0, transactionId],
+                         datetimeUtc, 0, transactionId],
                         function(err2) {
                           if (err2) {
                             db.run('ROLLBACK');

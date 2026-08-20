@@ -1,9 +1,9 @@
 // src/services/money.js — Conversión de dinero en los límites API↔DB.
 //
 // DECISIÓN DE DISEÑO (Freddy, 19 ago 2026):
-//   - MONTOS/SALDOS (balance, amount, fee, converted_amount, from_amount,
+//   - MONTOS/SALDOS (balance, amount, fee, from_amount,
 //     to_amount): escala ×100 (centavos). $1.50 → 150, 1.50 VES → 150.
-//   - TASAS (exchange_rate, rate, daily_rates.bcv/paralelo): escala ×10000.
+//   - TASAS (rate, daily_rates.bcv/paralelo): escala ×10000.
 //     634.95 → 6349500. La tasa lleva más precisión natural.
 //   - La API y el front trabajan en UNIDADES HUMANAS ($1.50). Solo las rutas
 //     (límite API↔DB) convierten; los services operan en enteros; el front no
