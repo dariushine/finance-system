@@ -63,6 +63,12 @@ describe('Backfill de tasas históricas', () => {
     // (con el mock https fijo devuelve oficial, así que sí hay tasa)
     expect(rate).not.toBeNull();
   });
+
+  test('prevDay retrocede un día correctamente', () => {
+    const { prevDay } = require('../src/services/rates');
+    expect(prevDay('2026-04-04')).toBe('2026-04-03');
+    expect(prevDay('2026-03-01')).toBe('2026-02-28');
+  });
 });
 
 describe('Conversión VES -> USD', () => {
