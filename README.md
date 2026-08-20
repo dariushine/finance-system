@@ -234,14 +234,25 @@ docker compose down            # detiene (conserva la DB en backend/data)
 docker compose down -v         # detiene (borra volúmenes anónimos; el bind backend/data queda)
 ```
 
-### Opción 2: Desarrollo (hot reload — sin rebuildear)
+### Opción 2: Desarrollo (hot reload)
 
-Usa el override `docker-compose.dev.yml` para iterar sin `docker compose build`. **NO** es para producción.
+Usa el override `docker-compose.dev.yml` para iterar sin rebuildear cuando solo editas código. **NO** es para producción.
+
+**Solo editas código (hot reload, sin rebuild):**
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
+
+**Si agregás o modificás dependencias (`package.json`) — siempre reconstruir y limpiar volúmenes:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+> ⚠️ El `--build` instala las dependencias nuevas dentro del contenedor (el `npm install` del `Dockerfile`). Sin `--build`, la imagen/volumen anterior sigue usando las deps viejas y verás errores como `Module not found: Can't resolve 'jose'`. El `down -v` borra los volúmenes anónimos (`node_modules`/`.next`); el bind `backend/data` se conserva.
 
 | Servicio | Cómo corre | Efecto |
 |---|---|---|
@@ -279,7 +290,7 @@ npm run dev
 
 ## 🔧 Variables de entorno
 
-El backend **no necesita `.env`**: usa defaults en `exchange-server.js` (puerto 3002, DB en `backend/data/finance.db`) y crea el esquema al arrancar.
+El backend **no necesita `.env`**: usa defaults en `exchange-server.js` (puerto 3002, DB en `backend/data/finance.db`) y crea el esquema al arrancar. La **autenticación es opcional**: define `AUTH_USERNAME` + `AUTH_PASSWORD` (y un `AUTH_TOKEN_SECRET`) para proteger la app; si no los defines, todo queda abierto (práctico en dev).
 
 | Variable | Dónde | Descripción |
 |---|---|---|
@@ -288,6 +299,32 @@ El backend **no necesita `.env`**: usa defaults en `exchange-server.js` (puerto 
 | `NEXT_PUBLIC_API_URL` | Compose (frontend) | `http://backend:3002/api` (proxy) |
 | `API_UPSTREAM` | Frontend (dev-Docker) | Override del rewrite de Next para apuntar al backend por nombre de red |
 | `SEED_DEMO_DATA` | Backend | `true` para sembrar wallets/categorías de demostración al crear la DB |
+| `AUTH_USERNAME` | Backend + middleware (Compose) | Usuario permitido. Si se define con contraseña, activa la protección |
+| `AUTH_PASSWORD` | Backend + middleware (Compose) | Contraseña del usuario |
+| `AUTH_TOKEN_SECRET` | Backend + middleware (Compose) | Secreto para firmar los JWT (≥ 32 chars, usa `openssl rand -base64 48`) |
+| `ACCESS_TOKEN_TTL_MS` | Backend | Vida del access token (default 5 min) |
+| `REFRESH_TTL_SHORT_MS` | Backend | Vida del refresh sin "Recuérdame" (default 1 h) |
+| `REFRESH_TTL_LONG_MS` | Backend | Vida del refresh con "Recuérdame" (default 30 días) |
+| `AUTH_COOKIE_SECURE` | Backend | `true` para marcar cookies como Secure (solo HTTPS) |
+
+### 🔐 Autenticación (login)
+
+La app usa login con **cookie de sesión httpOnly** (inmune a XSS): un access token JWT de corta vida (5 min) más un refresh token con rotación persistido en SQLite. Al expirar el access, el front lo renueva solo vía `/api/auth/refresh`; si el refresh falla, te lleva al login.
+
+**La raíz (`/`) es la pantalla de login** y el dashboard vive en `/dashboard`. Sin sesión, cualquier ruta del dashboard redirige a la raíz; con sesión, la raíz redirige a `/dashboard`.
+
+Para activarla, copia `.env.example` a `.env` y define `AUTH_USERNAME`, `AUTH_PASSWORD` y `AUTH_TOKEN_SECRET`:
+
+```bash
+cp .env.example .env
+# edita .env con tus credenciales y un secreto aleatorio (openssl rand -base64 48)
+# luego levanta con docker compose (lee las vars del .env)
+docker compose up --build -d
+```
+
+> Si `AUTH_USERNAME`/`AUTH_PASSWORD` no están definidas, la auth queda **deshabilitada** (todo abierto) para no frenar el dev local.
+
+Endpoints de auth: `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/session`. El login tiene rate-limit (10 intentos fallidos cada 15 min por IP → 429).
 
 ## 📁 Estructura del proyecto
 
@@ -295,12 +332,13 @@ El backend **no necesita `.env`**: usa defaults en `exchange-server.js` (puerto 
 finance-system/
 ├── backend/                        # API Backend (Express 5 + SQLite)
 │   ├── exchange-server.js          # Servidor principal (puerto 3002)
-│   ├── src/                        # Código modular: db.js, services/, routes/
+│   ├── src/                        # Código modular: db.js, services/, routes/, auth.js
 │   ├── data/                       # Base de datos SQLite (bind mount en Docker)
 │   ├── __tests__/                  # Tests de validación (Jest + supertest)
 │   └── package.json
 ├── frontend/                       # Dashboard Next.js 15 (Mobile-First)
-│   ├── app/                        # App Router (páginas por sección)
+│   ├── app/                        # App Router (páginas por sección + login)
+│   ├── middleware.ts               # Protege las páginas (verifica el refresh token)
 │   ├── next.config.js              # Rewrites /api/* → backend
 │   └── package.json
 ├── scripts/                        # seed-demo.js, take-screenshots.js (dev/demo)
@@ -308,6 +346,7 @@ finance-system/
 ├── docker-compose.yml              # Producción
 ├── docker-compose.dev.yml          # Override de desarrollo
 ├── Dockerfile                      # Build multi-stage (backend + frontend)
+├── .env.example                    # Plantilla de variables (incluye AUTH_*)
 └── README.md                       # Esta documentación
 ```
 

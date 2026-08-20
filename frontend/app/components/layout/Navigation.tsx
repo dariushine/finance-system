@@ -6,6 +6,7 @@ import {
   Toolbar,
   Typography,
   IconButton,
+  Button,
   Drawer,
   List,
   ListItem,
@@ -37,13 +38,15 @@ import {
   MoreHoriz as MoreHorizIcon,
   Schedule as ScheduleIcon,
   Settings as SettingsIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { logout } from '../../lib/auth';
 
 // Items de primer nivel: van en la barra inferior (mobile) y en el sidebar (desktop)
 const primaryItems = [
-  { label: 'Dashboard', icon: <HomeIcon />, path: '/' },
+  { label: 'Dashboard', icon: <HomeIcon />, path: '/dashboard' },
   { label: 'Billeteras', icon: <WalletIcon />, path: '/wallets' },
   { label: 'Transacciones', icon: <TransactionIcon />, path: '/transactions' },
   { label: 'Exchanges', icon: <ExchangeIcon />, path: '/exchanges' },
@@ -102,13 +105,13 @@ export default function Navigation() {
   // Index en la barra inferior. Si la página actual es un item secundario ("Más"),
   // el botón "Más" queda resaltado.
   const primaryIndex = primaryItems.findIndex(item =>
-    item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
+    item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
   );
   const inPrimary = primaryIndex >= 0;
   const bottomNavValue = inPrimary ? primaryIndex : primaryItems.length; // primaryItems.length = posición de "Más"
 
   const isActive = (path: string) =>
-    path === '/' ? pathname === '/' : pathname.startsWith(path);
+    path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(path);
 
   const renderList = (collapsed: boolean) => (
     <>
@@ -207,6 +210,12 @@ export default function Navigation() {
           </ListItem>
         ))}
       </List>
+      <Box sx={{ borderTop: 1, borderColor: 'divider', p: 1 }}>
+        <ListItem component="button" type="button" onClick={() => { setMobileOpen(false); logout(); }} sx={{ borderRadius: 1, cursor: 'pointer' }}>
+          <ListItemIcon sx={{ minWidth: 40 }}><LogoutIcon /></ListItemIcon>
+          <ListItemText primary="Cerrar sesión" />
+        </ListItem>
+      </Box>
     </Box>
   );
 
@@ -254,6 +263,29 @@ export default function Navigation() {
           </Tooltip>
         </Box>
       )}
+
+      {/* Cerrar sesión */}
+      <Box
+        sx={{
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          p: 1,
+        }}
+      >
+        {collapsed ? (
+          <Tooltip title="Cerrar sesión">
+            <IconButton onClick={() => logout()} color="inherit">
+              <LogoutIcon />
+            </IconButton>
+          </Tooltip>
+        ) : (
+          <Button startIcon={<LogoutIcon />} color="inherit" onClick={() => logout()} sx={{ textTransform: 'none' }}>
+            Cerrar sesión
+          </Button>
+        )}
+      </Box>
     </Box>
   );
 

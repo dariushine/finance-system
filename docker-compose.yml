@@ -12,6 +12,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3002
+      - AUTH_USERNAME=${AUTH_USERNAME:-}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      - AUTH_TOKEN_SECRET=${AUTH_TOKEN_SECRET:-dev-insecure-secret-change-me}
+      - ACCESS_TOKEN_TTL_MS=${ACCESS_TOKEN_TTL_MS:-300000}
+      - REFRESH_TTL_SHORT_MS=${REFRESH_TTL_SHORT_MS:-3600000}
+      - REFRESH_TTL_LONG_MS=${REFRESH_TTL_LONG_MS:-2592000000}
+      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
       interval: 30s
@@ -33,6 +40,9 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=http://backend:3002/api
+      - AUTH_USERNAME=${AUTH_USERNAME:-}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      - AUTH_TOKEN_SECRET=${AUTH_TOKEN_SECRET:-dev-insecure-secret-change-me}
     depends_on:
       backend:
         condition: service_healthy
