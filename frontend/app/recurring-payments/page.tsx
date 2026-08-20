@@ -17,6 +17,12 @@ import {
   IconButton,
   Typography,
   Avatar,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Divider,
+  Stack,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -26,6 +32,10 @@ import {
   ChevronRight,
   Schedule as ScheduleIcon,
   Close as CloseIcon,
+  ExpandMore as ExpandMoreIcon,
+  AccountBalanceWallet as WalletIcon,
+  Notes as NotesIcon,
+  Tag as TagIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import {
@@ -45,6 +55,8 @@ export default function RecurringPaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [executePayment, setExecutePayment] = useState<RecurringPayment | null>(null);
+  const [expanded, setExpanded] = useState<number | false>(false);
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
 
   const load = useCallback(async () => {
     try {
@@ -109,6 +121,88 @@ export default function RecurringPaymentsPage() {
         <Box>
           {payments.map((p) => {
             const isIncome = p.type === 'income';
+            // En móvil usamos acordeón: la tarjeta muestra nombre + monto + flecha,
+            // y al expandir se ven categoría, billetera, descripción y acciones.
+            if (isMobile) {
+              const isOpen = expanded === p.id;
+              return (
+                <Accordion
+                  key={p.id}
+                  expanded={isOpen}
+                  onChange={() => setExpanded((prev) => (prev === p.id ? false : p.id))}
+                  disableGutters
+                  sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, boxShadow: 'none' }}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5, minHeight: 56 }}>
+                    <Box display="flex" alignItems="center" gap={1.5} width="100%" pr={1}>
+                      <Avatar sx={{ width: 40, height: 40, bgcolor: isIncome ? 'success.light' : 'error.light', flexShrink: 0 }}>
+                        {isIncome ? <ArrowUpward /> : <ArrowDownward />}
+                      </Avatar>
+                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Typography variant="body1" fontWeight="bold" noWrap>
+                          {p.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {p.description || p.categoryName}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body1" fontWeight="bold" color={isIncome ? 'success.main' : 'error.main'} sx={{ flexShrink: 0 }}>
+                        {isIncome ? '+' : '-'}{formatCurrency(p.amount, p.currency)}
+                      </Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
+                    <Divider sx={{ mb: 1.5 }} />
+                    <Stack spacing={1}>
+                      <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">Categoría</Typography>
+                        <Chip size="small" label={p.categoryName} variant="outlined" icon={<TagIcon />} />
+                      </Box>
+                      <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">Billetera</Typography>
+                        <Box display="flex" alignItems="center" gap={0.5}>
+                          <WalletIcon fontSize="small" color="action" />
+                          <Typography variant="body2">{p.walletName || 'Ninguna'}</Typography>
+                        </Box>
+                      </Box>
+                      {p.description && (
+                        <Box display="flex" justifyContent="space-between" gap={2}>
+                          <Typography variant="body2" color="text.secondary">Descripción</Typography>
+                          <Box display="flex" alignItems="flex-start" gap={0.5}>
+                            <NotesIcon fontSize="small" color="action" sx={{ mt: 0.25 }} />
+                            <Typography variant="body2" textAlign="right">{p.description}</Typography>
+                          </Box>
+                        </Box>
+                      )}
+                      <Box display="flex" justifyContent="flex-end" gap={1} pt={1}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<PlayArrow />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExecutePayment(p);
+                          }}
+                        >
+                          Realizar
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/recurring-payments/${p.id}`);
+                          }}
+                        >
+                          Ver
+                        </Button>
+                      </Box>
+                    </Stack>
+                  </AccordionDetails>
+                </Accordion>
+              );
+            }
+            // Desktop: tarjeta existente.
             return (
               <Card
                 key={p.id}
@@ -132,7 +226,7 @@ export default function RecurringPaymentsPage() {
                       {p.name}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" noWrap>
-                      {isIncome ? 'Ingreso' : 'Gasto'} · {p.categoryName} · {p.walletName || 'Sin billetera'}
+                      {p.categoryName} · {p.walletName || 'Sin billetera'}
                     </Typography>
                   </Box>
                   <Box display="flex" alignItems="center" gap={1.5} sx={{ flexShrink: 0 }}>

@@ -39,6 +39,7 @@ import { useOnDataChanged } from '../lib/dataEvents';
 import DateRangeFilter from '../components/DateRangeFilter';
 import EmptyState from '../components/EmptyState';
 import { CurrencyExchange as ExchangeIcon } from '@mui/icons-material';
+import { downloadCSV, formatCSVDate, formatCSVDateTime } from '../lib/csv';
 
 interface Exchange {
   id: number;
@@ -248,29 +249,18 @@ export default function ExchangesPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Desde', 'Hacia', 'Monto Desde', 'Monto Hacia', 'Tasa', 'Fee', 'Fecha'];
+    const headers = ['Desde', 'Hacia', 'Monto Desde', 'Monto Hacia', 'Tasa', 'Fee', 'Fecha', 'Hora'];
     const rows = exchanges.map(ex => [
       ex.fromWalletName || `Billetera ${ex.fromWalletId}`,
       ex.toWalletName || `Billetera ${ex.toWalletId}`,
       ex.fromAmount,
       ex.toAmount,
       ex.rate.toFixed(4),
-      ex.fee ? ex.fee.toFixed(2) : '',
-      formatExchangeDate(ex)
+      ex.fee && ex.fee > 0 ? ex.fee.toFixed(2) : '',
+      formatCSVDate(ex.date || (ex.createdAt ? ex.createdAt.slice(0, 10) : '')),
+      ex.time ? ex.time.slice(0, 5) : '',
     ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `exchanges_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    downloadCSV(`exchanges_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
   };
 
   if (loading && !exchanges.length) {

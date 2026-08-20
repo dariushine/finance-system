@@ -43,6 +43,7 @@ module.exports = function registerExchangeRoutes(app) {
   app.post('/api/exchanges', async (req, res) => {
     try {
       const { fromWalletId, toWalletId, fromAmount, toAmount, description, fee, date, time, tz } = req.body;
+      const desc = typeof description === 'string' ? description.trim() : description;
       const tzEff = await effectiveTz(null, req.body);
 
       if (!fromWalletId || !toWalletId || !fromAmount || !toAmount) {
@@ -91,18 +92,18 @@ module.exports = function registerExchangeRoutes(app) {
 
       const debitTransaction = await createTransaction(
         fromWalletId, 'exchange_out', 'expense', fromAmountInt,
-        `${description || 'Exchange'} → ${toWallet.name}`, commission, txDate, txTime, tzEff
+        `${desc || 'Exchange'} → ${toWallet.name}`, commission, txDate, txTime, tzEff
       );
       const creditTransaction = await createTransaction(
         toWalletId, 'exchange_in', 'income', toAmountInt,
-        `${description || 'Exchange'} ← ${fromWallet.name}`, 0, txDate, txTime, tzEff
+        `${desc || 'Exchange'} ← ${fromWallet.name}`, 0, txDate, txTime, tzEff
       );
 
       db.run(
         `INSERT INTO exchanges (debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id,
          from_amount, to_amount, rate, fee, description)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [debitTransaction.id, creditTransaction.id, fromWalletId, toWalletId, fromAmountInt, toAmountInt, rate, commission, description || ''],
+        [debitTransaction.id, creditTransaction.id, fromWalletId, toWalletId, fromAmountInt, toAmountInt, rate, commission, desc || ''],
         function (err) {
           if (err) {
             console.error('Error registrando exchange:', err);
@@ -255,6 +256,7 @@ module.exports = function registerExchangeRoutes(app) {
       if (!ex || ex.deleted) return res.status(404).json({ error: 'Exchange no encontrado' });
 
       const { fromAmount, toAmount, fee, description, date, time, tz } = req.body;
+      const desc = typeof description === 'string' ? description.trim() : description;
       const tzEff = await effectiveTz(null, req.body);
       const [debit, credit] = await getExchangeTransactions(ex);
       if (!debit || debit.deleted || !credit || credit.deleted) {
@@ -318,7 +320,7 @@ module.exports = function registerExchangeRoutes(app) {
         const newTime = normalizeTimeMinute(time);
         newDatetimeUtc = wallClockToUtc(newDate, newTime, tzEff);
       }
-      const newDescription = description !== undefined ? (description || '') : ex.description;
+      const newDescription = desc !== undefined ? (desc || '') : ex.description;
 
       const newFromTotal = newFromAmountInt + newFeeInt;
       if (fromWalletBalanceBefore < newFromTotal) {

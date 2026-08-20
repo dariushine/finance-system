@@ -254,10 +254,6 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             {error || walletsError}
           </Alert>
         )}
-
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-          💡 El currency se obtiene automáticamente de la billetera seleccionada
-        </Typography>
       </CardContent>
 
       {/* Feedback visual en vez de alert() */}

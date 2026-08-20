@@ -327,10 +327,6 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
             </Button>
           </Box>
         </form>
-
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-          💡 Ejemplo: 100 USD → 60,000 VES (tasa 600 VES/USD)
-        </Typography>
       </CardContent>
       <Snackbar
         open={snackbar.open}

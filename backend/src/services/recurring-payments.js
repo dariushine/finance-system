@@ -84,6 +84,7 @@ async function updateRecurringPayment(id, data) {
 
   const { name, description, amount, fee, currency, type, categoryId, walletId } = data || {};
   const trimmedName = name != null ? String(name).trim() : existing.name;
+  const trimmedDescription = description != null ? String(description).trim() : (existing.description || '');
   const finalType = type || existing.type;
   const finalCurrency = currency || existing.currency;
   const finalAmount = amount != null ? Number(amount) : existing.amount;
@@ -100,7 +101,7 @@ async function updateRecurringPayment(id, data) {
 
   await run(
     'UPDATE recurring_payments SET name = ?, description = ?, amount = ?, fee = ?, currency = ?, type = ?, category_id = ?, wallet_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [trimmedName, description != null ? description : existing.description, finalAmount, finalFee, finalCurrency, finalType, finalCategoryId, finalWalletId, id]
+    [trimmedName, trimmedDescription, finalAmount, finalFee, finalCurrency, finalType, finalCategoryId, finalWalletId, id]
   );
   return q(`${RECURRING_SELECT} WHERE rp.id = ?`, [id]);
 }
@@ -122,7 +123,7 @@ async function executeRecurringPayment(id, options = {}) {
   const walletId = overrideWalletId != null && overrideWalletId !== '' ? overrideWalletId : row.walletId;
   const fee = overrideFee != null ? Number(overrideFee) : (row.fee || 0);
   const finalDescription =
-    description != null ? description
+    description != null ? String(description).trim()
     : (row.description ? `Pago frecuente: ${row.name} — ${row.description}` : `Pago frecuente: ${row.name}`);
 
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto debe ser mayor a 0');
