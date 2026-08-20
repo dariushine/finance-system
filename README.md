@@ -1,6 +1,6 @@
 # Sistema de Finanzas Personal
 
-Sistema completo de gestión de finanzas personales con billeteras múltiples (USD/VES/EUR), transacciones por categorías, exchanges entre billeteras, tasas diarias BCV/paralelo y un dashboard web **mobile-first**.
+Sistema completo de gestión de finanzas personales con billeteras múltiples (USD/VES), transacciones por categorías, exchanges entre billeteras, tasas diarias BCV/paralelo y un dashboard web **mobile-first**.
 
 ---
 
@@ -64,7 +64,7 @@ El proyecto es **mobile-first**: las mismas vistas se adaptan a pantallas móvil
 
 ## ✨ Características
 
-- **🏦 Billeteras múltiples**: Banco, Efectivo, Tarjeta, Cripto e Inversión, en USD/VES/EUR, con alias, icono y color. **Soft-delete** (las eliminadas quedan en "Billeteras eliminadas" y se pueden reactivar).
+- **🏦 Billeteras múltiples**: Banco, Efectivo, Tarjeta, Cripto e Inversión, en USD/VES, con alias, icono y color. **Soft-delete** (las eliminadas quedan en "Billeteras eliminadas" y se pueden reactivar).
 - **💸 Transacciones**: Gastos e ingresos con categorías, comisión opcional (fee aparte del monto) y moneda tomada automáticamente de la billetera.
 - **💱 Exchanges**: Cambios entre billeteras con **transacciones separadas** (débito `exchange_out` + crédito `exchange_in` + comisión `fee`), validación de fondos y tasa calculada como `toAmount / fromAmount`.
 - **📊 Balance total**: En USD, con conversión de billeteras no-USD usando tasas diarias (BCV o paralelo).
@@ -102,7 +102,7 @@ Sistema de Finanzas
 Desde la rama `feat/money-integer-scale4` el dinero se guarda como **enteros de escala fija**:
 
 - **Montos y saldos** (`balance`, `amount`, `fee`, ...): **×100 (centavos)**. `$1.50` → `150`.
-- **Tasas de cambio** (`exchange_rate`, `bcv`, `paralelo`, ...): **×10000**. `634.95` → `6349500`.
+- **Tasas de cambio** (`bcv`, `paralelo`, ...): **×10000**. `634.95` → `6349500`.
 
 La **API y el frontend trabajan en unidades humanas** (`$1.50`, `634.95`); solo las rutas (límite API↔DB) convierten. Esto evita errores de coma flotante (`0.1 + 0.2 !== 0.3`) y mantiene precisión exacta en las conversiones.
 
@@ -138,8 +138,6 @@ Lista verificada de endpoints reales del backend (`backend/exchange-server.js`):
 | POST | `/api/exchanges` | Crear exchange (fromWalletId, toWalletId, fromAmount, toAmount, opcional fee) |
 | GET | `/api/exchanges?page=&limit=` | Listar exchanges (paginados) |
 | GET | `/api/exchanges/:id` | Obtener detalle de un exchange |
-| GET | `/api/balance` | Balance total en USD con desglose por moneda |
-| GET | `/api/exchange-rates` | Tasas de cambio centralizadas (USD:1, VES:635, EUR:1.07) |
 | GET | `/api/rates/effective?type=bcv\|paralelo&date=` | Tasa vigente para convertir VES→USD en el frontend |
 | GET | `/api/daily-rates` | Listar todas las tasas diarias (descendente) |
 | GET | `/api/daily-rates/today` | Obtener/crear la tasa de hoy (BD → API → error) |
@@ -157,7 +155,7 @@ El backend crea automáticamente el esquema al arrancar y hace migraciones menor
 
 - **wallets**: id, name, alias, type, currency, balance, description, icon, color, isActive, excludeFromTotal, hideInDashboard, createdAt.
 - **categories**: id, name, type, color, icon, isActive, createdAt. Se siembran categorías de sistema (`exchange_out`, `exchange_in`, `fee`).
-- **transactions**: id, wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id, deleted, created_at. Guarda **un solo instante absoluto UTC** (`datetime_utc` ISO con Z) y se proyecta a la zona horaria del usuario al leer.
+- **transactions**: id, wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id, deleted, created_at. Guarda **un solo instante absoluto UTC** (`datetime_utc` ISO con Z) y se proyecta a la zona horaria del usuario al leer.
 - **exchanges**: id, debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id, from_amount, to_amount, rate, fee, description, deleted, created_at.
 - **daily_rates**: id, date (única), bcv, paralelo, source, created_at.
 - **settings**: clave-valor (ej. `user_timezone`).

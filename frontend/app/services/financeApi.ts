@@ -102,11 +102,6 @@ class FinanceApi {
   async getHealth(): Promise<{ status: string; timestamp: string }> {
     return this.fetch('/health');
   }
-
-  // Exchange rates
-  async getExchangeRates(): Promise<{ rates: Record<string, number>; timestamp: string }> {
-    return this.fetch('/exchange-rates');
-  }
 }
 
 export const financeApi = new FinanceApi();

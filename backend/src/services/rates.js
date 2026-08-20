@@ -260,11 +260,4 @@ function prevDay(iso) {
 // Evita crear categorías del sistema (fee, exchange_out, exchange_in): si se pide
 // una de estas y no existe, se rechaza el error para no corromper los flujos.
 
-
-function getExchangeRates() {
-  return { USD: 1, VES: 635, EUR: 1.07 };
-}
-
-// Endpoint para que el frontend obtenga las tasas en vez de hardcodearlas
-
-module.exports = { fetchRatesFromApi, fetchHistoricRate, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getRateForDate, getOrFetchRateForDate, getExchangeRates, prevDay };
+module.exports = { fetchRatesFromApi, fetchHistoricRate, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getRateForDate, getOrFetchRateForDate, prevDay };
