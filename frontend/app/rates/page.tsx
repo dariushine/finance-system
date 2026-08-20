@@ -109,6 +109,9 @@ export default function RatesPage() {
   const [editing, setEditing] = useState<DailyRate | null>(null);
   const [form, setForm] = useState({ date: '', bcv: '', paralelo: '' });
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  // Confirmación de borrado (Dialog MUI en vez de window.confirm)
+  const [deleting, setDeleting] = useState<DailyRate | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
 
   // Sanitiza una tasa: solo dígitos y un punto decimal (sin letras ni símbolos).
   const sanitizeRate = (raw: string) => {
@@ -183,7 +186,6 @@ export default function RatesPage() {
   };
 
   const remove = useCallback(async (rate: DailyRate) => {
-    if (!confirm(`¿Eliminar la tasa del ${rate.date}?`)) return;
     try {
       const res = await fetch(`${API_URL}/daily-rates/${rate.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar');
@@ -193,6 +195,14 @@ export default function RatesPage() {
       setSnackbar(err instanceof Error ? err.message : 'Error al eliminar');
     }
   }, [loadRates]);
+
+  const confirmRemove = async () => {
+    if (!deleting) return;
+    setDeleteSaving(true);
+    await remove(deleting);
+    setDeleting(null);
+    setDeleteSaving(false);
+  };
 
   const syncToday = async () => {
     try {
@@ -252,7 +262,7 @@ export default function RatesPage() {
                   isOpen={expanded === rate.id}
                   onToggle={handleToggle}
                   onEdit={openEdit}
-                  onRemove={remove}
+                  onRemove={setDeleting}
                 />
               ))}
             </Box>
@@ -279,7 +289,7 @@ export default function RatesPage() {
                         <IconButton size="small" onClick={() => openEdit(rate)}>
                           <EditIcon fontSize="small" />
                         </IconButton>
-                        <IconButton size="small" color="error" onClick={() => remove(rate)}>
+                        <IconButton size="small" color="error" onClick={() => setDeleting(rate)}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
@@ -293,8 +303,7 @@ export default function RatesPage() {
       </Card>
 
       <Dialog open={openEditor} onClose={() => setOpenEditor(false)} fullWidth maxWidth="xs">
-        <DialogTitle>{editing ? `Editar tasa del ${editing.date}` : 'Nueva tasa'}</DialogTitle>
-        <DialogContent>
+        <DialogTitle>{editing ? `Editar tasa del ${editing.date}` : 'Nueva tasa'}</DialogTitle>        <DialogContent>
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label="Fecha"
@@ -328,6 +337,22 @@ export default function RatesPage() {
         <DialogActions>
           <Button onClick={() => setOpenEditor(false)}>Cancelar</Button>
           <Button variant="contained" onClick={save}>Guardar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: confirmar eliminación de tasa */}
+      <Dialog open={!!deleting} onClose={() => setDeleting(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Eliminar tasa</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Eliminar la tasa del <b>{deleting ? deleting.date : ''}</b>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleting(null)}>Cancelar</Button>
+          <Button variant="contained" color="error" onClick={confirmRemove} disabled={deleteSaving}>
+            {deleteSaving ? 'Eliminando…' : 'Eliminar'}
+          </Button>
         </DialogActions>
       </Dialog>
 
