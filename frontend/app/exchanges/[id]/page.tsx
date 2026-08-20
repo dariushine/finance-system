@@ -465,7 +465,7 @@ export default function ExchangeDetailPage() {
         <DialogContent>
           <Typography>
             ¿Seguro que quieres eliminar este exchange de <b>{formatCurrency(exchange.fromAmount, fromCurrency)}</b> →{' '}
-            <b>{formatCurrency(exchange.toAmount, toCurrency)}</b>? Se eliminarán virtualmente las transacciones del
+            <b>{formatCurrency(exchange.toAmount, toCurrency)}</b>? Se eliminarán las transacciones del
             débito, crédito y sus comisiones, y se ajustarán los balances de las billeteras.
           </Typography>
         </DialogContent>

@@ -635,7 +635,7 @@ export default function TransactionDetailPage() {
         <DialogContent>
           <Typography>
             ¿Seguro que quieres eliminar esta transacción de <b>{formatCurrency(tx.amount, currency)}</b>?
-            Se eliminará virtualmente (no se borra de la base) y el balance de la billetera se ajustará.
+            El balance de la billetera se ajustará.
           </Typography>
         </DialogContent>
         <DialogActions>

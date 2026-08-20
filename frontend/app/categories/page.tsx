@@ -70,6 +70,10 @@ export default function CategoriesPage() {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
 
+  // Confirmación de borrado (Dialog MUI en vez de window.confirm)
+  const [deleting, setDeleting] = useState<Category | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
@@ -143,13 +147,21 @@ export default function CategoriesPage() {
   };
 
   const handleDelete = async (cat: Category) => {
-    if (!window.confirm(`¿Desactivar la categoría "${categoryLabel(cat.name)}"? Las transacciones existentes se conservan.`)) return;
     try {
       await deleteCategory(cat.id);
+      setDeleting(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al desactivar');
+      setDeleting(null);
     }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setDeleteSaving(true);
+    await handleDelete(deleting);
+    setDeleteSaving(false);
   };
 
   const handleReactivate = async (cat: Category) => {
@@ -187,7 +199,7 @@ export default function CategoriesPage() {
           <EditIcon fontSize="small" />
         </IconButton>
         {cat.isActive ? (
-          <IconButton size="small" onClick={() => handleDelete(cat)} aria-label="Desactivar">
+          <IconButton size="small" onClick={() => setDeleting(cat)} aria-label="Desactivar">
             <DeleteOutlined fontSize="small" />
           </IconButton>
         ) : (
@@ -341,6 +353,22 @@ export default function CategoriesPage() {
           <Button onClick={() => setEditing(null)}>Cancelar</Button>
           <Button onClick={handleEdit} variant="contained" disabled={saving || !editName.trim()}>
             {saving ? 'Guardando…' : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: confirmar desactivación */}
+      <Dialog open={!!deleting} onClose={() => setDeleting(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Desactivar categoría</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Desactivar la categoría <b>{deleting ? categoryLabel(deleting.name) : ''}</b>? Las transacciones existentes se conservan.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleting(null)}>Cancelar</Button>
+          <Button onClick={confirmDelete} variant="contained" color="error" disabled={deleteSaving}>
+            {deleteSaving ? 'Desactivando…' : 'Desactivar'}
           </Button>
         </DialogActions>
       </Dialog>
