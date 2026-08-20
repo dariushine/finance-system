@@ -3,10 +3,7 @@ import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v14-appRouter';
-import { Box, Container } from '@mui/material';
-import Navigation from './components/layout/Navigation';
-import AddFab from './components/AddFab';
-import RateFetcher from './components/RateFetcher';
+import AppChrome from './components/AppChrome';
 import AuthProvider from './components/AuthProvider';
 import theme from './theme';
 import { NumberFormatProvider } from './lib/NumberFormat';
@@ -40,25 +37,7 @@ export default function RootLayout({
             <NumberFormatProvider>
             <TimeZoneProvider>
             <AuthProvider />
-            <RateFetcher />
-            <AddFab />
-            <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-              <Navigation />
-              <Box
-                component="main"
-                sx={{
-                  flexGrow: 1,
-                  minWidth: 0,
-                  p: { xs: 2, sm: 3 },
-                  pt: { md: 8 }, // clears the fixed AppBar on desktop
-                  pb: { xs: 8, md: 3 }, // Extra padding for mobile bottom nav
-                }}
-              >
-                <Container maxWidth="xl">
-                  {children}
-                </Container>
-              </Box>
-            </Box>
+            <AppChrome>{children}</AppChrome>
             </TimeZoneProvider>
             </NumberFormatProvider>
           </ThemeProvider>

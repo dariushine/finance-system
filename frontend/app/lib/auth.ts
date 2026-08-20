@@ -4,7 +4,7 @@
 //  - Adjunta credenciales (mismas-origin → cookies httpOnly viajan solas).
 //  - Si un /api responde 401, intenta renovar el access token vía refresh y
 //    reintenta la petición una sola vez.
-//  - Si el refresh falla, redirige a /login.
+//  - Si el refresh falla, redirige a la raíz (login).
 //
 // La única marca de sesión visible al cliente es un flag en memoria/localStorage
 // para mostrar/ocultar la UI; la seguridad real vive en las cookies httpOnly.
@@ -32,7 +32,7 @@ export async function logout(): Promise<void> {
     /* aunque falle, se limpia el estado local */
   }
   localStorage.removeItem(SESSION_FLAG);
-  window.location.href = '/login';
+  window.location.href = '/';
 }
 
 // Renueva el access token a partir del refresh token. Devuelve true si ok.

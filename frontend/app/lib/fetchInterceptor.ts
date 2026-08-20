@@ -33,8 +33,8 @@ async function refreshAccessToken(): Promise<boolean> {
 }
 
 function redirectToLogin() {
-  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-    window.location.href = '/login';
+  if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+    window.location.href = '/';
   }
 }
 

@@ -35,11 +35,12 @@ async function hasValidRefresh(req: NextRequest): Promise<boolean> {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // La página de login siempre es accesible (y redirige si ya hay sesión).
-  if (pathname === '/login') {
+  // La raíz (login) y /login siempre son accesibles (y redirigen al dashboard
+  // si ya hay sesión). Mantengo /login como alias por compatibilidad.
+  if (pathname === '/' || pathname === '/login') {
     if (!authEnabled()) return NextResponse.next();
     if (await hasValidRefresh(req)) {
-      return NextResponse.redirect(new URL('/', req.url));
+      return NextResponse.redirect(new URL('/dashboard', req.url));
     }
     return NextResponse.next();
   }
@@ -58,7 +59,7 @@ export async function middleware(req: NextRequest) {
 
   if (!(await hasValidRefresh(req))) {
     const url = req.nextUrl.clone();
-    url.pathname = '/login';
+    url.pathname = '/';
     url.search = '';
     return NextResponse.redirect(url);
   }

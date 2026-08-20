@@ -46,7 +46,7 @@ import { logout } from '../../lib/auth';
 
 // Items de primer nivel: van en la barra inferior (mobile) y en el sidebar (desktop)
 const primaryItems = [
-  { label: 'Dashboard', icon: <HomeIcon />, path: '/' },
+  { label: 'Dashboard', icon: <HomeIcon />, path: '/dashboard' },
   { label: 'Billeteras', icon: <WalletIcon />, path: '/wallets' },
   { label: 'Transacciones', icon: <TransactionIcon />, path: '/transactions' },
   { label: 'Exchanges', icon: <ExchangeIcon />, path: '/exchanges' },
@@ -105,13 +105,13 @@ export default function Navigation() {
   // Index en la barra inferior. Si la página actual es un item secundario ("Más"),
   // el botón "Más" queda resaltado.
   const primaryIndex = primaryItems.findIndex(item =>
-    item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
+    item.path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(item.path)
   );
   const inPrimary = primaryIndex >= 0;
   const bottomNavValue = inPrimary ? primaryIndex : primaryItems.length; // primaryItems.length = posición de "Más"
 
   const isActive = (path: string) =>
-    path === '/' ? pathname === '/' : pathname.startsWith(path);
+    path === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(path);
 
   const renderList = (collapsed: boolean) => (
     <>
