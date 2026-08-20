@@ -105,7 +105,10 @@ export default function RecurringPaymentForm({ initial, onSuccess, onCancel }: R
 
       const payload = {
         name: name.trim(),
-        description: description || undefined,
+        // Mandamos SIEMPRE description (aunque sea string vacío). Si la
+        // enviamos como undefined, el backend asume "conservar la actual" y
+        // borrar el texto (dejarlo en blanco) no tendría efecto.
+        description: description ? String(description).trim() : '',
         amount: parsedAmount,
         fee: parsedFee > 0 ? parsedFee : undefined,
         currency,
