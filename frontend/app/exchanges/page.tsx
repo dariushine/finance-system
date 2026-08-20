@@ -249,12 +249,12 @@ export default function ExchangesPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Desde', 'Hacia', 'Monto Desde', 'Monto Hacia', 'Tasa', 'Fee', 'Fecha', 'Hora'];
+    const headers = ['Desde', 'Hacia', 'Debito', 'Credito', 'Tasa', 'Fee', 'Fecha', 'Hora'];
     const rows = exchanges.map(ex => [
       ex.fromWalletName || `Billetera ${ex.fromWalletId}`,
       ex.toWalletName || `Billetera ${ex.toWalletId}`,
-      ex.fromAmount,
-      ex.toAmount,
+      ex.fromAmount, // débito (sale de la wallet origen)
+      ex.toAmount,   // crédito (entra a la wallet destino)
       ex.rate.toFixed(4),
       ex.fee && ex.fee > 0 ? ex.fee.toFixed(2) : '',
       formatCSVDate(ex.date || (ex.createdAt ? ex.createdAt.slice(0, 10) : '')),

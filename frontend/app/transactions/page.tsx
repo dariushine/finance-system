@@ -144,7 +144,7 @@ export default function TransactionsPage() {
   const pagedTransactions = transactions.slice(startIndex, startIndex + rowsPerPage);
 
   const exportCSV = () => {
-    const header = ['ID', 'Fecha', 'Hora', 'Categoria', 'Tipo', 'Billetera', 'Monto', 'Moneda', 'Descripcion'];
+    const header = ['ID', 'Fecha', 'Hora', 'Categoria', 'Tipo', 'Billetera', 'Credito', 'Debito', 'Moneda', 'Descripcion'];
     const rows = transactions.map((t) => [
       t.id,
       formatCSVDateTime(t.date, null), // solo fecha dd/MM/aaaa
@@ -152,7 +152,8 @@ export default function TransactionsPage() {
       t.category,
       t.type === 'income' ? 'Ingreso' : 'Gasto',
       t.walletName || '',
-      t.type === 'income' ? String(t.amount) : `-${t.amount}`,
+      t.type === 'income' ? String(t.amount) : '', // crédito
+      t.type === 'expense' ? String(t.amount) : '', // débito
       t.walletCurrency || '',
       t.description || '',
     ]);
