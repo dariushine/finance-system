@@ -17,6 +17,7 @@ import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
 import { useRouter } from 'next/navigation';
 import { useOnDataChanged } from '../lib/dataEvents';
+import { downloadCSV, formatCSVDateTime } from '../lib/csv';
 
 // Fecha + hora (HH:MM) de la transacción proyectada en la zona del usuario.
 // El backend manda `time` en cada fila de la lista; si falta, solo fecha.
@@ -143,26 +144,20 @@ export default function TransactionsPage() {
   const pagedTransactions = transactions.slice(startIndex, startIndex + rowsPerPage);
 
   const exportCSV = () => {
-    const header = ['ID', 'Fecha', 'Categoría', 'Tipo', 'Billetera', 'Monto', 'Moneda', 'Fee', 'Descripción'];
+    const header = ['ID', 'Fecha', 'Hora', 'Categoria', 'Tipo', 'Billetera', 'Credito', 'Debito', 'Moneda', 'Descripcion'];
     const rows = transactions.map((t) => [
       t.id,
-      formatLocalDate(t.date),
+      formatCSVDateTime(t.date, null), // solo fecha dd/MM/aaaa
+      t.time ? t.time.slice(0, 5) : '', // hora
       t.category,
       t.type === 'income' ? 'Ingreso' : 'Gasto',
       t.walletName || '',
-      t.type === 'income' ? String(t.amount) : `-${t.amount}`,
+      t.type === 'income' ? String(t.amount) : '', // crédito
+      t.type === 'expense' ? String(t.amount) : '', // débito
       t.walletCurrency || '',
-      t.fee ? String(t.fee) : '',
       t.description || '',
     ]);
-    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `transacciones_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCSV(`transacciones_${new Date().toISOString().split('T')[0]}.csv`, header, rows);
   };
 
   return (

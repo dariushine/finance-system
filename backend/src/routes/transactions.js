@@ -31,7 +31,9 @@ module.exports = function registerTransactionRoutes(app) {
   app.post('/api/transactions', async (req, res) => {
     try {
       const { walletId, categoryName, type, amount, description, fee, date, time, tz } = req.body;
-      if (!walletId || !categoryName || !type || !amount) {
+      const catName = typeof categoryName === 'string' ? categoryName.trim() : categoryName;
+      const desc = typeof description === 'string' ? description.trim() : description;
+      if (!walletId || !catName || !type || !amount) {
         return res.status(400).json({ error: 'Faltan campos requeridos: walletId, categoryName, type, amount' });
       }
       if (typeof date !== 'string' || date === '') {
@@ -46,7 +48,7 @@ module.exports = function registerTransactionRoutes(app) {
       if (!isValidTime(time)) {
         return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
       }
-      const result = await createTransaction(walletId, categoryName, type, toInt(amount), description, toInt(fee), date, time, tz);
+      const result = await createTransaction(walletId, catName, type, toInt(amount), desc, toInt(fee), date, time, tz);
       // La respuesta vuelve en unidades (int→unidades) para el front.
       res.json({ success: true, message: `Transacción de ${type} registrada exitosamente`, transaction: {
         ...result,
@@ -238,6 +240,8 @@ module.exports = function registerTransactionRoutes(app) {
       }
 
       const { description, amount, date, time, categoryName, tz } = req.body;
+      const catName = typeof categoryName === 'string' ? categoryName.trim() : categoryName;
+      const desc = typeof description === 'string' ? description.trim() : description;
       const tzEff = await effectiveTz(null, req.body);
 
       // La fecha/hora en edición siempre viajan juntas (el front prellena la
@@ -296,18 +300,18 @@ module.exports = function registerTransactionRoutes(app) {
       }
 
       let newCategoryId = t.categoryId;
-      if (categoryName != null && categoryName !== '' && categoryName !== t.category) {
+      if (catName != null && catName !== '' && catName !== t.category) {
         if (t.category === 'fee') {
           return res.status(400).json({ error: 'La categoría de una comisión (fee) no se puede cambiar.' });
         }
-        if (isSystemCategoryName(categoryName)) {
+        if (isSystemCategoryName(catName)) {
           return res.status(400).json({ error: 'No puedes asignar categorías del sistema (fee, exchange).' });
         }
-        const cat = await getOrCreateCategory(categoryName, t.type);
+        const cat = await getOrCreateCategory(catName, t.type);
         newCategoryId = cat.id;
       }
 
-      const newDescription = description !== undefined ? (description || '') : t.description;
+      const newDescription = desc !== undefined ? (desc || '') : t.description;
 
       await withTransaction(async () => {
         if (amountChanged) {
@@ -440,6 +444,8 @@ module.exports = function registerTransactionRoutes(app) {
         return res.status(400).json({ error: 'Esta transacción pertenece a un exchange. No puedes crearle transacciones asociadas desde aquí.' });
       }
       const { amount, type, categoryName, description, date, time, tz } = req.body;
+      const catName = typeof categoryName === 'string' ? categoryName.trim() : categoryName;
+      const desc = typeof description === 'string' ? description.trim() : description;
       const tzEff = await effectiveTz(null, req.body);
       const parsedUnits = Number(amount);
       if (!Number.isFinite(parsedUnits) || parsedUnits <= 0) {
@@ -449,7 +455,7 @@ module.exports = function registerTransactionRoutes(app) {
       if (type !== 'income' && type !== 'expense') {
         return res.status(400).json({ error: 'type debe ser income o expense' });
       }
-      if (isSystemCategoryName(categoryName)) {
+      if (isSystemCategoryName(catName)) {
         return res.status(400).json({ error: 'No puedes usar categorías del sistema (fee, exchange).' });
       }
       if (typeof date !== 'string' || date === '') {
@@ -464,7 +470,7 @@ module.exports = function registerTransactionRoutes(app) {
       if (!isValidTime(time)) {
         return res.status(400).json({ error: 'Hora inválida, use formato HH:MM (00-23:00-59)' });
       }
-      const cat = await getOrCreateCategory(categoryName, type);
+      const cat = await getOrCreateCategory(catName, type);
 
       const prevWall = projectRow({ datetimeUtc: t.datetimeUtc }, tzEff) || {};
       const assocDate = date;
@@ -482,7 +488,7 @@ module.exports = function registerTransactionRoutes(app) {
         return runDb(
           `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
            VALUES (?, ?, ?, ?, ?, ?, 10000, ?, 0, ?)`,
-          [t.walletId, cat.id, type, parsedAmount, description || '', assocDatetimeUtc, parsedAmount, id]
+          [t.walletId, cat.id, type, parsedAmount, desc || '', assocDatetimeUtc, parsedAmount, id]
         );
       });
       res.json({ success: true, message: 'Transacción asociada creada', associateId: ins.lastID });

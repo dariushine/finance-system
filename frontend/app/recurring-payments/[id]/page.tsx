@@ -240,12 +240,14 @@ export default function RecurringPaymentDetailPage() {
                 {formatCurrency(payment.amount, currency)}
               </Typography>
             </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary" display="block">Comisión</Typography>
-              <Typography variant="h6" fontWeight="bold">
-                {(payment.fee || 0) > 0 ? formatCurrency(Number(payment.fee), currency) : 'Sin comisión'}
-              </Typography>
-            </Box>
+            {(payment.fee || 0) > 0 && (
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block">Comisión</Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  {formatCurrency(Number(payment.fee), currency)}
+                </Typography>
+              </Box>
+            )}
             <Box>
               <Typography variant="caption" color="text.secondary" display="block">Billetera preferida</Typography>
               <Box display="flex" alignItems="center" gap={0.5}>

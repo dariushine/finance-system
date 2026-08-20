@@ -29,7 +29,10 @@ function getWalletById(id, active) {
 // valores inválidos. El balance inicial lo pone el usuario al crearla.
 function createWallet(data) {
   const { name, alias, type, currency, balance, description, icon, color, excludeFromTotal, hideInDashboard } = data;
-  if (!name || !type || !currency) {
+  const trimmedName = typeof name === 'string' ? name.trim() : name;
+  const trimmedAlias = typeof alias === 'string' ? alias.trim() : alias;
+  const trimmedDescription = typeof description === 'string' ? description.trim() : description;
+  if (!trimmedName || !type || !currency) {
     return Promise.reject(new Error('Faltan campos requeridos: name, type, currency'));
   }
   const excludeTotal = (excludeFromTotal === true || excludeFromTotal === 1) ? 1 : 0;
@@ -38,7 +41,7 @@ function createWallet(data) {
     db.run(
       `INSERT INTO wallets (name, alias, type, currency, balance, description, icon, color, isActive, excludeFromTotal, hideInDashboard)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-      [name, alias || null, type, currency, balance || 0, description || null, icon || null, color || null, excludeTotal, hideDash],
+      [trimmedName, trimmedAlias || null, type, currency, balance || 0, trimmedDescription || null, icon || null, color || null, excludeTotal, hideDash],
       function (err) {
         if (err) return reject(err);
         db.get('SELECT * FROM wallets WHERE id = ?', [this.lastID], (e, row) => {
@@ -57,9 +60,9 @@ function updateWalletMeta(id, fields) {
   return new Promise((resolve, reject) => {
     getWalletById(id, 1).then((wallet) => {
       if (!wallet) return reject(Object.assign(new Error('Billetera no encontrada'), { status: 404 }));
-      const newName = name !== undefined ? name : wallet.name;
-      const newAlias = alias !== undefined ? alias : wallet.alias;
-      const newDescription = description !== undefined ? description : wallet.description;
+      const newName = name !== undefined ? String(name).trim() : wallet.name;
+      const newAlias = alias !== undefined ? String(alias).trim() : wallet.alias;
+      const newDescription = description !== undefined ? String(description).trim() : wallet.description;
       const newIcon = icon !== undefined ? icon : wallet.icon;
       const newColor = color !== undefined ? color : wallet.color;
       // Los flags sólo cambian si vienen en el body (si no, conservan su valor actual)

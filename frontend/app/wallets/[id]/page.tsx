@@ -69,6 +69,7 @@ import theme from '../../theme';
 import { useNumberFormat } from '../../lib/NumberFormat';
 import { useTimeZone } from '../../lib/timeZone';
 import { useOnDataChanged } from '../../lib/dataEvents';
+import { downloadCSV, formatCSVDate } from '../../lib/csv';
 
 const icons: Record<string, ReactNode> = {
   bank: <AccountBalance />,
@@ -239,23 +240,31 @@ export default function WalletDetailPage() {
   const pagedTransactions = reportTransactions.slice(startIndex, startIndex + rowsPerPage);
 
   const exportCSV = () => {
-    const header = ['ID', 'Fecha', 'Tipo', 'Categoría', 'Descripción', 'Monto'];
+    const header = ['ID', 'Fecha', 'Hora', 'Tipo', 'Categoria', 'Descripcion', 'Credito', 'Debito', 'Saldo'];
+    // Saldo después de cada transacción: running sum anclado al balance real de la
+    // billetera (misma lógica que el detalle). Las filas del reporte vienen ordenadas
+    // DESC (más reciente primero); volteamos a ASC para acumular.
+    const asc = [...reportTransactions].reverse();
+    const totalNet = asc.reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0);
+    let cumulative = 0;
+    const balanceAfter = new Map<number, string>();
+    const walletBalance = Number(wallet?.balance) || 0;
+    for (const t of asc) {
+      cumulative += t.type === 'income' ? Number(t.amount) : -Number(t.amount);
+      balanceAfter.set(t.id, (walletBalance - totalNet + cumulative).toFixed(2));
+    }
     const rows = reportTransactions.map((t) => [
       t.id,
-      t.date,
+      formatCSVDate(t.date),
+      t.time ? t.time.slice(0, 5) : '',
       t.type === 'income' ? 'Ingreso' : 'Egreso',
       t.category,
       t.description || '',
-      t.type === 'income' ? String(t.amount) : `-${t.amount}`,
+      t.type === 'income' ? String(t.amount) : '', // crédito
+      t.type === 'expense' ? String(t.amount) : '', // débito
+      balanceAfter.get(t.id) ?? '',
     ]);
-    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `billetera_${id}_transacciones_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCSV(`billetera_${id}_transacciones_${new Date().toISOString().split('T')[0]}.csv`, header, rows);
   };
 
   const openEdit = () => {
