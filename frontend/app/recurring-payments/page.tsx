@@ -139,11 +139,8 @@ export default function RecurringPaymentsPage() {
                         {isIncome ? <ArrowUpward /> : <ArrowDownward />}
                       </Avatar>
                       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Typography variant="body1" fontWeight="bold" noWrap>
+                        <Typography variant="body1" fontWeight="bold">
                           {p.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap>
-                          {p.description || p.categoryName}
                         </Typography>
                       </Box>
                       <Typography variant="body1" fontWeight="bold" color={isIncome ? 'success.main' : 'error.main'} sx={{ flexShrink: 0 }}>
