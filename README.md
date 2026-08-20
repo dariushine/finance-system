@@ -309,16 +309,20 @@ El backend **no necesita `.env`**: usa defaults en `exchange-server.js` (puerto 
 
 ### 🔐 Autenticación (login)
 
-La app usa login con **cookie de sesión httpOnly** (inmune a XSS): un access token JWT de corta vida (5 min) más un refresh token con rotación persistido en SQLite. Al expirar el access, el front lo renueva solo vía `/api/auth/refresh`; si el refresh falla, te manda a `/login`.
+La app usa login con **cookie de sesión httpOnly** (inmune a XSS): un access token JWT de corta vida (5 min) más un refresh token con rotación persistido en SQLite. Al expirar el access, el front lo renueva solo vía `/api/auth/refresh`; si el refresh falla, te lleva al login.
+
+**La raíz (`/`) es la pantalla de login** y el dashboard vive en `/dashboard`. Sin sesión, cualquier ruta del dashboard redirige a la raíz; con sesión, la raíz redirige a `/dashboard`.
 
 Para activarla, copia `.env.example` a `.env` y define `AUTH_USERNAME`, `AUTH_PASSWORD` y `AUTH_TOKEN_SECRET`:
 
 ```bash
 cp .env.example .env
-# edita .env con tus credenciales y un secreto aleatorio
+# edita .env con tus credenciales y un secreto aleatorio (openssl rand -base64 48)
 # luego levanta con docker compose (lee las vars del .env)
 docker compose up --build -d
 ```
+
+> Si `AUTH_USERNAME`/`AUTH_PASSWORD` no están definidas, la auth queda **deshabilitada** (todo abierto) para no frenar el dev local.
 
 Endpoints de auth: `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/session`. El login tiene rate-limit (10 intentos fallidos cada 15 min por IP → 429).
 
