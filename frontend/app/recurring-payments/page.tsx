@@ -151,6 +151,12 @@ export default function RecurringPaymentsPage() {
                   <AccordionDetails sx={{ px: 1.5, pt: 0 }}>
                     <Divider sx={{ mb: 1.5 }} />
                     <Stack spacing={1}>
+                      {p.description && (
+                        <Box display="flex" alignItems="flex-start" gap={1} sx={{ mb: 0.5 }}>
+                          <NotesIcon fontSize="small" color="action" sx={{ mt: 0.25 }} />
+                          <Typography variant="body2">{p.description}</Typography>
+                        </Box>
+                      )}
                       <Box display="flex" justifyContent="space-between">
                         <Typography variant="body2" color="text.secondary">Categoría</Typography>
                         <Chip size="small" label={p.categoryName} variant="outlined" icon={<TagIcon />} />
@@ -162,15 +168,6 @@ export default function RecurringPaymentsPage() {
                           <Typography variant="body2">{p.walletName || 'Ninguna'}</Typography>
                         </Box>
                       </Box>
-                      {p.description && (
-                        <Box display="flex" justifyContent="space-between" gap={2}>
-                          <Typography variant="body2" color="text.secondary">Descripción</Typography>
-                          <Box display="flex" alignItems="flex-start" gap={0.5}>
-                            <NotesIcon fontSize="small" color="action" sx={{ mt: 0.25 }} />
-                            <Typography variant="body2" textAlign="right">{p.description}</Typography>
-                          </Box>
-                        </Box>
-                      )}
                       <Box display="flex" justifyContent="flex-end" gap={1} pt={1}>
                         <Button
                           size="small"
