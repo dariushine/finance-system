@@ -1,6 +1,6 @@
 // src/routes/stats.js — Estadísticas del dashboard.
 const { db } = require('../db');
-const { getRateForDate } = require('../services/rates');
+const { getOrFetchRateForDate } = require('../services/rates');
 const { rangeToInstants, projectInstants } = require('../services/timeUtil');
 const { getUserTimeZone } = require('../services/settings');
 const { isValidTimeZone } = require('../services/timeZoneMap');
@@ -55,7 +55,7 @@ module.exports = function registerStatsRoutes(app) {
 
       const getRate = async (date) => {
         if (rateCache.has(date)) return rateCache.get(date);
-        const rate = await getRateForDate(date, rateType);
+        const rate = await getOrFetchRateForDate(date, rateType);
         rateCache.set(date, rate);
         return rate;
       };
@@ -136,7 +136,7 @@ module.exports = function registerStatsRoutes(app) {
       const exchangeRateCache = new Map();
       const getExRate = async (date) => {
         if (exchangeRateCache.has(date)) return exchangeRateCache.get(date);
-        const r = await getRateForDate(date, rateType);
+        const r = await getOrFetchRateForDate(date, rateType);
         exchangeRateCache.set(date, r);
         return r;
       };

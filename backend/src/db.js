@@ -23,7 +23,7 @@ const db = new sqlite3.Database(dbPath);
 
 // ALMACENAMIENTO DE DINERO (decisión Freddy, 19 ago 2026):
 //   - MONTOS (balance, amount, fee, ...): INTEGER ×100 (centavos). $1.50 → 150.
-//   - TASAS (exchange_rate, rate, bcv/paralelo): INTEGER ×10000. 634.95 → 6349500.
+//   - TASAS (rate, bcv/paralelo): INTEGER ×10000. 634.95 → 6349500.
 // La API/front trabajan en unidades; las rutas convierten en el límite (money.js).
 
 // Crear tablas
@@ -80,8 +80,6 @@ db.serialize(() => {
     amount INTEGER NOT NULL,
     description TEXT,
     datetime_utc TEXT NOT NULL,
-    exchange_rate INTEGER DEFAULT 10000,
-    converted_amount INTEGER NOT NULL,
     fee INTEGER DEFAULT 0,
     parent_transaction_id INTEGER,
     deleted INTEGER DEFAULT 0,
@@ -105,6 +103,50 @@ db.serialize(() => {
         if (addErr) console.log('⚠️ datetime_utc:', addErr.message);
       });
     }
+  });
+
+  // Migración: quitar columnas legacy exchange_rate y converted_amount de
+  // transactions (no se usan; siempre placeholder 10000/amount). SQLite >= 3.35
+  // soporta DROP COLUMN; reconstruimos la tabla para descartarlas de verdad.
+  db.all(`PRAGMA table_info(transactions)`, (err2, cols2) => {
+    if (err2) return;
+    const names2 = (cols2 || []).map((c) => c.name);
+    const hasLegacy = names2.includes('exchange_rate') || names2.includes('converted_amount');
+    if (!hasLegacy) return;
+    console.log('🗑️  Migración: quitando exchange_rate/converted_amount de transactions');
+    db.serialize(() => {
+      db.run(`DROP TABLE IF EXISTS transactions_old_migration`);
+      db.run(`
+        CREATE TABLE transactions_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          wallet_id INTEGER NOT NULL,
+          category_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          amount INTEGER NOT NULL,
+          description TEXT,
+          datetime_utc TEXT NOT NULL,
+          fee INTEGER DEFAULT 0,
+          parent_transaction_id INTEGER,
+          deleted INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (wallet_id) REFERENCES wallets(id),
+          FOREIGN KEY (category_id) REFERENCES categories(id),
+          FOREIGN KEY (parent_transaction_id) REFERENCES transactions(id)
+        )`);
+      db.run(`
+        INSERT INTO transactions_new (id, wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id, deleted, created_at)
+        SELECT id, wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id, deleted, created_at
+        FROM transactions`);
+      db.run(`DROP TABLE transactions`);
+      db.run(`ALTER TABLE transactions_new RENAME TO transactions`);
+      // Re-asegurar columnas opcionales por si el schema nuevo es de una versión anterior.
+      db.all(`PRAGMA table_info(transactions)`, (e3, c3) => {
+        const n3 = (c3 || []).map((c) => c.name);
+        if (!n3.includes('fee')) db.run(`ALTER TABLE transactions ADD COLUMN fee INTEGER DEFAULT 0`);
+        if (!n3.includes('parent_transaction_id')) db.run(`ALTER TABLE transactions ADD COLUMN parent_transaction_id INTEGER`);
+        if (!n3.includes('deleted')) db.run(`ALTER TABLE transactions ADD COLUMN deleted INTEGER DEFAULT 0`);
+      });
+    });
   });
 
   // Intercambios

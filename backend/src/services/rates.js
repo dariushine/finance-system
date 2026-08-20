@@ -31,6 +31,36 @@ function fetchRatesFromApi() {
   });
 }
 
+// Consulta el histórico de Dolarapi para una fecha concreta (YYYY-MM-DD).
+// Devuelve { bcv, paralelo } en unidades humanas, o null si no se pudo.
+// URL: /v1/historicos/dolares/YYYY/MM/DD (fecha en formato con barras).
+function fetchHistoricRate(date) {
+  return new Promise((resolve) => {
+    if (!date) return resolve(null);
+    const [y, m, d] = date.split('-');
+    if (!y || !m || !d) return resolve(null);
+    const lib = require('https');
+    lib.get({ host: 've.dolarapi.com', path: `/v1/historicos/dolares/${y}/${m}/${d}`, timeout: 8000 }, (resp) => {
+      let data = '';
+      resp.on('data', (c) => (data += c));
+      resp.on('end', () => {
+        try {
+          const arr = JSON.parse(data);
+          if (!Array.isArray(arr)) return resolve(null);
+          const bcv = arr.find((r) => r && r.fuente === 'oficial');
+          const para = arr.find((r) => r && r.fuente === 'paralelo');
+          const bcvVal = bcv && typeof bcv.promedio === 'number' ? bcv.promedio : null;
+          const paraVal = para && typeof para.promedio === 'number' ? para.promedio : null;
+          if (bcvVal === null && paraVal === null) return resolve(null);
+          resolve({ bcv: bcvVal, paralelo: paraVal });
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    }).on('error', () => resolve(null)).on('timeout', function () { this.destroy(); resolve(null); });
+  });
+}
+
 // Guardar (o actualizar) la tasa para una fecha.
 // bcv/paralelo llegan en UNIDADES HUMANAS (desde la API o el body) y se
 // guardan como enteros de escala 4 (×10000) en la columna INTEGER.
@@ -114,6 +144,40 @@ function getRateForDate(date, type) {
   });
 }
 
+// Como getRateForDate, pero si no existe la tasa para la fecha en BD, la
+// consulta al histórico de Dolarapi y la GUARDA en daily_rates (backfill).
+// Así una transacción antigua de un día sin tasa cacheada se convierte con la
+// tasa real de ESE día y además queda persistida para futuras consultas.
+// Devuelve la tasa (enteros de escala ×10000) o null si no se pudo obtener.
+function getOrFetchRateForDate(date, type) {
+  return new Promise((resolve) => {
+    const col = type === 'paralelo' ? 'paralelo' : 'bcv';
+    db.get('SELECT bcv, paralelo FROM daily_rates WHERE date = ?', [date], (err, row) => {
+      if (!err && row) return resolve(row[col] != null ? row[col] : null);
+      // No está en BD: consultar histórico y guardarlo.
+      fetchHistoricRate(date).then((hist) => {
+        if (!hist || (hist[col] == null)) return resolve(null);
+        const bcvInt = hist.bcv != null ? toRateInt(hist.bcv) : null;
+        const paraInt = hist.paralelo != null ? toRateInt(hist.paralelo) : null;
+        // Guarda ambas si vienen; al menos la pedida.
+        if (bcvInt != null || paraInt != null) {
+          db.run(
+            `INSERT INTO daily_rates (date, bcv, paralelo, source)
+             VALUES (?, ?, ?, 'dolarapi')
+             ON CONFLICT(date) DO UPDATE SET
+               bcv = COALESCE(excluded.bcv, daily_rates.bcv),
+               paralelo = COALESCE(excluded.paralelo, daily_rates.paralelo),
+               source = 'dolarapi'`,
+            [date, bcvInt != null ? bcvInt : 0, paraInt != null ? paraInt : 0],
+            () => {}
+          );
+        }
+        resolve(hist[col] != null ? toRateInt(hist[col]) : null);
+      });
+    });
+  });
+}
+
 // Busca una categoría activa por nombre+tipo. Si no existe, la crea de forma
 // idempotente (nueva categoría con color por tipo). Devuelve la fila (id, name...).
 // Evita crear categorías del sistema (fee, exchange_out, exchange_in): si se pide
@@ -126,4 +190,4 @@ function getExchangeRates() {
 
 // Endpoint para que el frontend obtenga las tasas en vez de hardcodearlas
 
-module.exports = { fetchRatesFromApi, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getRateForDate, getExchangeRates };
+module.exports = { fetchRatesFromApi, fetchHistoricRate, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getRateForDate, getOrFetchRateForDate, getExchangeRates };

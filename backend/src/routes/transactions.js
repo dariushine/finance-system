@@ -417,9 +417,9 @@ module.exports = function registerTransactionRoutes(app) {
       const ins = await withTransaction(async () => {
         await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) - feeAmount, t.walletId]);
         const inserted = await runDb(
-          `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
-           VALUES (?, ?, 'expense', ?, ?, ?, 10000, ?, 0, ?)`,
-          [t.walletId, feeCat.id, feeAmount, `Comisión: ${t.description || t.category}`, feeDatetimeUtc, feeAmount, id]
+          `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
+           VALUES (?, ?, 'expense', ?, ?, ?, 0, ?)`,
+          [t.walletId, feeCat.id, feeAmount, `Comisión: ${t.description || t.category}`, feeDatetimeUtc, id]
         );
         await syncParentFeeSql(id);
         return inserted;
@@ -486,9 +486,9 @@ module.exports = function registerTransactionRoutes(app) {
       const ins = await withTransaction(async () => {
         await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [Number(t.walletBalance) + effect, t.walletId]);
         return runDb(
-          `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, exchange_rate, converted_amount, fee, parent_transaction_id)
-           VALUES (?, ?, ?, ?, ?, ?, 10000, ?, 0, ?)`,
-          [t.walletId, cat.id, type, parsedAmount, desc || '', assocDatetimeUtc, parsedAmount, id]
+          `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+          [t.walletId, cat.id, type, parsedAmount, desc || '', assocDatetimeUtc, id]
         );
       });
       res.json({ success: true, message: 'Transacción asociada creada', associateId: ins.lastID });
