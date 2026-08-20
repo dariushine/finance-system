@@ -37,6 +37,7 @@ import { useRouter } from 'next/navigation';
 import { parseLocalDate } from '../lib/dates';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
+import { useOnDataChanged } from '../lib/dataEvents';
 
 interface Transaction {
   id: number;
@@ -45,25 +46,33 @@ interface Transaction {
   amount: number;
   description?: string;
   date: string;
+  /** Hora (HH:MM) en la zona del usuario, la manda el backend proyectada. */
+  time?: string | null;
   walletName?: string;
   walletCurrency?: string;
 }
 
 const MAX_ROWS = 5;
 
+// Hora cruda HH:MM o HH:MM:SS sin pasar por parseLocalDate (que desvia el día).
+const timeOnly = (t?: string | null) => (t ? t.slice(0, 5) : '');
+
 // --- Formateadores a nivel de módulo (referencias estables, no se reconstruyen por render) ---
-const formatDate = (dateString: string) => {
+const formatDate = (dateString: string, time?: string | null) => {
   const date = parseLocalDate(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const t = timeOnly(time);
+  const timePart = t ? ` · ${t}` : '';
 
   if (diffHours < 24) {
-    return `Hoy ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
+    return `Hoy${timePart}`;
   } else if (diffHours < 48) {
-    return `Ayer ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
+    return `Ayer${timePart}`;
   } else {
-    return date.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
+    const dateStr = date.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
+    return t ? `${dateStr} · ${t}` : dateStr;
   }
 };
 
@@ -107,7 +116,7 @@ const MobileTransactionItem = memo(function MobileTransactionItem({
         <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
           <Stack spacing={0.25}>
             <Typography variant="body2" color="text.secondary">
-              {formatDate(transaction.date)}
+              {formatDate(transaction.date, transaction.time)}
             </Typography>
             <Chip
               icon={getTypeIcon(transaction.type)}
@@ -189,6 +198,9 @@ export default function RecentTransactions() {
 
   useEffect(() => { load(); }, []);
 
+  // Recargar al crear/editar/borrar (FAB u otra acción).
+  useOnDataChanged(load, []);
+
   const displayed = transactions.slice(0, visibleCount);
 
   // Handler ESTABLE: su referencia no cambia entre renders, así el memo de cada
@@ -269,7 +281,7 @@ export default function RecentTransactions() {
                   >
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {formatDate(transaction.date)}
+                        {formatDate(transaction.date, transaction.time)}
                       </Typography>
                     </TableCell>
                     <TableCell>

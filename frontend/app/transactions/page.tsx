@@ -16,6 +16,15 @@ import { formatLocalDate } from '../lib/dates';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
 import { useRouter } from 'next/navigation';
+import { useOnDataChanged } from '../lib/dataEvents';
+
+// Fecha + hora (HH:MM) de la transacción proyectada en la zona del usuario.
+// El backend manda `time` en cada fila de la lista; si falta, solo fecha.
+const formatTxDate = (date: string, time?: string | null) => {
+  const base = formatLocalDate(date);
+  const t = time ? time.slice(0, 5) : '';
+  return t ? `${base} · ${t}` : base;
+};
 
 interface Transaction {
   id: number;
@@ -25,6 +34,8 @@ interface Transaction {
   fee?: number;
   description?: string;
   date: string;
+  /** Hora (HH:MM) en la zona del usuario, la manda el backend proyectada. */
+  time?: string | null;
   walletName?: string;
   walletCurrency?: string;
 }
@@ -92,6 +103,9 @@ export default function TransactionsPage() {
   }, [applied, userTimeZone]);
 
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
+
+  // Recargar al crear/editar/borrar (FAB u otra acción).
+  useOnDataChanged(loadTransactions, [loadTransactions]);
 
   const handlePeriodChange = (v: string) => {
     setPeriod(v);
@@ -200,7 +214,7 @@ export default function TransactionsPage() {
                 <TableBody>
                   {pagedTransactions.map((transaction) => (
                     <TableRow key={transaction.id} hover onClick={() => goToDetail(transaction.id)} sx={{ cursor: 'pointer' }}>
-                      <TableCell>{formatLocalDate(transaction.date)}</TableCell>
+                      <TableCell>{formatTxDate(transaction.date, transaction.time)}</TableCell>
                       <TableCell><Chip label={transaction.category} size="small" variant="outlined" /></TableCell>
                       <TableCell>{transaction.walletName || '—'}</TableCell>
                       <TableCell><Chip label={transaction.type === 'income' ? 'Ingreso' : 'Gasto'} color={transaction.type === 'income' ? 'success' : 'error'} size="small" /></TableCell>

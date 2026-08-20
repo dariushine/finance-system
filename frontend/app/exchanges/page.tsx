@@ -35,6 +35,7 @@ import {
 import { API_URL } from '../lib/api';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
+import { useOnDataChanged } from '../lib/dataEvents';
 import DateRangeFilter from '../components/DateRangeFilter';
 import EmptyState from '../components/EmptyState';
 import { CurrencyExchange as ExchangeIcon } from '@mui/icons-material';
@@ -187,6 +188,9 @@ export default function ExchangesPage() {
   useEffect(() => {
     loadExchanges();
   }, [page, rowsPerPage, applied]);
+
+  // Recargar al crear/editar/borrar (FAB u otra acción).
+  useOnDataChanged(() => { loadExchanges(); }, []);
 
   const loadExchanges = async () => {
     try {

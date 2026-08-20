@@ -44,6 +44,7 @@ import {
 import { API_URL } from '../lib/api';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
+import { useOnDataChanged } from '../lib/dataEvents';
 
 // Simularemos gráficos con componentes MUI por ahora
 // En producción, usaríamos Recharts o Chart.js
@@ -237,6 +238,9 @@ export default function ReportsPage() {
   useEffect(() => {
     loadReportData();
   }, [timeRange, rateType]);
+
+  // Recargar al crear/editar/borrar (FAB u otra acción).
+  useOnDataChanged(() => { loadReportData(); }, []);
 
   const loadReportData = async () => {
     try {

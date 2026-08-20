@@ -45,6 +45,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useWallets } from '../lib/hooks';
+import { useOnDataChanged } from '../lib/dataEvents';
 import { useHideBalances } from '../lib/hooks/useHideBalances';
 import { useNumberFormat } from '../lib/NumberFormat';
 import BalanceReveal from '../components/BalanceReveal';
@@ -74,6 +75,9 @@ export default function WalletsPage() {
   const { formatAmount, formatCurrency } = useNumberFormat();
   const [rateType, setRateType] = useState<'bcv' | 'paralelo'>('bcv');
   const { wallets, loading, error, refetch } = useWallets(rateType);
+
+  // Recargar las billeteras al crear/editar/borrar (FAB u otra acción).
+  useOnDataChanged(refetch, [refetch]);
 
   const [deleted, setDeleted] = useState<Wallet[]>([]);
   const [deletedLoading, setDeletedLoading] = useState(false);

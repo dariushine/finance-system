@@ -27,6 +27,8 @@ export interface AccordionTransaction {
   category?: string;
   description?: string;
   date: string;
+  /** Hora (HH:MM) en la zona del usuario, la manda el backend proyectada. */
+  time?: string | null;
   amount: number;
   fee?: number;
   walletName?: string;
@@ -48,18 +50,24 @@ interface Props {
 // --- Formateadores memoizados a nivel de módulo (NO se reconstruyen por render) ---
 const dateFormatter = new Intl.DateTimeFormat('es-VE', { day: '2-digit', month: 'short' });
 
-const formatDate = (dateString: string) => {
+// Hora cruda HH:MM o HH:MM:SS sin pasar por parseLocalDate.
+const timeOnly = (t?: string | null) => (t ? t.slice(0, 5) : '');
+
+const formatDate = (dateString: string, time?: string | null) => {
   const date = parseLocalDate(dateString);
   const now = Date.now();
   const diffMs = now - date.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const t = timeOnly(time);
+  const timePart = t ? ` · ${t}` : '';
 
   if (diffHours < 24) {
-    return `Hoy ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
+    return `Hoy${timePart}`;
   } else if (diffHours < 48) {
-    return `Ayer ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`;
+    return `Ayer${timePart}`;
   } else {
-    return dateFormatter.format(date);
+    const dateStr = dateFormatter.format(date);
+    return t ? `${dateStr} · ${t}` : dateStr;
   }
 };
 
@@ -104,7 +112,7 @@ const TransactionAccordionItem = memo(function TransactionAccordionItem({
         <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
           <Stack spacing={0.25}>
             <Typography variant="body2" color="text.secondary">
-              {formatDate(transaction.date)}
+              {formatDate(transaction.date, transaction.time)}
             </Typography>
             <Chip
               icon={isIncome ? <IncomeIcon /> : <ExpenseIcon />}
