@@ -189,25 +189,45 @@ function getOrFetchRateForDate(date, type) {
 }
 
 // Busca la tasa `col` (bcv|paralelo) del último día hábil ANTERIOR a `date`,
-// consultando el histórico hacia atrás día a día (como hacen bancos/BCV: un
-// gasto de fin de semana o feriado se valora con la cotización oficial del
-// último día hábil previo). Consulta a Dolarapi y guarda en daily_rates cuando
-// encuentra. Devuelve entero ×10000 o null si no hay ninguno.
+// recorriendo hacia atrás día a día (como hacen bancos/BCV: un gasto de fin de
+// semana o feriado se valora con la cotización oficial del último día hábil
+// previo). PRIMERO consulta la BD hacia atrás (rápido): si una fecha ya está en
+// daily_rates con un 0 en la columna pedida, significa que ese día no tiene tasa
+// y se salta sin volver a la API. Solo llama al API para fechas no cacheadas, y
+// al encontrar guarda. Devuelve entero ×10000 o null si no hay ninguno.
 function lastBusinessDayRate(col, date) {
   return new Promise((resolve) => {
-    const attempt = (d) => {
-      fetchHistoricRate(d).then((hist) => {
-        if (hist && hist[col] != null) {
-          // persistirlo para no repetir el recorrido
-          persistHistoric(d, hist);
-          return resolve(toRateInt(hist[col]));
+    const attemptBD = (d) => {
+      db.get('SELECT bcv, paralelo FROM daily_rates WHERE date = ?', [d], (err, row) => {
+        // En BD: si la columna pedida > 0, es la respuesta. Si es 0/null, salta al anterior.
+        if (!err && row) {
+          const v = row[col] != null ? Number(row[col]) : 0;
+          if (v > 0) return resolve(v);
+          const prev = prevDay(d);
+          if (!prev || prev < '2020-01-01') return resolve(null);
+          return attemptBD(prev);
         }
-        const prev = prevDay(d);
-        if (!prev || prev < '2020-01-01') return resolve(null);
-        attempt(prev);
+        // No está en BD: consultar API y (si trae su columna) guardar + resolver.
+        attemptAPI(d);
       });
     };
-    attempt(date);
+    const attemptAPI = (d) => {
+      fetchHistoricRate(d).then((hist) => {
+        const prev = prevDay(d);
+        const stop = !prev || prev < '2020-01-01';
+        const hasCol = hist && hist[col] != null;
+        if (!hist && !stop) return attemptBD(prev);
+        // Guarda lo que vino (la columna que falta queda en 0 como marcador),
+        // para no volver a llamar a la API por esos días.
+        persistHistoric(d, hist);
+        if (hasCol) return resolve(toRateInt(hist[col]));
+        if (stop) return resolve(null);
+        // La columna pedida no vino (0): marca este día y sigue al anterior.
+        attemptBD(prev);
+      });
+    };
+    // Empezar por la BD para favorecer el cache.
+    attemptBD(date);
   });
 }
 

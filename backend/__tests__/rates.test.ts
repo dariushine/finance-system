@@ -69,6 +69,37 @@ describe('Backfill de tasas históricas', () => {
     expect(prevDay('2026-04-04')).toBe('2026-04-03');
     expect(prevDay('2026-03-01')).toBe('2026-02-28');
   });
+
+  test('un 0 en la columna dispara fallback al día hábil anterior sin API', async () => {
+    // BD pre-poblada tipo semana santa: domingo/viernes/jueves con bcv=0, miercoles con tasa.
+    const rowsByDate = {
+      '2026-04-04': { bcv: 0, paralelo: 6333500 },
+      '2026-04-03': { bcv: 0, paralelo: 6439400 },
+      '2026-04-02': { bcv: 0, paralelo: 6519800 },
+      '2026-04-01': { bcv: 4739176, paralelo: 6529700 },
+    };
+    mockDb.get.mockImplementation((sql, params, cb) => {
+      const date = params && params[0];
+      cb(null, rowsByDate[date] || undefined);
+    });
+    // Hacer que el https.get falle (no debería llamarse si la BD resuelve)
+    const https = require('https');
+    let apiCount = 0;
+    const orig = https.get;
+    https.get = () => {
+      apiCount++;
+      return { on: () => ({ on: () => ({}) }) };
+    };
+
+    const { getOrFetchRateForDate } = require('../src/services/rates');
+    const rate = await getOrFetchRateForDate('2026-04-04', 'bcv');
+
+    // Debe resolver al BCV del miércoles sin llamar a la API
+    expect(rate).toBe(4739176);
+    expect(apiCount).toBe(0);
+
+    https.get = orig;
+  });
 });
 
 describe('Conversión VES -> USD', () => {
