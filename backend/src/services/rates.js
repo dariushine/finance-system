@@ -153,10 +153,16 @@ function getOrFetchRateForDate(date, type) {
   return new Promise((resolve) => {
     const col = type === 'paralelo' ? 'paralelo' : 'bcv';
     db.get('SELECT bcv, paralelo FROM daily_rates WHERE date = ?', [date], (err, row) => {
-      if (!err && row) return resolve(row[col] != null ? row[col] : null);
+      // Si la fecha ya está en BD y trae la columna pedida (mayor que 0), úsala.
+      if (!err && row) {
+        if (row[col] != null && Number(row[col]) > 0) return resolve(row[col]);
+        // Está en BD pero sin la columna pedida (ej. solo paralelo y se pide bcv
+        // en un fin de semana): caer al último día hábil anterior.
+        return resolve(lastBusinessDayRate(col, date));
+      }
       // No está en BD: consultar histórico y guardarlo.
       fetchHistoricRate(date).then((hist) => {
-        if (!hist || (hist[col] == null)) return resolve(null);
+        if (!hist) return resolve(lastBusinessDayRate(col, date));
         const bcvInt = hist.bcv != null ? toRateInt(hist.bcv) : null;
         const paraInt = hist.paralelo != null ? toRateInt(hist.paralelo) : null;
         // Guarda ambas si vienen; al menos la pedida.
@@ -172,10 +178,61 @@ function getOrFetchRateForDate(date, type) {
             () => {}
           );
         }
-        resolve(hist[col] != null ? toRateInt(hist[col]) : null);
-      });
+        // Si la columna pedida no viene (BCV en fin de semana), caer al día hábil anterior.
+        if (hist[col] != null) {
+          resolve(toRateInt(hist[col]));
+        } else {
+          resolve(lastBusinessDayRate(col, date));
+        }      });
     });
   });
+}
+
+// Busca la tasa `col` (bcv|paralelo) del último día hábil ANTERIOR a `date`,
+// consultando el histórico hacia atrás día a día (como hacen bancos/BCV: un
+// gasto de fin de semana o feriado se valora con la cotización oficial del
+// último día hábil previo). Consulta a Dolarapi y guarda en daily_rates cuando
+// encuentra. Devuelve entero ×10000 o null si no hay ninguno.
+function lastBusinessDayRate(col, date) {
+  return new Promise((resolve) => {
+    const attempt = (d) => {
+      fetchHistoricRate(d).then((hist) => {
+        if (hist && hist[col] != null) {
+          // persistirlo para no repetir el recorrido
+          persistHistoric(d, hist);
+          return resolve(toRateInt(hist[col]));
+        }
+        const prev = prevDay(d);
+        if (!prev || prev < '2020-01-01') return resolve(null);
+        attempt(prev);
+      });
+    };
+    attempt(date);
+  });
+}
+
+function persistHistoric(date, hist) {
+  const bcvInt = hist.bcv != null ? toRateInt(hist.bcv) : null;
+  const paraInt = hist.paralelo != null ? toRateInt(hist.paralelo) : null;
+  if (bcvInt == null && paraInt == null) return;
+  db.run(
+    `INSERT INTO daily_rates (date, bcv, paralelo, source)
+     VALUES (?, ?, ?, 'dolarapi')
+     ON CONFLICT(date) DO UPDATE SET
+       bcv = COALESCE(excluded.bcv, daily_rates.bcv),
+       paralelo = COALESCE(excluded.paralelo, daily_rates.paralelo),
+       source = 'dolarapi'`,
+    [date, bcvInt != null ? bcvInt : 0, paraInt != null ? paraInt : 0],
+    () => {}
+  );
+}
+
+function prevDay(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())}`;
 }
 
 // Busca una categoría activa por nombre+tipo. Si no existe, la crea de forma
@@ -190,4 +247,4 @@ function getExchangeRates() {
 
 // Endpoint para que el frontend obtenga las tasas en vez de hardcodearlas
 
-module.exports = { fetchRatesFromApi, fetchHistoricRate, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getRateForDate, getOrFetchRateForDate, getExchangeRates };
+module.exports = { fetchRatesFromApi, fetchHistoricRate, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getRateForDate, getOrFetchRateForDate, getExchangeRates, prevDay };
