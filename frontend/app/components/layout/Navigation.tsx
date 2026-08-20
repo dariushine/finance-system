@@ -6,6 +6,7 @@ import {
   Toolbar,
   Typography,
   IconButton,
+  Button,
   Drawer,
   List,
   ListItem,
@@ -37,9 +38,11 @@ import {
   MoreHoriz as MoreHorizIcon,
   Schedule as ScheduleIcon,
   Settings as SettingsIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { logout } from '../../lib/auth';
 
 // Items de primer nivel: van en la barra inferior (mobile) y en el sidebar (desktop)
 const primaryItems = [
@@ -207,6 +210,12 @@ export default function Navigation() {
           </ListItem>
         ))}
       </List>
+      <Box sx={{ borderTop: 1, borderColor: 'divider', p: 1 }}>
+        <ListItem component="button" type="button" onClick={() => { setMobileOpen(false); logout(); }} sx={{ borderRadius: 1, cursor: 'pointer' }}>
+          <ListItemIcon sx={{ minWidth: 40 }}><LogoutIcon /></ListItemIcon>
+          <ListItemText primary="Cerrar sesión" />
+        </ListItem>
+      </Box>
     </Box>
   );
 
@@ -254,6 +263,29 @@ export default function Navigation() {
           </Tooltip>
         </Box>
       )}
+
+      {/* Cerrar sesión */}
+      <Box
+        sx={{
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          p: 1,
+        }}
+      >
+        {collapsed ? (
+          <Tooltip title="Cerrar sesión">
+            <IconButton onClick={() => logout()} color="inherit">
+              <LogoutIcon />
+            </IconButton>
+          </Tooltip>
+        ) : (
+          <Button startIcon={<LogoutIcon />} color="inherit" onClick={() => logout()} sx={{ textTransform: 'none' }}>
+            Cerrar sesión
+          </Button>
+        )}
+      </Box>
     </Box>
   );
 

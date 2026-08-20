@@ -7,6 +7,7 @@ import { Box, Container } from '@mui/material';
 import Navigation from './components/layout/Navigation';
 import AddFab from './components/AddFab';
 import RateFetcher from './components/RateFetcher';
+import AuthProvider from './components/AuthProvider';
 import theme from './theme';
 import { NumberFormatProvider } from './lib/NumberFormat';
 import { TimeZoneProvider } from './lib/timeZone';
@@ -38,6 +39,7 @@ export default function RootLayout({
             <CssBaseline />
             <NumberFormatProvider>
             <TimeZoneProvider>
+            <AuthProvider />
             <RateFetcher />
             <AddFab />
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>

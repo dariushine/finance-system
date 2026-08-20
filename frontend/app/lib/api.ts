@@ -1,5 +1,7 @@
 // API service for the finance system
 // Usa rewrites de Next.js: /api → backend:3002/api
+import { apiFetch } from './auth';
+
 export const API_URL = '/api';
 
 // Settings (zona horaria) — GET /api/settings y PUT por clave.
@@ -10,13 +12,13 @@ export interface Settings {
 }
 
 export async function getSettings(): Promise<Settings> {
-  const response = await fetch(`${API_URL}/settings`);
+  const response = await apiFetch(`${API_URL}/settings`);
   if (!response.ok) throw new Error('No se pudieron cargar las configuraciones');
   return response.json();
 }
 
 export async function setUserTimeZone(timezone: string): Promise<Settings> {
-  const response = await fetch(`${API_URL}/settings/user_timezone`, {
+  const response = await apiFetch(`${API_URL}/settings/user_timezone`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ timezone }),
@@ -124,21 +126,21 @@ export interface ExchangeDetail {
 
 // Wallets API
 export async function getWallets(): Promise<Wallet[]> {
-  const response = await fetch(`${API_URL}/wallets`);
+  const response = await apiFetch(`${API_URL}/wallets`);
   if (!response.ok) throw new Error('Failed to load wallets');
   return response.json();
 }
 
 // Obtener billeteras eliminadas (soft-delete)
 export async function getDeletedWallets(): Promise<Wallet[]> {
-  const response = await fetch(`${API_URL}/wallets/deleted`);
+  const response = await apiFetch(`${API_URL}/wallets/deleted`);
   if (!response.ok) throw new Error('Failed to load deleted wallets');
   return response.json();
 }
 
 // Obtener una billetera por id
 export async function getWallet(id: number | string): Promise<Wallet> {
-  const response = await fetch(`${API_URL}/wallets/${id}`);
+  const response = await apiFetch(`${API_URL}/wallets/${id}`);
   if (!response.ok) throw new Error('Failed to load wallet');
   return response.json();
 }
@@ -158,7 +160,7 @@ export interface WalletInput {
 
 // Crear una billetera
 export async function createWallet(data: WalletInput): Promise<Wallet> {
-  const response = await fetch(`${API_URL}/wallets`, {
+  const response = await apiFetch(`${API_URL}/wallets`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -172,7 +174,7 @@ export async function createWallet(data: WalletInput): Promise<Wallet> {
 
 // Actualizar una billetera
 export async function updateWallet(id: number | string, data: Partial<WalletInput>): Promise<Wallet> {
-  const response = await fetch(`${API_URL}/wallets/${id}`, {
+  const response = await apiFetch(`${API_URL}/wallets/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -186,14 +188,14 @@ export async function updateWallet(id: number | string, data: Partial<WalletInpu
 
 // Soft-delete una billetera
 export async function deleteWallet(id: number | string): Promise<any> {
-  const response = await fetch(`${API_URL}/wallets/${id}`, { method: 'DELETE' });
+  const response = await apiFetch(`${API_URL}/wallets/${id}`, { method: 'DELETE' });
   if (!response.ok) throw new Error('Failed to delete wallet');
   return response.json();
 }
 
 // Reactivar una billetera
 export async function reactivateWallet(id: number | string): Promise<Wallet> {
-  const response = await fetch(`${API_URL}/wallets/${id}/reactivate`, { method: 'PUT' });
+  const response = await apiFetch(`${API_URL}/wallets/${id}/reactivate`, { method: 'PUT' });
   if (!response.ok) throw new Error('Failed to reactivate wallet');
   return response.json();
 }
@@ -233,7 +235,7 @@ export async function getWalletReport(
   if (opts?.period) params.append('period', opts.period);
   if (opts?.tz) params.append('tz', opts.tz);
   const qs = params.toString();
-  const response = await fetch(`${API_URL}/wallets/${id}/report${qs ? `?${qs}` : ''}`);
+  const response = await apiFetch(`${API_URL}/wallets/${id}/report${qs ? `?${qs}` : ''}`);
   if (!response.ok) throw new Error('Failed to load wallet report');
   return response.json();
 }
@@ -244,7 +246,7 @@ export async function getEffectiveRate(type: 'bcv' | 'paralelo' = 'bcv', date?: 
   const params = new URLSearchParams();
   params.append('type', type);
   if (date) params.append('date', date);
-  const response = await fetch(`${API_URL}/rates/effective?${params.toString()}`);
+  const response = await apiFetch(`${API_URL}/rates/effective?${params.toString()}`);
   if (!response.ok) throw new Error('Failed to load effective rate');
   return response.json();
 }
@@ -262,7 +264,7 @@ export async function getTransactions(
   if (date) params.append('date', date);
   if (tz) params.append('tz', tz);
   
-  const response = await fetch(`${API_URL}/transactions?${params}`);
+  const response = await apiFetch(`${API_URL}/transactions?${params}`);
   if (!response.ok) throw new Error('Failed to load transactions');
   return response.json();
 }
@@ -270,7 +272,7 @@ export async function getTransactions(
 // Obtener el detalle de una transacción (incluye balanceAfter y transacciones hijas)
 export async function getTransaction(id: number | string, tz?: string): Promise<TransactionDetail> {
   const qs = tz ? `?tz=${encodeURIComponent(tz)}` : '';
-  const response = await fetch(`${API_URL}/transactions/${id}${qs}`);
+  const response = await apiFetch(`${API_URL}/transactions/${id}${qs}`);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body?.error || 'No se pudo cargar la transacción');
@@ -284,7 +286,7 @@ export async function updateTransaction(
   data: { description?: string; amount?: number; date?: string; time?: string; categoryName?: string },
   tz?: string
 ): Promise<any> {
-  const response = await fetch(`${API_URL}/transactions/${id}`, {
+  const response = await apiFetch(`${API_URL}/transactions/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(tz ? { ...data, tz } : data),
@@ -296,7 +298,7 @@ export async function updateTransaction(
 
 // Eliminar virtualmente una transacción
 async function deleteTransaction(id: number | string): Promise<any> {
-  const response = await fetch(`${API_URL}/transactions/${id}`, { method: 'DELETE' });
+  const response = await apiFetch(`${API_URL}/transactions/${id}`, { method: 'DELETE' });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo eliminar la transacción');
   return body;
@@ -308,7 +310,7 @@ export async function addTransactionFee(
   data: { amount: number; date?: string; time?: string },
   tz?: string
 ): Promise<any> {
-  const response = await fetch(`${API_URL}/transactions/${id}/fee`, {
+  const response = await apiFetch(`${API_URL}/transactions/${id}/fee`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(tz ? { ...data, tz } : data),
@@ -324,7 +326,7 @@ export async function createAssociatedTransaction(
   data: { amount: number; type: 'income' | 'expense'; categoryName: string; description?: string; date?: string; time?: string },
   tz?: string
 ): Promise<any> {
-  const response = await fetch(`${API_URL}/transactions/${id}/associate`, {
+  const response = await apiFetch(`${API_URL}/transactions/${id}/associate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(tz ? { ...data, tz } : data),
@@ -339,7 +341,7 @@ export { deleteTransaction };
 // Obtener detalle de un exchange (GET /api/exchanges/:id)
 export async function getExchange(id: number | string, tz?: string): Promise<ExchangeDetail> {
   const qs = tz ? `?tz=${encodeURIComponent(tz)}` : '';
-  const response = await fetch(`${API_URL}/exchanges/${id}${qs}`);
+  const response = await apiFetch(`${API_URL}/exchanges/${id}${qs}`);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body?.error || 'No se pudo cargar el exchange');
@@ -353,7 +355,7 @@ export async function updateExchange(
   data: { fromAmount?: number; toAmount?: number; fee?: number; description?: string; date?: string; time?: string },
   tz?: string
 ): Promise<any> {
-  const response = await fetch(`${API_URL}/exchanges/${id}`, {
+  const response = await apiFetch(`${API_URL}/exchanges/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(tz ? { ...data, tz } : data),
@@ -365,7 +367,7 @@ export async function updateExchange(
 
 // Eliminar virtualmente un exchange (soft-delete)
 export async function deleteExchange(id: number | string): Promise<any> {
-  const response = await fetch(`${API_URL}/exchanges/${id}`, { method: 'DELETE' });
+  const response = await apiFetch(`${API_URL}/exchanges/${id}`, { method: 'DELETE' });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo eliminar el exchange');
   return body;
@@ -373,7 +375,7 @@ export async function deleteExchange(id: number | string): Promise<any> {
 
 // POST transaction API
 export async function postTransaction(data: Transaction, tz?: string): Promise<Transaction> {
-  const response = await fetch(`${API_URL}/transactions`, {
+  const response = await apiFetch(`${API_URL}/transactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(tz ? { ...data, tz } : data)
@@ -393,7 +395,7 @@ export async function postExchange(exchange: {
   date?: string; 
   time?: string; 
 }, tz?: string): Promise<any> {
-  const response = await fetch(`${API_URL}/exchanges`, {
+  const response = await apiFetch(`${API_URL}/exchanges`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -434,13 +436,13 @@ export async function getCategories(category_type?: 'expense' | 'income', opts?:
   const params = new URLSearchParams();
   if (category_type) params.append('type', category_type);
   if (opts?.includingInactive) params.append('includingInactive', '1');
-  const response = await fetch(`${API_URL}/categories?${params.toString()}`);
+  const response = await apiFetch(`${API_URL}/categories?${params.toString()}`);
   if (!response.ok) throw new Error('Failed to get categories');
   return response.json();
 }
 
 export async function createCategory(data: CategoryInput): Promise<Category> {
-  const response = await fetch(`${API_URL}/categories`, {
+  const response = await apiFetch(`${API_URL}/categories`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -451,7 +453,7 @@ export async function createCategory(data: CategoryInput): Promise<Category> {
 }
 
 export async function updateCategory(id: number | string, data: Partial<CategoryInput>): Promise<Category> {
-  const response = await fetch(`${API_URL}/categories/${id}`, {
+  const response = await apiFetch(`${API_URL}/categories/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -462,14 +464,14 @@ export async function updateCategory(id: number | string, data: Partial<Category
 }
 
 export async function deleteCategory(id: number | string): Promise<any> {
-  const response = await fetch(`${API_URL}/categories/${id}`, { method: 'DELETE' });
+  const response = await apiFetch(`${API_URL}/categories/${id}`, { method: 'DELETE' });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo desactivar la categoría');
   return body;
 }
 
 export async function reactivateCategory(id: number | string): Promise<Category> {
-  const response = await fetch(`${API_URL}/categories/${id}/reactivate`, { method: 'PUT' });
+  const response = await apiFetch(`${API_URL}/categories/${id}/reactivate`, { method: 'PUT' });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo reactivar la categoría');
   return body;
@@ -488,7 +490,7 @@ export interface Balance {
 }
 
 export async function getBalance(): Promise<Balance> {
-  const response = await fetch(`${API_URL}/balance`);
+  const response = await apiFetch(`${API_URL}/balance`);
   if (!response.ok) throw new Error('Failed to load balance');
   return response.json();
 }
@@ -524,13 +526,13 @@ export interface RecurringPaymentInput {
 }
 
 export async function getRecurringPayments(): Promise<RecurringPayment[]> {
-  const response = await fetch(`${API_URL}/recurring-payments`);
+  const response = await apiFetch(`${API_URL}/recurring-payments`);
   if (!response.ok) throw new Error('Failed to load recurring payments');
   return response.json();
 }
 
 export async function getRecurringPayment(id: number | string): Promise<RecurringPayment> {
-  const response = await fetch(`${API_URL}/recurring-payments/${id}`);
+  const response = await apiFetch(`${API_URL}/recurring-payments/${id}`);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body?.error || 'No se pudo cargar el pago frecuente');
@@ -539,7 +541,7 @@ export async function getRecurringPayment(id: number | string): Promise<Recurrin
 }
 
 export async function createRecurringPayment(data: RecurringPaymentInput): Promise<RecurringPayment> {
-  const response = await fetch(`${API_URL}/recurring-payments`, {
+  const response = await apiFetch(`${API_URL}/recurring-payments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -553,7 +555,7 @@ export async function updateRecurringPayment(
   id: number | string,
   data: Partial<RecurringPaymentInput>
 ): Promise<RecurringPayment> {
-  const response = await fetch(`${API_URL}/recurring-payments/${id}`, {
+  const response = await apiFetch(`${API_URL}/recurring-payments/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -564,7 +566,7 @@ export async function updateRecurringPayment(
 }
 
 export async function deleteRecurringPayment(id: number | string): Promise<any> {
-  const response = await fetch(`${API_URL}/recurring-payments/${id}`, { method: 'DELETE' });
+  const response = await apiFetch(`${API_URL}/recurring-payments/${id}`, { method: 'DELETE' });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || 'No se pudo eliminar el pago frecuente');
   return body;
@@ -586,7 +588,7 @@ export async function executeRecurringPayment(
   id: number | string,
   data: ExecuteRecurringInput
 ): Promise<{ success: boolean; transaction: { id: number; type: string; amount: number; currency: string } }> {
-  const response = await fetch(`${API_URL}/recurring-payments/${id}/execute`, {
+  const response = await apiFetch(`${API_URL}/recurring-payments/${id}/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),

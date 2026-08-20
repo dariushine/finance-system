@@ -1,4 +1,7 @@
 // Acceso a la API a través del reverse proxy de Next.js (/api → backend:3002/api en Docker)
+// Usa el fetch con auto-refresh del access token (auth.ts).
+import { apiFetch } from '../lib/auth';
+
 const API_BASE = '/api';
 
 export interface Transaction {
@@ -39,18 +42,13 @@ export interface Stats {
 
 class FinanceApi {
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    });
+    const response = await apiFetch(`${API_BASE}${endpoint}`, options ?? {});
 
     if (!response.ok) {
       throw new Error(`API Error: ${response.status} ${response.statusText}`);
     }
 
+    if (response.status === 204) return undefined as T;
     return response.json();
   }
 

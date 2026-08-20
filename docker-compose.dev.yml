@@ -1,30 +1,55 @@
-# Override de DESARROLLO — hot reload en ambos servicios.
-# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-# (NO usar en producción; solo para iterar sin rebuildear.)
 services:
+  # Backend API service (dev)
   backend:
-    # Bind del código fuente para reflejar cambios al instante
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    ports:
+      - "3002:3002"
     volumes:
-      - ./backend:/app/backend
-      # Conservar node_modules del contenedor (instalado para Linux) sobre el bind,
-      # para no usar el del host (sqlite3 es nativo y no portable)
-      - /app/backend/node_modules
-    # node --watch recarga la API al editar (sin necesidad de nodemon)
-    command: ["node", "--watch", "exchange-server.js"]
-
-  frontend:
-    # Bind del código fuente + next dev (hot reload real)
-    volumes:
-      - ./frontend:/app/frontend
-      # Volúmenes anónimos: conservan node_modules/.next del contenedor
-      # por encima del bind, para no usar los del host
-      - /app/frontend/node_modules
-      - /app/frontend/.next
+      - ./backend/data:/app/backend/data
     environment:
-      # next dev con rewrite apuntando al backend por nombre de red
       - NODE_ENV=development
-      - API_UPSTREAM=http://backend:3002
-    command: ["npm", "run", "dev"]
-    # En dev, el frontend no debe esperar al healthcheck del backend
+      - PORT=3002
+      - AUTH_USERNAME=${AUTH_USERNAME:-}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      - AUTH_TOKEN_SECRET=${AUTH_TOKEN_SECRET:-dev-insecure-secret-change-me}
+      - ACCESS_TOKEN_TTL_MS=${ACCESS_TOKEN_TTL_MS:-300000}
+      - REFRESH_TTL_SHORT_MS=${REFRESH_TTL_SHORT_MS:-3600000}
+      - REFRESH_TTL_LONG_MS=${REFRESH_TTL_LONG_MS:-2592000000}
+      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - finance-network
+
+  # Frontend dashboard (dev)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://backend:3002/api
+      - AUTH_USERNAME=${AUTH_USERNAME:-}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      - AUTH_TOKEN_SECRET=${AUTH_TOKEN_SECRET:-dev-insecure-secret-change-me}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - finance-network
+
+networks:
+  finance-network:
+    driver: bridge
