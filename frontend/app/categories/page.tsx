@@ -245,10 +245,12 @@ export default function CategoriesPage() {
       {loading ? (
         <Box>
           {Array.from({ length: 6 }).map((_, i) => (
-            <Box key={i} display="flex" alignItems="center" gap={2} py={1}>
-              <Skeleton variant="circular" width={32} height={32} />
-              <Skeleton variant="text" width={180} />
-            </Box>
+            <Card key={i} variant="outlined" sx={{ mb: 1 }}>
+              <CardContent sx={{ py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Skeleton variant="circular" width={28} height={28} />
+                <Skeleton variant="text" width="55%" sx={{ flexGrow: 1 }} />
+              </CardContent>
+            </Card>
           ))}
         </Box>
       ) : (
