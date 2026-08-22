@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, Typography, Box, CircularProgress, Chip, useMediaQuery, useTheme } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
+import { Card, CardContent, Typography, Box, CircularProgress, Chip, useMediaQuery, useTheme, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { AttachMoney, TrendingUp, ErrorOutline } from '@mui/icons-material';
 import { financeApi, Stats } from '../services/financeApi';
 import BalanceReveal from './BalanceReveal';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
 import { useOnDataChanged } from '../lib/dataEvents';
+import { useRatePreference } from '../lib/hooks/useRatePreference';
 
 interface DailyRate { date: string; bcv: number; paralelo: number }
 
@@ -22,37 +23,58 @@ export default function BalanceCard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [ratePref, setRatePref] = useRatePreference();
 
-  const fetchData = async () => {
+  // Ref de la tasa para que el refresh periódico y el recálculo usen siempre
+  // el valor más reciente sin depender de closures del render inicial.
+  const ratePrefRef = useRef(ratePref);
+  ratePrefRef.current = ratePref;
+  // Skip del efecto de tasa en el primer render (la carga inicial la hace el otro efecto).
+  const firstStatsLoad = useRef(true);
+
+  const loadStats = async (showSpinner: boolean) => {
+    const rate = ratePrefRef.current;
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       const [statsData] = await Promise.all([
-        financeApi.getStats(true, userTimeZone),
+        financeApi.getStats(true, userTimeZone, rate),
       ]);
       setStats(statsData);
       setLastUpdated(new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }));
       setError(null);
     } catch (err) {
-      setError('Error al cargar datos del backend');
+      if (showSpinner) setError('Error al cargar datos del backend');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
+  // Carga inicial (con spinner) + refresh periódico (sin spinner).
   useEffect(() => {
-    fetchData();
-    // Refresh every 60 seconds
-    const interval = setInterval(fetchData, 60000);
+    loadStats(true);
+    const interval = setInterval(() => loadStats(false), 60000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Recargar cuando se crea/edita/borra algo (FAB u otra acción).
-  useOnDataChanged(fetchData, []);
-
-  // Tasa del día (solo móvil, para los chips). En desktop el menú superior ya la muestra.
+  // Cambio de tasa: recalcular SOLO el monto, sin resetear el panel entero.
   useEffect(() => {
-    if (!isMobile) return;
+    if (firstStatsLoad.current) {
+      firstStatsLoad.current = false;
+      return;
+    }
+    loadStats(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ratePref]);
+
+  // Recargar con spinner al crear/editar/borrar (FAB u otra acción).
+  useOnDataChanged(() => loadStats(true), []);
+
+  // Tasa del día (para los chips en móvil; en desktop solo la muestra el menú superior).
+  // Se busca siempre (independiente de isMobile) para que al achicar la ventana a móvil
+  // los chips ya tengan la tasa cargada y no muestren "Tasas —".
+  useEffect(() => {
     let active = true;
     fetch('/api/daily-rates/today')
       .then(async (res) => {
@@ -109,18 +131,67 @@ export default function BalanceCard() {
           </Box>
         </Box>
 
-        {/* Chips de tasas (solo móvil, donde no hay panel superior) */}
-        {isMobile && (
+        {/* Selector de tasa: chips tappables en móvil, toggle BCV/Paralelo en desktop. */}
+        {isMobile ? (
           <Box display="flex" gap={1} flexWrap="wrap" mt={2}>
             {rate ? (
               <>
-                <Chip size="small" label={`BCV: ${rate.bcv.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
-                <Chip size="small" label={`Paralelo: ${rate.paralelo.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
+                <Chip
+                  size="small"
+                  label={`BCV: ${rate.bcv.toFixed(2)}`}
+                  onClick={() => setRatePref('bcv')}
+                  sx={{
+                    bgcolor: ratePref === 'bcv' ? '#fff' : 'rgba(255,255,255,0.2)',
+                    color: ratePref === 'bcv' ? 'primary.main' : 'white',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                />
+                <Chip
+                  size="small"
+                  label={`Paralelo: ${rate.paralelo.toFixed(2)}`}
+                  onClick={() => setRatePref('paralelo')}
+                  sx={{
+                    bgcolor: ratePref === 'paralelo' ? '#fff' : 'rgba(255,255,255,0.2)',
+                    color: ratePref === 'paralelo' ? 'primary.main' : 'white',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                />
               </>
             ) : (
               <Chip size="small" label="Tasas —" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
             )}
           </Box>
+        ) : (
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={ratePref}
+            onChange={(e, val) => val && setRatePref(val)}
+            sx={{ mt: 2, bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 1 }}
+          >
+            <ToggleButton
+              value="bcv"
+              sx={{
+                color: 'white',
+                borderColor: 'rgba(255,255,255,0.35)',
+                '&.Mui-selected': { bgcolor: '#fff', color: 'primary.main' },
+              }}
+            >
+              BCV
+            </ToggleButton>
+            <ToggleButton
+              value="paralelo"
+              sx={{
+                color: 'white',
+                borderColor: 'rgba(255,255,255,0.35)',
+                '&.Mui-selected': { bgcolor: '#fff', color: 'primary.main' },
+              }}
+            >
+              Paralelo
+            </ToggleButton>
+          </ToggleButtonGroup>
         )}
       </CardContent>
     </Card>
