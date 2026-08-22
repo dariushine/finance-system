@@ -439,8 +439,7 @@ function createAuth(db) {
   };
 
   // GET /api/auth/sessions → lista de sesiones abiertas.
-  router.get('/sessions', async (req, res) => {
-    if (!browserAuthed(req)) return res.status(401).json({ error: 'No autorizado' });
+  router.get('/sessions', requireBrowserAuth, async (req, res) => {
     try {
       const rows = await store.listSessions();
       // Marcar la sesión actual: es el jti del refresh token de ESTA cookie.
@@ -473,8 +472,7 @@ function createAuth(db) {
   });
 
   // DELETE /api/auth/sessions/:jti → revoca una sesión (logout remoto).
-  router.delete('/sessions/:jti', async (req, res) => {
-    if (!browserAuthed(req)) return res.status(401).json({ error: 'No autorizado' });
+  router.delete('/sessions/:jti', requireBrowserAuth, async (req, res) => {
     try {
       await store.revokeToken(req.params.jti);
       res.json({ ok: true });
@@ -486,8 +484,7 @@ function createAuth(db) {
   // ── API tokens (acceso programático) ────────────────────────────────────
 
   // GET /api/auth/tokens → lista los API tokens (sin valor plano).
-  router.get('/tokens', async (req, res) => {
-    if (!browserAuthed(req)) return res.status(401).json({ error: 'No autorizado' });
+  router.get('/tokens', requireBrowserAuth, async (req, res) => {
     try {
       const rows = await tokenStore.list();
       const tokens = (rows || []).map((t) => ({
@@ -506,8 +503,7 @@ function createAuth(db) {
 
   // POST /api/auth/tokens → crea un API token. Body: { name, expires_in }.
   // expires_in en segundos (null = sin expiración). Devuelve el valor plano UNA vez.
-  router.post('/tokens', async (req, res) => {
-    if (!browserAuthed(req)) return res.status(401).json({ error: 'No autorizado' });
+  router.post('/tokens', requireBrowserAuth, async (req, res) => {
     const { name, expires_in } = req.body || {};
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ error: 'El nombre del token es obligatorio' });
@@ -537,8 +533,7 @@ function createAuth(db) {
   });
 
   // DELETE /api/auth/tokens/:id → revoca/borra un API token.
-  router.delete('/tokens/:id', async (req, res) => {
-    if (!browserAuthed(req)) return res.status(401).json({ error: 'No autorizado' });
+  router.delete('/tokens/:id', requireBrowserAuth, async (req, res) => {
     try {
       await tokenStore.remove(req.params.id);
       res.json({ ok: true });
@@ -583,7 +578,15 @@ function createAuth(db) {
     }
   }
 
-  return { router, requireAuth };
+  // Middleware para rutas que SOLO admite la sesión de navegador (cookies
+  // httpOnly), nunca un API token Bearer: gestión de sesiones/tokens y
+  // configuración sensible.
+  function requireBrowserAuth(req, res, next) {
+    if (!browserAuthed(req)) return res.status(401).json({ error: 'No autorizado' });
+    next();
+  }
+
+  return { router, requireAuth, requireBrowserAuth };
 }
 
 module.exports = { createAuth, authEnabled };

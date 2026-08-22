@@ -55,7 +55,7 @@ function buildApp() {
   registerTransactions(app);
   registerExchanges(app);
   registerRates(app);
-  registerSettings(app);
+  registerSettings(app, auth.requireBrowserAuth);
   registerStats(app);
 
   return app;

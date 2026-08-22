@@ -6,7 +6,7 @@ const {
 } = require('../services/settings');
 const { isValidTimeZone } = require('../services/timeZoneMap');
 
-module.exports = function registerSettingsRoutes(app) {
+module.exports = function registerSettingsRoutes(app, requireBrowserAuth) {
   // GET /api/settings → { user_timezone, defaults }
   app.get('/api/settings', async (req, res) => {
     try {
@@ -21,7 +21,9 @@ module.exports = function registerSettingsRoutes(app) {
   });
 
   // PUT /api/settings/user_timezone → setea la zona del usuario.
-  app.put('/api/settings/user_timezone', async (req, res) => {
+  // Solo sesión de navegador (nunca un API token Bearer): es configuración
+  // sensible que el token no debe poder tocar.
+  app.put('/api/settings/user_timezone', requireBrowserAuth, async (req, res) => {
     try {
       const { timezone } = req.body || {};
       if (timezone != null && !isValidTimeZone(timezone)) {
