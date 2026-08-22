@@ -309,7 +309,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   />
                   {rateData.commission > 0 && (
                     <Chip
-                      label={`Comisión: ${rateData.commission.toFixed(2)} ${fromCur}`}
+                      label={`Comisión débito: ${rateData.commission.toFixed(2)} ${fromCur}`}
                       color="warning"
                       size="small"
                     />
