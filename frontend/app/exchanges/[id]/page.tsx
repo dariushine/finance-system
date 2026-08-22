@@ -120,6 +120,8 @@ export default function ExchangeDetailPage() {
       try {
         const credit = await getTransaction(data.creditTransactionId);
         txs.push(credit);
+        // Los fees hijas del crédito (comisión de crédito) también deben mostrarse.
+        if (credit.children?.length) txs.push(...credit.children);
       } catch { /* el crédito podría no resolverse; se omite */ }
       setTransactions(txs);
     } catch (e: any) {
