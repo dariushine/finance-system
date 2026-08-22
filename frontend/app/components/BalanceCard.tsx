@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, Typography, Box, CircularProgress, Chip, useMediaQuery, useTheme } from '@mui/material';
+import { Card, CardContent, Typography, Box, CircularProgress, Chip, useMediaQuery, useTheme, Switch, FormControlLabel } from '@mui/material';
 import { AttachMoney, TrendingUp, ErrorOutline } from '@mui/icons-material';
 import { financeApi, Stats } from '../services/financeApi';
 import BalanceReveal from './BalanceReveal';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
 import { useOnDataChanged } from '../lib/dataEvents';
+import { useRatePreference } from '../lib/hooks/useRatePreference';
 
 interface DailyRate { date: string; bcv: number; paralelo: number }
 
@@ -22,12 +23,13 @@ export default function BalanceCard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [ratePref, setRatePref] = useRatePreference();
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const [statsData] = await Promise.all([
-        financeApi.getStats(true, userTimeZone),
+        financeApi.getStats(true, userTimeZone, ratePref),
       ]);
       setStats(statsData);
       setLastUpdated(new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }));
@@ -45,7 +47,7 @@ export default function BalanceCard() {
     // Refresh every 60 seconds
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [ratePref]);
 
   // Recargar cuando se crea/edita/borra algo (FAB u otra acción).
   useOnDataChanged(fetchData, []);
@@ -109,18 +111,55 @@ export default function BalanceCard() {
           </Box>
         </Box>
 
-        {/* Chips de tasas (solo móvil, donde no hay panel superior) */}
-        {isMobile && (
+        {/* Selector de tasa: chips tappables en móvil, switch en desktop. */}
+        {isMobile ? (
           <Box display="flex" gap={1} flexWrap="wrap" mt={2}>
             {rate ? (
               <>
-                <Chip size="small" label={`BCV: ${rate.bcv.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
-                <Chip size="small" label={`Paralelo: ${rate.paralelo.toFixed(2)}`} sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 600 }} />
+                <Chip
+                  size="small"
+                  label={`BCV: ${rate.bcv.toFixed(2)}`}
+                  onClick={() => setRatePref('bcv')}
+                  sx={{
+                    bgcolor: ratePref === 'bcv' ? '#fff' : 'rgba(255,255,255,0.2)',
+                    color: ratePref === 'bcv' ? 'primary.main' : 'white',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                />
+                <Chip
+                  size="small"
+                  label={`Paralelo: ${rate.paralelo.toFixed(2)}`}
+                  onClick={() => setRatePref('paralelo')}
+                  sx={{
+                    bgcolor: ratePref === 'paralelo' ? '#fff' : 'rgba(255,255,255,0.2)',
+                    color: ratePref === 'paralelo' ? 'primary.main' : 'white',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                />
               </>
             ) : (
               <Chip size="small" label="Tasas —" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
             )}
           </Box>
+        ) : (
+          <FormControlLabel
+            control={
+              <Switch
+                checked={ratePref === 'paralelo'}
+                onChange={(e) => setRatePref(e.target.checked ? 'paralelo' : 'bcv')}
+                size="small"
+                sx={{ color: 'white' }}
+              />
+            }
+            label="Paralelo"
+            sx={{
+              mt: 2,
+              color: 'white',
+              '& .MuiFormControlLabel-label': { fontSize: '0.875rem' },
+            }}
+          />
         )}
       </CardContent>
     </Card>

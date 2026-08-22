@@ -45,6 +45,8 @@ import { API_URL } from '../lib/api';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
 import { useOnDataChanged } from '../lib/dataEvents';
+import { useRatePreference } from '../lib/hooks/useRatePreference';
+import { usePersistedState } from '../lib/hooks/usePersistedState';
 
 // Simularemos gráficos con componentes MUI por ahora
 // En producción, usaríamos Recharts o Chart.js
@@ -224,8 +226,13 @@ export default function ReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeRange, setTimeRange] = useState('6m');
-  const [rateType, setRateType] = useState<'bcv' | 'paralelo'>('bcv');
+  const [timeRange, setTimeRange] = usePersistedState<string>(
+    'finanzas.reportes.rango',
+    '6m',
+    (v) => v,
+    (raw) => raw,
+  );
+  const [rateType, setRateType] = useRatePreference();
 
   // Handlers ESTABLES: cada uno solo re-renderiza la tarjeta que se abre/cierra.
   const handleMonthlyToggle = useCallback((index: number) => {
