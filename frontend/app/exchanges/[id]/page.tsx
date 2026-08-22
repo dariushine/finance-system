@@ -95,7 +95,7 @@ export default function ExchangeDetailPage() {
   const [saving, setSaving] = useState(false);
 
   // Form editar
-  const [editForm, setEditForm] = useState({ fromAmount: 0, toAmount: 0, fee: 0, description: '', date: '', time: '' });
+  const [editForm, setEditForm] = useState({ fromAmount: 0, toAmount: 0, fee: 0, creditFee: 0, description: '', date: '', time: '' });
 
   // Feedback
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
@@ -141,6 +141,7 @@ export default function ExchangeDetailPage() {
       fromAmount: exchange.fromAmount,
       toAmount: exchange.toAmount,
       fee: exchange.fee ? exchange.fee : 0,
+      creditFee: exchange.creditFee ? exchange.creditFee : 0,
       description: exchange.description || '',
       date: exchange.date || todayISODate(),
       time: exchange.time ? exchange.time.slice(0, 5) : nowTimeInZone(userTimeZone),
@@ -164,6 +165,9 @@ export default function ExchangeDetailPage() {
       const fee = editForm.fee;
       if (!Number.isFinite(fee) || fee < 0) throw new Error('La comisión no puede ser negativa');
       payload.fee = fee;
+      const creditFee = editForm.creditFee;
+      if (!Number.isFinite(creditFee) || creditFee < 0) throw new Error('La comisión de crédito no puede ser negativa');
+      payload.creditFee = creditFee;
       if (editForm.date) payload.date = editForm.date;
       payload.time = editForm.time;
       const res = await updateExchange(exchange.id, payload, userTimeZone);
@@ -311,7 +315,15 @@ export default function ExchangeDetailPage() {
                 {hasFee && (
                   <Chip
                     icon={<ReceiptLong />}
-                    label={`Fee ${formatCurrency(exchange.fee!, fromCurrency)}`}
+                    label={`Fee débito ${formatCurrency(exchange.fee!, fromCurrency)}`}
+                    color="warning"
+                    variant="outlined"
+                  />
+                )}
+                {(exchange.creditFee ?? 0) > 0 && (
+                  <Chip
+                    icon={<ReceiptLong />}
+                    label={`Fee crédito ${formatCurrency(exchange.creditFee!, toCurrency)}`}
                     color="warning"
                     variant="outlined"
                   />
@@ -342,8 +354,9 @@ export default function ExchangeDetailPage() {
               <Row label="Monto enviado" value={`-${formatCurrency(exchange.fromAmount, fromCurrency)}`} color="error.main" />
               <Row label="Monto recibido" value={`+${formatCurrency(exchange.toAmount, toCurrency)}`} color="success.main" />
               <Row label="Tasa" value={`1 = ${exchange.rate.toFixed(4)}`} bold />
-              {hasFee && (
-                <Row label="Comisión (fee)" value={formatCurrency(exchange.fee!, fromCurrency)} />
+              <Row label="Comisión débito (fee)" value={hasFee ? formatCurrency(exchange.fee!, fromCurrency) : '—'} />
+              {(exchange.creditFee ?? 0) > 0 && (
+                <Row label="Comisión crédito (fee)" value={formatCurrency(exchange.creditFee!, toCurrency)} />
               )}
               {exchange.date && (
                 <Box display="flex" justifyContent="space-between" gap={2}>
@@ -422,6 +435,13 @@ export default function ExchangeDetailPage() {
               onValueChange={(n) => setEditForm({ ...editForm, fee: n })}
               fullWidth
               helperText="Pon 0 para eliminar la comisión existente"
+            />
+            <MoneyField
+              label={`Comisión crédito (fee) (${toCurrency})`}
+              value={editForm.creditFee}
+              onValueChange={(n) => setEditForm({ ...editForm, creditFee: n })}
+              fullWidth
+              helperText="Pon 0 para eliminar la comisión de crédito existente"
             />
             <TextField
               label="Fecha"

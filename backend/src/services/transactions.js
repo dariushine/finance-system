@@ -276,8 +276,9 @@ function dtKey(isoA, isoB) {
   return String(isoA || '') < String(isoB || '');
 }
 
-// Recalcula transactions.fee del padre y exchanges.fee (si el padre es débito de
-// un exchange). SOLO UPDATEs; debe llamarse DENTRO de un withTransaction.
+// Recalcula transactions.fee del padre, exchanges.fee (si el padre es débito de
+// un exchange) y exchanges.credit_fee (si el padre es crédito de un exchange).
+// SOLO UPDATEs; debe llamarse DENTRO de un withTransaction.
 async function syncParentFeeSql(parentId) {
   await runDb(
     `UPDATE transactions SET fee = COALESCE((
@@ -288,6 +289,7 @@ async function syncParentFeeSql(parentId) {
      WHERE id = ?`,
     [parentId]
   );
+  // Comisión del lado DÉBITO: hijos de la transacción débito → exchanges.fee.
   await runDb(
     `UPDATE exchanges SET fee = COALESCE((
        SELECT SUM(t.amount) FROM transactions t
@@ -295,6 +297,16 @@ async function syncParentFeeSql(parentId) {
        WHERE t.parent_transaction_id = exchanges.debit_transaction_id AND c.name = 'fee' AND t.deleted = 0
      ), 0)
      WHERE debit_transaction_id = ?`,
+    [parentId]
+  );
+  // Comisión del lado CRÉDITO: hijos de la transacción crédito → exchanges.credit_fee.
+  await runDb(
+    `UPDATE exchanges SET credit_fee = COALESCE((
+       SELECT SUM(t.amount) FROM transactions t
+       JOIN categories c ON c.id = t.category_id
+       WHERE t.parent_transaction_id = exchanges.credit_transaction_id AND c.name = 'fee' AND t.deleted = 0
+     ), 0)
+     WHERE credit_transaction_id = ?`,
     [parentId]
   );
 }

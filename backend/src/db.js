@@ -160,6 +160,7 @@ db.serialize(() => {
     to_amount INTEGER NOT NULL,
     rate INTEGER NOT NULL,
     fee INTEGER DEFAULT 0,
+    credit_fee INTEGER DEFAULT 0,
     description TEXT,
     deleted INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -168,6 +169,15 @@ db.serialize(() => {
     FOREIGN KEY (from_wallet_id) REFERENCES wallets(id),
     FOREIGN KEY (to_wallet_id) REFERENCES wallets(id)
   )`);
+
+  // Migración: columna credit_fee (comisión del crédito) para DBs previas.
+  db.all(`PRAGMA table_info(exchanges)`, (err, cols) => {
+    if (err) return;
+    const names = (cols || []).map((c) => c.name);
+    if (!names.includes('credit_fee')) {
+      db.run(`ALTER TABLE exchanges ADD COLUMN credit_fee INTEGER DEFAULT 0`);
+    }
+  });
 
   // Tasas diarias
   db.run(`CREATE TABLE IF NOT EXISTS daily_rates (
@@ -286,6 +296,13 @@ function ensureExchangesFeeSync() {
       SELECT SUM(t.amount) FROM transactions t
       JOIN categories c ON c.id = t.category_id
       WHERE t.parent_transaction_id = exchanges.debit_transaction_id AND c.name = 'fee'
+    ), 0)
+  `);
+  db.run(`
+    UPDATE exchanges SET credit_fee = COALESCE((
+      SELECT SUM(t.amount) FROM transactions t
+      JOIN categories c ON c.id = t.category_id
+      WHERE t.parent_transaction_id = exchanges.credit_transaction_id AND c.name = 'fee'
     ), 0)
   `);
 }

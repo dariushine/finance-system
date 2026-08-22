@@ -34,20 +34,23 @@ function getExchangeTransactionRow(id) {
   );
 }
 
-// Crea una transacción fee (hija del débito) con el instante UTC del exchange.
-async function createFeeForExchange(debit, amount, datetimeUtc, description, tz) {
+// Crea una transacción fee (hija de parentTx) con el instante UTC del exchange.
+// Se usa tanto para la comisión del débito (hija del débito) como para la del
+// crédito (hija del crédito). parentTx puede ser el débito o el crédito.
+async function createFeeForExchange(parentTx, amount, datetimeUtc, description, tz) {
   const category = await getDb("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1");
-  const fc = category ? category.id : debit.categoryId;
+  const fc = category ? category.id : parentTx.categoryId;
   await runDb(
     `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
      VALUES (?, ?, 'expense', ?, ?, ?, 0, ?)`,
-    [debit.walletId, fc, amount, `Comisión: ${description || 'Exchange'}`, datetimeUtc, debit.id]
+    [parentTx.walletId, fc.id, amount, `Comisión: ${description || 'Exchange'}`, datetimeUtc, parentTx.id]
   );
 }
 
 // Elimina virtualmente todas las transacciones de un exchange (débito, crédito y fees)
 // y devuelve el efecto neto por billetera para reajustar balances.
-async function softDeleteExchangeTransactions(debit, credit) {  const txIds = [debit.id, credit.id];
+async function softDeleteExchangeTransactions(debit, credit) {
+  const txIds = [debit.id, credit.id];
   // Todos los fees (hijos del débito y del crédito, no borrados) también se borran.
   const fees = await allDb(
     `SELECT id, wallet_id AS walletId, type, amount, parent_transaction_id AS parentId
