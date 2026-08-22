@@ -339,6 +339,75 @@ export async function createAssociatedTransaction(
 
 export { deleteTransaction };
 
+// ===== Sesiones y API tokens (gestión de acceso) =====
+
+export interface SessionInfo {
+  jti: string;
+  deviceName: string;
+  userAgent: string;
+  ip: string | null;
+  createdAt: number;
+  expiresAt: number;
+  lastUsedAt: number | null;
+  current: boolean;
+}
+
+export interface ApiToken {
+  id: number;
+  name: string;
+  expiresAt: number | null;
+  createdAt: number;
+  lastUsedAt: number | null;
+  isActive: boolean;
+}
+
+export async function getSessions(): Promise<SessionInfo[]> {
+  const response = await apiFetch(`${API_URL}/auth/sessions`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'No se pudieron cargar las sesiones');
+  }
+  const json = await response.json();
+  return json.sessions || [];
+}
+
+export async function revokeSession(jti: string): Promise<void> {
+  const response = await apiFetch(`${API_URL}/auth/sessions/${encodeURIComponent(jti)}`, { method: 'DELETE' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'No se pudo revocar la sesión');
+  }
+}
+
+export async function getApiTokens(): Promise<ApiToken[]> {
+  const response = await apiFetch(`${API_URL}/auth/tokens`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'No se pudieron cargar los tokens');
+  }
+  const json = await response.json();
+  return json.tokens || [];
+}
+
+export async function createApiToken(name: string, expiresInSec: number | null): Promise<{ id: number; name: string; token: string; expiresAt: number | null }> {
+  const response = await apiFetch(`${API_URL}/auth/tokens`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, expires_in: expiresInSec }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudo crear el token');
+  return body;
+}
+
+export async function deleteApiToken(id: number): Promise<void> {
+  const response = await apiFetch(`${API_URL}/auth/tokens/${id}`, { method: 'DELETE' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'No se pudo revocar el token');
+  }
+}
+
 // Obtener detalle de un exchange (GET /api/exchanges/:id)
 export async function getExchange(id: number | string, tz?: string): Promise<ExchangeDetail> {
   const qs = tz ? `?tz=${encodeURIComponent(tz)}` : '';

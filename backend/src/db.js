@@ -222,6 +222,32 @@ db.serialize(() => {
   // Default razonable: usuario en Caracas.
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('user_timezone', 'America/Caracas')`);
 
+  // ============ REFRESH TOKENS (sesiones) ============
+  // La tabla la crea createTokenStore en auth.js; aquí solo aseguramos las
+  // columnas de identificación de sesión para DBs creadas antes de este feature.
+  db.all(`PRAGMA table_info(refresh_tokens)`, (err, cols) => {
+    if (err) return;
+    const names = (cols || []).map((c) => c.name);
+    if (!names.includes('user_agent')) db.run(`ALTER TABLE refresh_tokens ADD COLUMN user_agent TEXT`);
+    if (!names.includes('ip')) db.run(`ALTER TABLE refresh_tokens ADD COLUMN ip TEXT`);
+    if (!names.includes('device_name')) db.run(`ALTER TABLE refresh_tokens ADD COLUMN device_name TEXT`);
+    if (!names.includes('last_used_at')) db.run(`ALTER TABLE refresh_tokens ADD COLUMN last_used_at INTEGER`);
+  });
+
+  // ============ API TOKENS (acceso programático) ============
+  // Tokens de larga duración (o sin expiración) para operar la API fuera de un
+  // navegador (scripts, skills, etc.). Se guardan HASHED (SHA-256); el valor
+  // plano solo se muestra una vez al crearlo.
+  db.run(`CREATE TABLE IF NOT EXISTS api_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at INTEGER,
+    created_at INTEGER NOT NULL,
+    last_used_at INTEGER,
+    is_active INTEGER DEFAULT 1
+  )`);
+
   // Categorías de sistema (siempre presentes)
   const systemCategories = [
     ['fee', 'expense', '#e67e22'],

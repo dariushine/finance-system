@@ -38,6 +38,7 @@ import {
   MoreHoriz as MoreHorizIcon,
   Schedule as ScheduleIcon,
   Settings as SettingsIcon,
+  Security as SecurityIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
@@ -58,6 +59,8 @@ const moreItems = [
   { label: 'Reportes', icon: <ReportIcon />, path: '/reports' },
   { label: 'Categorías', icon: <CategoryIcon />, path: '/categories' },
   { label: 'Tasas', icon: <RatesIcon />, path: '/rates' },
+  // Seguridad y acceso: sesiones activas y tokens de API.
+  { label: 'Sesiones', icon: <SecurityIcon />, path: '/sessions' },
   // Opciones siempre al final del menú "Más" (sidebar desktop + drawer móvil).
   // NO se agrega al bottom nav móvil (ya está lleno).
   { label: 'Opciones', icon: <SettingsIcon />, path: '/settings' },
