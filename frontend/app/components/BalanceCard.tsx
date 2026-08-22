@@ -9,6 +9,7 @@ import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
 import { useOnDataChanged } from '../lib/dataEvents';
 import { useRatePreference } from '../lib/hooks/useRatePreference';
+import { isSessionDead } from '../lib/auth';
 
 interface DailyRate { date: string; bcv: number; paralelo: number }
 
@@ -51,9 +52,18 @@ export default function BalanceCard() {
   };
 
   // Carga inicial (con spinner) + refresh periódico (sin spinner).
+  // Si la sesión muere (401 + refresh fallido), el intervalo se limpia para no
+  // seguir haciendo polling en bucle hacia una sesión ya revocada.
   useEffect(() => {
+    if (isSessionDead()) return;
     loadStats(true);
-    const interval = setInterval(() => loadStats(false), 60000);
+    const interval = setInterval(() => {
+      if (isSessionDead()) {
+        clearInterval(interval);
+        return;
+      }
+      loadStats(false);
+    }, 60000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
