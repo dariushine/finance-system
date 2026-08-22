@@ -18,7 +18,7 @@ import {
   TablePagination,
   Button,
   Alert,
-  CircularProgress,
+  Skeleton,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -275,14 +275,6 @@ export default function ExchangesPage() {
     downloadCSV(`exchanges_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
   };
 
-  if (loading && !exchanges.length) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   return (
     <Box>
       {/* Header */}
@@ -335,7 +327,22 @@ export default function ExchangesPage() {
             </Typography>
           </Box>
 
-          {isMobile ? (
+          {loading ? (
+            <Box>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Box key={i} display="flex" alignItems="center" justifyContent="space-between" py={1.5}>
+                  <Box display="flex" alignItems="center" gap={2} sx={{ minWidth: 0 }}>
+                    <Skeleton variant="circular" width={36} height={36} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Skeleton variant="text" width={160} />
+                      <Skeleton variant="text" width={90} />
+                    </Box>
+                  </Box>
+                  <Skeleton variant="text" width={70} />
+                </Box>
+              ))}
+            </Box>
+          ) : isMobile ? (
             // MOBILE: acordeón por exchange (o estado vacío amigable si no hay registros)
             exchanges.length === 0 ? (
               <EmptyState

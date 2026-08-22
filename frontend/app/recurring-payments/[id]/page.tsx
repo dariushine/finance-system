@@ -10,7 +10,7 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
+  Skeleton,
   Collapse,
   Dialog,
   DialogActions,
@@ -186,7 +186,13 @@ export default function RecurringPaymentDetailPage() {
   };
 
   if (loading) {
-    return <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px"><CircularProgress /></Box>;
+    return (
+      <Box>
+        <Skeleton variant="text" width={160} height={28} sx={{ mb: 3 }} />
+        <Skeleton variant="rounded" height={160} sx={{ mb: 2 }} />
+        <Skeleton variant="rounded" height={120} />
+      </Box>
+    );
   }
   if (error || !payment) {
     return (

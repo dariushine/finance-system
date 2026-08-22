@@ -10,7 +10,7 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
+  Skeleton,
   Dialog,
   DialogActions,
   DialogContent,
@@ -204,8 +204,10 @@ export default function ExchangeDetailPage() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
+      <Box>
+        <Skeleton variant="text" width={160} height={28} sx={{ mb: 3 }} />
+        <Skeleton variant="rounded" height={180} sx={{ mb: 2 }} />
+        <Skeleton variant="rounded" height={140} />
       </Box>
     );
   }

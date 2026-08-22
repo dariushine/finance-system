@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Card, CardContent, Grid, Typography, Box, Avatar, CircularProgress, Alert,
-  CardActionArea, Chip, Pagination
+  Card, CardContent, Grid, Typography, Box, Avatar, Alert,
+  CardActionArea, Chip, Pagination, Skeleton
 } from '@mui/material';
 import { AccountBalance, AttachMoney, CreditCard, Savings, ShowChart, ChevronRight } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
@@ -69,9 +69,28 @@ export default function WalletList() {
   if (loading) {
     return (
       <Card>
-        <CardContent sx={{ textAlign: 'center', py: 4 }}>
-          <CircularProgress />
-          <Typography variant="body2" sx={{ mt: 2 }}>Cargando billeteras...</Typography>
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Skeleton variant="text" width={160} />
+            <Skeleton variant="text" width={80} />
+          </Box>
+          <Grid container spacing={2}>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Grid item xs={12} sm={6} md={4} key={i}>
+                <Card variant="outlined" sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Box display="flex" gap={2} alignItems="center">
+                      <Skeleton variant="circular" width={40} height={40} />
+                      <Box sx={{ width: '100%' }}>
+                        <Skeleton variant="text" width="60%" />
+                        <Skeleton variant="text" width="40%" />
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
         </CardContent>
       </Card>
     );

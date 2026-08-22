@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Card, CardContent, Typography, Box, CircularProgress, Chip, useMediaQuery, useTheme, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Card, CardContent, Typography, Box, Chip, useMediaQuery, useTheme, ToggleButton, ToggleButtonGroup, Skeleton } from '@mui/material';
 import { AttachMoney, TrendingUp, ErrorOutline } from '@mui/icons-material';
 import { financeApi, Stats } from '../services/financeApi';
 import BalanceReveal from './BalanceReveal';
@@ -88,9 +88,17 @@ export default function BalanceCard() {
 
   if (loading) {
     return (
-      <Card sx={{ bgcolor: 'primary.main', color: 'white', textAlign: 'center', py: 4 }}>
-        <CircularProgress color="inherit" />
-        <Typography variant="body2" sx={{ mt: 2 }}>Cargando datos...</Typography>
+      <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Box sx={{ width: '60%' }}>
+              <Skeleton variant="text" width="40%" sx={{ bgcolor: 'rgba(255,255,255,0.25)' }} />
+              <Skeleton variant="text" width="75%" height={48} sx={{ bgcolor: 'rgba(255,255,255,0.25)' }} />
+              <Skeleton variant="text" width="45%" sx={{ bgcolor: 'rgba(255,255,255,0.25)' }} />
+            </Box>
+            <Skeleton variant="circular" width={48} height={48} sx={{ bgcolor: 'rgba(255,255,255,0.25)' }} />
+          </Box>
+        </CardContent>
       </Card>
     );
   }

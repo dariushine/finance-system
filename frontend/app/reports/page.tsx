@@ -13,7 +13,7 @@ import {
   FormControl,
   InputLabel,
   Alert,
-  CircularProgress,
+  Skeleton,
   Chip,
   Table,
   TableBody,
@@ -318,30 +318,6 @@ export default function ReportsPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error}
-      </Alert>
-    );
-  }
-
-  if (!data) {
-    return (
-      <Alert severity="info" sx={{ mt: 2 }}>
-        No hay datos disponibles para generar reportes
-      </Alert>
-    );
-  }
-
   return (
     <Box>
       {/* Header */}
@@ -388,6 +364,21 @@ export default function ReportsPage() {
         </Box>
       </Box>
 
+      {error && <Alert severity="error" sx={{ mt: 2, mb: 3 }}>{error}</Alert>}
+
+      {loading ? (
+        <Box>
+          <Box display="flex" gap={2} sx={{ mb: 3 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} variant="rounded" height={110} sx={{ flex: 1 }} />
+            ))}
+          </Box>
+          <Skeleton variant="rounded" height={220} />
+        </Box>
+      ) : !data ? (
+        <Alert severity="info" sx={{ mt: 2 }}>No hay datos disponibles para generar reportes</Alert>
+      ) : (
+      <>
       {/* Summary Stats */}
       <Grid container spacing={3} mb={4} alignItems="stretch">
         <Grid item xs={12} sm={6} md={3}>
@@ -788,6 +779,8 @@ export default function ReportsPage() {
           </Card>
         </Grid>
       </Grid>
+      </>
+      )}
     </Box>
   );
 }
