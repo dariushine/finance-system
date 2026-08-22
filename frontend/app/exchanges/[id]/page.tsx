@@ -354,9 +354,9 @@ export default function ExchangeDetailPage() {
               <Row label="Monto enviado" value={`-${formatCurrency(exchange.fromAmount, fromCurrency)}`} color="error.main" />
               <Row label="Monto recibido" value={`+${formatCurrency(exchange.toAmount, toCurrency)}`} color="success.main" />
               <Row label="Tasa" value={`1 = ${exchange.rate.toFixed(4)}`} bold />
-              <Row label="Comisión débito (fee)" value={hasFee ? formatCurrency(exchange.fee!, fromCurrency) : '—'} />
+              <Row label="Comisión débito" value={hasFee ? formatCurrency(exchange.fee!, fromCurrency) : '—'} />
               {(exchange.creditFee ?? 0) > 0 && (
-                <Row label="Comisión crédito (fee)" value={formatCurrency(exchange.creditFee!, toCurrency)} />
+                <Row label="Comisión crédito" value={formatCurrency(exchange.creditFee!, toCurrency)} />
               )}
               {exchange.date && (
                 <Box display="flex" justifyContent="space-between" gap={2}>
@@ -417,31 +417,33 @@ export default function ExchangeDetailPage() {
               Edita montos, comisión, descripción y fecha. Las billeteras se mantienen.
             </Typography>
             <MoneyField
-              label={`Monto enviado (${fromCurrency})`}
+              label="Monto enviado"
               value={editForm.fromAmount}
               onValueChange={(n) => setEditForm({ ...editForm, fromAmount: n })}
+              currency={fromCurrency}
               fullWidth
               autoFocus
             />
             <MoneyField
-              label={`Monto recibido (${toCurrency})`}
+              label="Monto recibido"
               value={editForm.toAmount}
               onValueChange={(n) => setEditForm({ ...editForm, toAmount: n })}
+              currency={toCurrency}
               fullWidth
             />
             <MoneyField
-              label={`Comisión (fee) (${fromCurrency})`}
+              label="Comisión débito"
               value={editForm.fee}
               onValueChange={(n) => setEditForm({ ...editForm, fee: n })}
+              currency={fromCurrency}
               fullWidth
-              helperText="Pon 0 para eliminar la comisión existente"
             />
             <MoneyField
-              label={`Comisión crédito (fee) (${toCurrency})`}
+              label="Comisión crédito"
               value={editForm.creditFee}
               onValueChange={(n) => setEditForm({ ...editForm, creditFee: n })}
+              currency={toCurrency}
               fullWidth
-              helperText="Pon 0 para eliminar la comisión de crédito existente"
             />
             <TextField
               label="Fecha"

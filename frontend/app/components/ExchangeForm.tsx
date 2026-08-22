@@ -258,22 +258,20 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   />
 
                   <MoneyField
-                    label="Comisión (fee)"
+                    label="Comisión débito"
                     value={fee}
                     onValueChange={setFee}
                     disabled={loading}
-                    helperText="Comisión pagada en la moneda de origen"
                     currency={fromWalletId ? (
                       wallets.find(w => w.id === fromWalletId)?.currency || ''
                     ) : undefined}
                   />
 
                   <MoneyField
-                    label="Comisión crédito (fee)"
+                    label="Comisión crédito"
                     value={creditFee}
                     onValueChange={setCreditFee}
                     disabled={loading}
-                    helperText="Comisión pagada en la moneda de destino"
                     currency={toWalletId ? (
                       wallets.find(w => w.id === toWalletId)?.currency || ''
                     ) : undefined}

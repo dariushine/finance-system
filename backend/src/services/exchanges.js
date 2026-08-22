@@ -39,11 +39,12 @@ function getExchangeTransactionRow(id) {
 // crédito (hija del crédito). parentTx puede ser el débito o el crédito.
 async function createFeeForExchange(parentTx, amount, datetimeUtc, description, tz) {
   const category = await getDb("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1");
+  // fc ya es el ID (entero) de la categoría fee, o el categoryId del padre si no existe.
   const fc = category ? category.id : parentTx.categoryId;
   await runDb(
     `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
      VALUES (?, ?, 'expense', ?, ?, ?, 0, ?)`,
-    [parentTx.walletId, fc.id, amount, `Comisión: ${description || 'Exchange'}`, datetimeUtc, parentTx.id]
+    [parentTx.walletId, fc, amount, `Comisión: ${description || 'Exchange'}`, datetimeUtc, parentTx.id]
   );
 }
 
