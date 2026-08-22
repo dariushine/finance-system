@@ -18,6 +18,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
   const [fromAmount, setFromAmount] = useState(0);
   const [toAmount, setToAmount] = useState(0);
   const [fee, setFee] = useState(0);
+  const [creditFee, setCreditFee] = useState(0);
   const [description, setDescription] = useState('');
   // Fecha del exchange (débito/crédito): por defecto hoy EN LA ZONA DEL USUARIO.
   const todayISODate = todayInZone(userTimeZone);
@@ -45,10 +46,14 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
     const rate = to / from;
     // Comisión en la moneda de origen
     const commission = fee;
+    // Comisión en la moneda de destino
+    const creditCommission = creditFee;
     // Total que se descuenta de la billetera origen (monto + comisión)
     const fromTotal = from + commission;
+    // Total que se descuenta de la billetera destino (monto recibido - comisión)
+    const creditTotal = to - creditCommission;
     
-    return { rate, netRate: rate, commission, fromTotal };
+    return { rate, netRate: rate, commission, creditCommission, fromTotal, creditTotal };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,6 +83,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
         fromAmount: fromAmount,
         toAmount: toAmount,
         fee: rateData.commission || undefined,
+        creditFee: rateData.creditCommission || undefined,
         description: description || undefined,
         date: date || undefined,
         time,
@@ -112,6 +118,7 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
       setFromAmount(0);
       setToAmount(0);
       setFee(0);
+      setCreditFee(0);
       setDescription('');
       setDate(todayInZone(userTimeZone));
       setTime(nowTimeInZone(userTimeZone));
@@ -251,13 +258,22 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   />
 
                   <MoneyField
-                    label="Comisión (fee)"
+                    label="Comisión débito"
                     value={fee}
                     onValueChange={setFee}
                     disabled={loading}
-                    helperText="Comisión pagada en la moneda de origen"
                     currency={fromWalletId ? (
                       wallets.find(w => w.id === fromWalletId)?.currency || ''
+                    ) : undefined}
+                  />
+
+                  <MoneyField
+                    label="Comisión crédito"
+                    value={creditFee}
+                    onValueChange={setCreditFee}
+                    disabled={loading}
+                    currency={toWalletId ? (
+                      wallets.find(w => w.id === toWalletId)?.currency || ''
                     ) : undefined}
                   />
                 </Box>
@@ -293,7 +309,14 @@ export default function ExchangeForm({ onSuccess }: ExchangeFormProps) {
                   />
                   {rateData.commission > 0 && (
                     <Chip
-                      label={`Comisión: ${rateData.commission.toFixed(2)} ${fromCur}`}
+                      label={`Comisión débito: ${rateData.commission.toFixed(2)} ${fromCur}`}
+                      color="warning"
+                      size="small"
+                    />
+                  )}
+                  {rateData.creditCommission > 0 && (
+                    <Chip
+                      label={`Comisión crédito: ${rateData.creditCommission.toFixed(2)} ${toCur}`}
                       color="warning"
                       size="small"
                     />

@@ -49,6 +49,7 @@ interface Exchange {
   toAmount: number;
   rate: number;
   fee?: number;
+  creditFee?: number;
   description?: string;
   createdAt: string;
   /** Fecha seleccionada por el usuario (YYYY-MM-DD) */
@@ -132,9 +133,19 @@ const ExchangeAccordionItem = memo(function ExchangeAccordionItem({
           </Box>
           {exchange.fee != null && exchange.fee > 0 && (
             <Box display="flex" justifyContent="space-between">
-              <Typography variant="body2" color="text.secondary">Fee</Typography>
+              <Typography variant="body2" color="text.secondary">Fee débito</Typography>
               <Chip
                 label={`${exchange.fee.toFixed(2)} ${exchange.fromCurrency || ''}`}
+                size="small"
+                color="warning"
+              />
+            </Box>
+          )}
+          {exchange.creditFee != null && exchange.creditFee > 0 && (
+            <Box display="flex" justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">Fee crédito</Typography>
+              <Chip
+                label={`${exchange.creditFee.toFixed(2)} ${exchange.toCurrency || ''}`}
                 size="small"
                 color="warning"
               />
@@ -249,7 +260,7 @@ export default function ExchangesPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Desde', 'Hacia', 'Debito', 'Credito', 'Tasa', 'Fee', 'Fecha', 'Hora'];
+    const headers = ['Desde', 'Hacia', 'Debito', 'Credito', 'Tasa', 'Fee', 'Fee Crédito', 'Fecha', 'Hora'];
     const rows = exchanges.map(ex => [
       ex.fromWalletName || `Billetera ${ex.fromWalletId}`,
       ex.toWalletName || `Billetera ${ex.toWalletId}`,
@@ -257,6 +268,7 @@ export default function ExchangesPage() {
       ex.toAmount,   // crédito (entra a la wallet destino)
       ex.rate.toFixed(4),
       ex.fee && ex.fee > 0 ? ex.fee.toFixed(2) : '',
+      ex.creditFee && ex.creditFee > 0 ? ex.creditFee.toFixed(2) : '',
       formatCSVDate(ex.date || (ex.createdAt ? ex.createdAt.slice(0, 10) : '')),
       ex.time ? ex.time.slice(0, 5) : '',
     ]);
@@ -354,7 +366,8 @@ export default function ExchangesPage() {
                   <TableCell>From → To</TableCell>
                   <TableCell>From Amount</TableCell>
                   <TableCell>To Amount</TableCell>
-                  <TableCell>Fee</TableCell>
+                  <TableCell>Fee débito</TableCell>
+                  <TableCell>Fee crédito</TableCell>
                   <TableCell>Descripción</TableCell>
                 </TableRow>
               </TableHead>
@@ -398,6 +411,20 @@ export default function ExchangesPage() {
                         {exchange.fee && exchange.fee > 0 ? (
                           <Chip
                             label={`${(exchange.fee || 0).toFixed(2)} ${exchange.fromCurrency || ''}`}
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            -
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {exchange.creditFee && exchange.creditFee > 0 ? (
+                          <Chip
+                            label={`${(exchange.creditFee || 0).toFixed(2)} ${exchange.toCurrency || ''}`}
                             size="small"
                             color="warning"
                             variant="outlined"

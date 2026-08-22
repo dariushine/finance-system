@@ -95,7 +95,7 @@ export default function ExchangeDetailPage() {
   const [saving, setSaving] = useState(false);
 
   // Form editar
-  const [editForm, setEditForm] = useState({ fromAmount: 0, toAmount: 0, fee: 0, description: '', date: '', time: '' });
+  const [editForm, setEditForm] = useState({ fromAmount: 0, toAmount: 0, fee: 0, creditFee: 0, description: '', date: '', time: '' });
 
   // Feedback
   const [snackbar, setSnackbar] = useState<{ open: boolean; severity: 'success' | 'error' | 'warning'; message: string }>({
@@ -120,6 +120,8 @@ export default function ExchangeDetailPage() {
       try {
         const credit = await getTransaction(data.creditTransactionId);
         txs.push(credit);
+        // Los fees hijas del crédito (comisión de crédito) también deben mostrarse.
+        if (credit.children?.length) txs.push(...credit.children);
       } catch { /* el crédito podría no resolverse; se omite */ }
       setTransactions(txs);
     } catch (e: any) {
@@ -141,6 +143,7 @@ export default function ExchangeDetailPage() {
       fromAmount: exchange.fromAmount,
       toAmount: exchange.toAmount,
       fee: exchange.fee ? exchange.fee : 0,
+      creditFee: exchange.creditFee ? exchange.creditFee : 0,
       description: exchange.description || '',
       date: exchange.date || todayISODate(),
       time: exchange.time ? exchange.time.slice(0, 5) : nowTimeInZone(userTimeZone),
@@ -164,6 +167,9 @@ export default function ExchangeDetailPage() {
       const fee = editForm.fee;
       if (!Number.isFinite(fee) || fee < 0) throw new Error('La comisión no puede ser negativa');
       payload.fee = fee;
+      const creditFee = editForm.creditFee;
+      if (!Number.isFinite(creditFee) || creditFee < 0) throw new Error('La comisión de crédito no puede ser negativa');
+      payload.creditFee = creditFee;
       if (editForm.date) payload.date = editForm.date;
       payload.time = editForm.time;
       const res = await updateExchange(exchange.id, payload, userTimeZone);
@@ -311,7 +317,15 @@ export default function ExchangeDetailPage() {
                 {hasFee && (
                   <Chip
                     icon={<ReceiptLong />}
-                    label={`Fee ${formatCurrency(exchange.fee!, fromCurrency)}`}
+                    label={`Fee débito ${formatCurrency(exchange.fee!, fromCurrency)}`}
+                    color="warning"
+                    variant="outlined"
+                  />
+                )}
+                {(exchange.creditFee ?? 0) > 0 && (
+                  <Chip
+                    icon={<ReceiptLong />}
+                    label={`Fee crédito ${formatCurrency(exchange.creditFee!, toCurrency)}`}
                     color="warning"
                     variant="outlined"
                   />
@@ -342,8 +356,9 @@ export default function ExchangeDetailPage() {
               <Row label="Monto enviado" value={`-${formatCurrency(exchange.fromAmount, fromCurrency)}`} color="error.main" />
               <Row label="Monto recibido" value={`+${formatCurrency(exchange.toAmount, toCurrency)}`} color="success.main" />
               <Row label="Tasa" value={`1 = ${exchange.rate.toFixed(4)}`} bold />
-              {hasFee && (
-                <Row label="Comisión (fee)" value={formatCurrency(exchange.fee!, fromCurrency)} />
+              <Row label="Comisión débito" value={hasFee ? formatCurrency(exchange.fee!, fromCurrency) : '—'} />
+              {(exchange.creditFee ?? 0) > 0 && (
+                <Row label="Comisión crédito" value={formatCurrency(exchange.creditFee!, toCurrency)} />
               )}
               {exchange.date && (
                 <Box display="flex" justifyContent="space-between" gap={2}>
@@ -404,24 +419,33 @@ export default function ExchangeDetailPage() {
               Edita montos, comisión, descripción y fecha. Las billeteras se mantienen.
             </Typography>
             <MoneyField
-              label={`Monto enviado (${fromCurrency})`}
+              label="Monto enviado"
               value={editForm.fromAmount}
               onValueChange={(n) => setEditForm({ ...editForm, fromAmount: n })}
+              currency={fromCurrency}
               fullWidth
               autoFocus
             />
             <MoneyField
-              label={`Monto recibido (${toCurrency})`}
+              label="Monto recibido"
               value={editForm.toAmount}
               onValueChange={(n) => setEditForm({ ...editForm, toAmount: n })}
+              currency={toCurrency}
               fullWidth
             />
             <MoneyField
-              label={`Comisión (fee) (${fromCurrency})`}
+              label="Comisión débito"
               value={editForm.fee}
               onValueChange={(n) => setEditForm({ ...editForm, fee: n })}
+              currency={fromCurrency}
               fullWidth
-              helperText="Pon 0 para eliminar la comisión existente"
+            />
+            <MoneyField
+              label="Comisión crédito"
+              value={editForm.creditFee}
+              onValueChange={(n) => setEditForm({ ...editForm, creditFee: n })}
+              currency={toCurrency}
+              fullWidth
             />
             <TextField
               label="Fecha"

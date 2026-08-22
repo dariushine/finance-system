@@ -160,6 +160,7 @@ db.serialize(() => {
     to_amount INTEGER NOT NULL,
     rate INTEGER NOT NULL,
     fee INTEGER DEFAULT 0,
+    credit_fee INTEGER DEFAULT 0,
     description TEXT,
     deleted INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -168,6 +169,19 @@ db.serialize(() => {
     FOREIGN KEY (from_wallet_id) REFERENCES wallets(id),
     FOREIGN KEY (to_wallet_id) REFERENCES wallets(id)
   )`);
+
+  // Migración: columna credit_fee (comisión del crédito) para DBs previas.
+  // No hace falta backfill: como las transacciones de exchange no admiten
+  // comisiones/operaciones asociadas y antes no existía credit_fee, no puede
+  // haber datos viejos con comisión de crédito (siempre sería 0). El valor se
+  // mantiene en runtime vía syncParentFeeSql al crear/editar exchanges.
+  db.all(`PRAGMA table_info(exchanges)`, (err, cols) => {
+    if (err) return;
+    const names = (cols || []).map((c) => c.name);
+    if (!names.includes('credit_fee')) {
+      db.run(`ALTER TABLE exchanges ADD COLUMN credit_fee INTEGER DEFAULT 0`);
+    }
+  });
 
   // Tasas diarias
   db.run(`CREATE TABLE IF NOT EXISTS daily_rates (

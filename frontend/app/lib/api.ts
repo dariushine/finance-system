@@ -112,6 +112,7 @@ export interface ExchangeDetail {
   toAmount: number;
   rate: number;
   fee?: number | null;
+  creditFee?: number | null;
   description?: string;
   createdAt?: string;
   debitTransactionId: number;
