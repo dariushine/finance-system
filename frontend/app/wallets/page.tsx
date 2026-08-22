@@ -162,31 +162,6 @@ export default function WalletsPage() {
 
   const gotoWallet = (id: number) => router.push(`/wallets/${id}`);
 
-  if (loading && wallets.length === 0) {
-    return (
-      <Box>
-        <Skeleton variant="text" width={180} height={36} sx={{ mb: 3 }} />
-        <Grid container spacing={2}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Grid item xs={12} sm={6} md={4} key={i}>
-              <Card variant="outlined" sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box display="flex" gap={2} alignItems="center">
-                    <Skeleton variant="circular" width={40} height={40} />
-                    <Box sx={{ width: '100%' }}>
-                      <Skeleton variant="text" width="60%" />
-                      <Skeleton variant="text" width="40%" />
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
-    );
-  }
-
   return (
     <Box>
       {/* Header */}
@@ -219,7 +194,26 @@ export default function WalletsPage() {
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-      <Grid container spacing={3}>
+      {loading ? (
+        <Grid container spacing={3}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Grid item xs={12} sm={6} lg={4} key={i}>
+              <Card variant="outlined" sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box display="flex" gap={2} alignItems="center">
+                    <Skeleton variant="circular" width={40} height={40} />
+                    <Box sx={{ width: '100%' }}>
+                      <Skeleton variant="text" width="60%" />
+                      <Skeleton variant="text" width="40%" />
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      ) : (
+        <Grid container spacing={3}>
         {wallets.map((wallet) => (
           <Grid item xs={12} sm={6} lg={4} key={wallet.id}>
             <Card sx={{ height: '100%' }}>
@@ -268,7 +262,8 @@ export default function WalletsPage() {
             </Card>
           </Grid>
         ))}
-      </Grid>
+        </Grid>
+      )}
 
       {!wallets.length && !error && <Alert severity="info" sx={{ mt: 2 }}>No hay billeteras configuradas. Crea una para comenzar.</Alert>}
 
