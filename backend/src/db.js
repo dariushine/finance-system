@@ -171,11 +171,19 @@ db.serialize(() => {
   )`);
 
   // Migración: columna credit_fee (comisión del crédito) para DBs previas.
+  // Importante: el backfill de credit_fee (syncCreditFeeSync) se lanza DENTRO del
+  // callback, DESPUÉS de que ALTER TABLE haya terminado. Ejecutarlo en el arranque
+  // inmediato (como hace ensureExchangesFeeSync con fee) generaría una carrera:
+  // el UPDATE correría antes de que exista la columna → SQLITE_ERROR no such column.
   db.all(`PRAGMA table_info(exchanges)`, (err, cols) => {
     if (err) return;
     const names = (cols || []).map((c) => c.name);
     if (!names.includes('credit_fee')) {
-      db.run(`ALTER TABLE exchanges ADD COLUMN credit_fee INTEGER DEFAULT 0`);
+      db.run(`ALTER TABLE exchanges ADD COLUMN credit_fee INTEGER DEFAULT 0`, () => {
+        syncCreditFeeSync();
+      });
+    } else {
+      syncCreditFeeSync();
     }
   });
 
@@ -298,6 +306,19 @@ function ensureExchangesFeeSync() {
       WHERE t.parent_transaction_id = exchanges.debit_transaction_id AND c.name = 'fee'
     ), 0)
   `);
+}
+
+// Sincroniza exchanges.credit_fee desde las transacciones hijas del CRÉDITO.
+// Corre solo DESPUÉS de que la columna credit_fee exista (ver migración arriba),
+// para no disparar la carrera que rompía el arranque en DBs previas.
+function syncCreditFeeSync() {
+  if (typeof db.exec === 'function') {
+    db.exec(`
+      DROP TRIGGER IF EXISTS trg_sync_credit_fee_after_insert;
+      DROP TRIGGER IF EXISTS trg_sync_credit_fee_after_delete;
+      DROP TRIGGER IF EXISTS trg_sync_credit_fee_after_update;
+    `);
+  }
   db.run(`
     UPDATE exchanges SET credit_fee = COALESCE((
       SELECT SUM(t.amount) FROM transactions t
@@ -309,4 +330,4 @@ function ensureExchangesFeeSync() {
 
 ensureExchangesFeeSync();
 
-module.exports = { db, dbPath, seedDemoData, ensureExchangesFeeSync };
+module.exports = { db, dbPath, seedDemoData, ensureExchangesFeeSync, syncCreditFeeSync };
