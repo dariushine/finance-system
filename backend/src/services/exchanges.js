@@ -37,14 +37,16 @@ function getExchangeTransactionRow(id) {
 // Crea una transacción fee (hija de parentTx) con el instante UTC del exchange.
 // Se usa tanto para la comisión del débito (hija del débito) como para la del
 // crédito (hija del crédito). parentTx puede ser el débito o el crédito.
-async function createFeeForExchange(parentTx, amount, datetimeUtc, description, tz) {
+async function createFeeForExchange(parentTx, amount, datetimeUtc, description, tz, side) {
   const category = await getDb("SELECT id FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1");
   // fc ya es el ID (entero) de la categoría fee, o el categoryId del padre si no existe.
   const fc = category ? category.id : parentTx.categoryId;
+  // side: 'débito' o 'crédito' (opcional) → "Comisión débito: ..." / "Comisión crédito: ...".
+  const sideLabel = side ? ` ${side}` : '';
   await runDb(
     `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
      VALUES (?, ?, 'expense', ?, ?, ?, 0, ?)`,
-    [parentTx.walletId, fc, amount, `Comisión: ${description || 'Exchange'}`, datetimeUtc, parentTx.id]
+    [parentTx.walletId, fc, amount, `Comisión${sideLabel}: ${description || 'Exchange'}`, datetimeUtc, parentTx.id]
   );
 }
 

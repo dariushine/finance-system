@@ -89,11 +89,16 @@ function createTransaction(walletId, categoryName, type, amount, description, fe
                   db.get('SELECT * FROM categories WHERE name = ? AND type = ? AND isActive = 1',
                     ['fee', 'expense'], (fErr, feeCategory) => {
                       const fc = (!fErr && feeCategory) ? feeCategory : category;
+                      // Etiqueta el lado cuando la transacción padre es parte de un exchange
+                      // (categoría exchange_out/exchange_in): "Comisión débito" / "Comisión crédito".
+                      const side = categoryName === 'exchange_out' ? 'débito' :
+                                   categoryName === 'exchange_in' ? 'crédito' : null;
+                      const sideLabel = side ? ` ${side}` : '';
                       db.run(
                         `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                         [walletId, fc.id, 'expense', commission,
-                         `Comisión: ${description || category.name}`,
+                         `Comisión${sideLabel}: ${description || category.name}`,
                          datetimeUtc, 0, transactionId],
                         function(err2) {
                           if (err2) {

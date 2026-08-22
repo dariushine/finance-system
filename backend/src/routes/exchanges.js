@@ -386,7 +386,7 @@ module.exports = function registerExchangeRoutes(app) {
         let debitFeesAlive = [...prevDebitFees];
         if (feeChanged) {
           if (newFeeInt > 0 && prevDebitFees.length === 0) {
-            await createFeeForExchange(debit, newFeeInt, newDatetimeUtc, newDescription, tzEff);
+            await createFeeForExchange(debit, newFeeInt, newDatetimeUtc, newDescription, tzEff, 'débito');
             debitFeesAlive = [];
           } else if (newFeeInt === 0) {
             for (const f of prevDebitFees) await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
@@ -402,7 +402,7 @@ module.exports = function registerExchangeRoutes(app) {
         let creditFeesAlive = [...prevCreditFees];
         if (creditFeeChanged) {
           if (newCreditFeeInt > 0 && prevCreditFees.length === 0) {
-            await createFeeForExchange(credit, newCreditFeeInt, newDatetimeUtc, newDescription, tzEff);
+            await createFeeForExchange(credit, newCreditFeeInt, newDatetimeUtc, newDescription, tzEff, 'crédito');
             creditFeesAlive = [];
           } else if (newCreditFeeInt === 0) {
             for (const f of prevCreditFees) await runDb('UPDATE transactions SET deleted = 1 WHERE id = ?', [f.id]);
