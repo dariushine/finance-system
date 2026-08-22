@@ -42,7 +42,11 @@ module.exports = function registerStatsRoutes(app) {
         if (dateFilter) {
           dateFilterStr = ` AND ${dateFilter}`;
         }
-        db.all(`SELECT t.type, t.amount, t.datetime_utc AS datetime_utc, t.datetime_utc AS datetimeUtc, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE t.deleted = 0${dateFilterStr}${walletFilter}`,
+        // Excluir categorías del sistema (exchange_out/exchange_in) de la
+        // contabilidad de gastos/ingresos del dashboard. No son movimientos
+        // reales de gasto/ingreso: se contabilizan por separado en exchangeStats.
+        const systemCatFilter = ` AND c.name NOT IN ('exchange_out','exchange_in')`;
+        db.all(`SELECT t.type, t.amount, t.datetime_utc AS datetime_utc, t.datetime_utc AS datetimeUtc, c.name AS category, c.type AS categoryType, w.currency, w.name AS walletName FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN wallets w ON w.id = t.wallet_id WHERE t.deleted = 0${systemCatFilter}${dateFilterStr}${walletFilter}`,
           params, (err, r) => err ? reject(err) : resolve(r));
       }).then((rows) => projectInstants(rows || [], tz));
 
