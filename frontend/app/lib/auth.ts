@@ -10,6 +10,10 @@
 // para mostrar/ocultar la UI; la seguridad real vive en las cookies httpOnly.
 
 const SESSION_FLAG = 'finance_session';
+// Marca “sesión muerta” para que el resto de la app (p. ej. los setInterval de
+// polling) sepa que hubo un 401 + refresh fallido y se detenga antes de volver
+// a disparar peticiones al API en loop.
+const SESSION_DEAD_FLAG = 'finance_session_dead';
 
 export async function login(username: string, password: string, remember: boolean): Promise<void> {
   const res = await fetch('/api/auth/login', {
@@ -23,6 +27,7 @@ export async function login(username: string, password: string, remember: boolea
     throw new Error(body?.error || 'No se pudo iniciar sesión');
   }
   localStorage.setItem(SESSION_FLAG, '1');
+  clearSessionDead();
 }
 
 export async function logout(): Promise<void> {
@@ -32,6 +37,7 @@ export async function logout(): Promise<void> {
     /* aunque falle, se limpia el estado local */
   }
   localStorage.removeItem(SESSION_FLAG);
+  clearSessionDead();
   window.location.href = '/';
 }
 
@@ -51,6 +57,23 @@ export async function refreshSession(): Promise<boolean> {
 export function hasLocalSession(): boolean {
   if (typeof window === 'undefined') return false;
   return localStorage.getItem(SESSION_FLAG) === '1';
+}
+
+// true cuando el refresh ya falló y decidimos que la sesión murió. Útil para
+// que los intervalos de polling se limpien en vez de seguir reintentando.
+export function isSessionDead(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(SESSION_DEAD_FLAG) === '1';
+}
+
+export function markSessionDead(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SESSION_DEAD_FLAG, '1');
+}
+
+export function clearSessionDead(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(SESSION_DEAD_FLAG);
 }
 
 export function markSession(): void {
