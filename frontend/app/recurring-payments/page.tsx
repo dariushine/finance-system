@@ -9,7 +9,7 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
+  Skeleton,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -101,8 +101,20 @@ export default function RecurringPaymentsPage() {
       )}
 
       {loading ? (
-        <Box display="flex" justifyContent="center" py={6}>
-          <CircularProgress />
+        <Box>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} variant="outlined" sx={{ mb: 1.5 }}>
+              <CardContent sx={{ py: 1.5 }}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Skeleton variant="circular" width={40} height={40} />
+                  <Box sx={{ width: '100%' }}>
+                    <Skeleton variant="text" width="55%" />
+                    <Skeleton variant="text" width="40%" />
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          ))}
         </Box>
       ) : payments.length === 0 ? (
         <Card variant="outlined">

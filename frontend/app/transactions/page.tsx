@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress,
+  Alert, Box, Button, Card, CardContent, Chip, Skeleton,
   Table, TableBody, TableCell, TableContainer, TableHead,
   TablePagination, TableRow, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
@@ -187,7 +187,19 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent>
-          {loading ? <Box display="flex" justifyContent="center" py={5}><CircularProgress /></Box> : !transactions.length ? (
+          {loading ? (
+            <Box py={2}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Box key={i} display="flex" alignItems="center" justifyContent="space-between" py={1.5}>
+                  <Box display="flex" alignItems="center" gap={2} sx={{ minWidth: 0 }}>
+                    <Skeleton variant="circular" width={36} height={36} />
+                    <Skeleton variant="text" width={160} />
+                  </Box>
+                  <Skeleton variant="text" width={70} />
+                </Box>
+              ))}
+            </Box>
+          ) : !transactions.length ? (
             <EmptyState
               icon={<ReceiptIcon sx={{ fontSize: 32, color: 'text.secondary' }} />}
               title="No hay transacciones todavía"

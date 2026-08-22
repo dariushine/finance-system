@@ -20,7 +20,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
-  CircularProgress,
+  Skeleton,
   IconButton,
   Chip,
   Snackbar,
@@ -243,8 +243,16 @@ export default function RatesPage() {
       <Card>
         <CardContent>
           {loading ? (
-            <Box display="flex" justifyContent="center" py={6}>
-              <CircularProgress />
+            <Box>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Box key={i} display="flex" alignItems="center" justifyContent="space-between" py={1.5}>
+                  <Skeleton variant="text" width={110} />
+                  <Box display="flex" gap={1}>
+                    <Skeleton variant="text" width={70} />
+                    <Skeleton variant="text" width={70} />
+                  </Box>
+                </Box>
+              ))}
             </Box>
           ) : rates.length === 0 ? (
             <Box textAlign="center" py={6}>

@@ -18,7 +18,7 @@ import {
   TablePagination,
   Button,
   Alert,
-  CircularProgress,
+  Skeleton,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -277,8 +277,18 @@ export default function ExchangesPage() {
 
   if (loading && !exchanges.length) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
+      <Box>
+        <Skeleton variant="text" width={200} height={36} sx={{ mb: 3 }} />
+        <Skeleton variant="rounded" height={120} sx={{ mb: 2 }} />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Box key={i} display="flex" alignItems="center" justifyContent="space-between" py={1.5}>
+            <Box display="flex" alignItems="center" gap={2} sx={{ minWidth: 0 }}>
+              <Skeleton variant="circular" width={36} height={36} />
+              <Skeleton variant="text" width={160} />
+            </Box>
+            <Skeleton variant="text" width={70} />
+          </Box>
+        ))}
       </Box>
     );
   }

@@ -8,7 +8,7 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
+  Skeleton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -243,8 +243,13 @@ export default function CategoriesPage() {
       )}
 
       {loading ? (
-        <Box display="flex" justifyContent="center" py={6}>
-          <CircularProgress />
+        <Box>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Box key={i} display="flex" alignItems="center" gap={2} py={1}>
+              <Skeleton variant="circular" width={32} height={32} />
+              <Skeleton variant="text" width={180} />
+            </Box>
+          ))}
         </Box>
       ) : (
         <>

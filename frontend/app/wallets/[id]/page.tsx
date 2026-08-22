@@ -9,7 +9,7 @@ import {
   Button,
   Card,
   CardContent,
-  CircularProgress,
+  Skeleton,
   Chip,
   Dialog,
   DialogTitle,
@@ -324,8 +324,10 @@ export default function WalletDetailPage() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
+      <Box>
+        <Skeleton variant="text" width={160} height={28} sx={{ mb: 3 }} />
+        <Skeleton variant="rounded" height={150} sx={{ mb: 2 }} />
+        <Skeleton variant="rounded" height={220} />
       </Box>
     );
   }
@@ -513,7 +515,17 @@ export default function WalletDetailPage() {
           </Box>
 
           {reportLoading ? (
-            <Box display="flex" justifyContent="center" py={4}><CircularProgress /></Box>
+            <Box>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Box key={i} display="flex" alignItems="center" justifyContent="space-between" py={1.5}>
+                  <Box display="flex" alignItems="center" gap={2} sx={{ minWidth: 0 }}>
+                    <Skeleton variant="circular" width={32} height={32} />
+                    <Skeleton variant="text" width={140} />
+                  </Box>
+                  <Skeleton variant="text" width={70} />
+                </Box>
+              ))}
+            </Box>
           ) : !report || report.transactions.length === 0 ? (
             <Alert severity="info">No hay transacciones en este período.</Alert>
           ) : (

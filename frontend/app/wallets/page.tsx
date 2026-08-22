@@ -10,6 +10,7 @@ import {
   CardContent,
   CardActionArea,
   CircularProgress,
+  Skeleton,
   Chip,
   Dialog,
   DialogTitle,
@@ -163,8 +164,25 @@ export default function WalletsPage() {
 
   if (loading && wallets.length === 0) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
+      <Box>
+        <Skeleton variant="text" width={180} height={36} sx={{ mb: 3 }} />
+        <Grid container spacing={2}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Grid item xs={12} sm={6} md={4} key={i}>
+              <Card variant="outlined" sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box display="flex" gap={2} alignItems="center">
+                    <Skeleton variant="circular" width={40} height={40} />
+                    <Box sx={{ width: '100%' }}>
+                      <Skeleton variant="text" width="60%" />
+                      <Skeleton variant="text" width="40%" />
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
       </Box>
     );
   }

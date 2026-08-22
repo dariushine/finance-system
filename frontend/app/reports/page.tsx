@@ -13,7 +13,7 @@ import {
   FormControl,
   InputLabel,
   Alert,
-  CircularProgress,
+  Skeleton,
   Chip,
   Table,
   TableBody,
@@ -320,8 +320,15 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
+      <Box>
+        <Skeleton variant="text" width={180} height={36} sx={{ mb: 2 }} />
+        <Skeleton variant="text" width={260} sx={{ mb: 3 }} />
+        <Box display="flex" gap={2} sx={{ mb: 3 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} variant="rounded" height={110} sx={{ flex: 1 }} />
+          ))}
+        </Box>
+        <Skeleton variant="rounded" height={220} />
       </Box>
     );
   }
