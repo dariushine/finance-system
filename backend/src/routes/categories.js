@@ -37,7 +37,7 @@ module.exports = function registerCategoriesRoutes(app) {
         }
         const txRows = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT t.amount, c.name AS category, w.currency
+            `SELECT t.amount, t.datetime_utc AS datetime_utc, c.name AS category, w.currency
              FROM transactions t
              LEFT JOIN categories c ON c.id = t.category_id
              LEFT JOIN wallets w ON w.id = t.wallet_id
