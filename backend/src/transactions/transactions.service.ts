@@ -6,7 +6,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { CategoriesService } from "../categories/categories.service";
 import { toInt, toNum } from "../common/money";
-import { isValidTimeZone, toUtcInstant } from "../common/timezone";
+import { isValidTimeZone, toUtcInstant, utcToWallClock } from "../common/timezone";
 
 @Injectable()
 export class TransactionsService {
@@ -127,11 +127,11 @@ export class TransactionsService {
         feeTransactionId,
         wallet: wallet.name,
         currency: wallet.currency,
-        amount: amountInt,
+        amount: toNum(amountInt),
         type,
-        newBalance,
+        newBalance: toNum(newBalance),
         category: category!.name,
-        fee: commission,
+        fee: toNum(commission),
         datetime_utc: datetimeUtc,
       };
     });
@@ -198,7 +198,6 @@ export class TransactionsService {
   }
 
   private projected(row: any, tz: string) {
-    const { utcToWallClock } = require("../common/timezone");
     const wall = utcToWallClock(new Date(row.datetimeUtc), tz);
     return {
       id: row.id,

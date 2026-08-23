@@ -1,12 +1,16 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { INestApplication, ValidationPipe } from "@nestjs/common";
-import * as request from "supertest";
+import { execSync } from "child_process";
+import request from "supertest";
+import { PrismaClient } from "@prisma/client";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { AppModule } from "../src/app.module";
 import cookieParser from "cookie-parser";
 
 // Tests e2e: usa una BD sqlite temporal para no tocar datos de dev.
 // Definir DATABASE_URL antes de importar AppModule (Prisma la lee al construir).
-const TEST_DB = `file:./test-finance-${Date.now()}.db`;
+const TEST_DB_NAME = `test-finance-${Date.now()}.db`;
+const TEST_DB = `file:./${TEST_DB_NAME}`;
 process.env.DATABASE_URL = TEST_DB;
 process.env.AUTH_USERNAME = "";
 process.env.AUTH_PASSWORD = "";
@@ -15,6 +19,12 @@ describe("Finance API (e2e)", () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    // Crear tablas de la BD temporal antes de levantar la app.
+    execSync("npx prisma db push --accept-data-loss", {
+      env: { ...process.env, DATABASE_URL: TEST_DB },
+      stdio: "ignore",
+    });
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -26,28 +36,29 @@ describe("Finance API (e2e)", () => {
     await app.init();
 
     // Plantear una wallet de prueba
-    const { PrismaClient } = await import("@prisma/client");
-    const { PrismaBetterSqlite3 } = await import("@prisma/adapter-better-sqlite3");
     const adapter = new PrismaBetterSqlite3({ url: TEST_DB });
     const prisma = new PrismaClient({ adapter });
-    await prisma.wallet.createMany({
-      data: [
-        { name: "TestA", type: "bank", currency: "USD", balance: 10000000 },
-        { name: "TestB", type: "bank", currency: "USD", balance: 5000000 },
-      ],
-      skipDuplicates: true,
-    });
+    // Tablas (migración de prueba); create puede fallar si ya existe → ignora.
+    for (const w of [
+      { name: "TestA", type: "bank", currency: "USD", balance: 10000000 },
+      { name: "TestB", type: "bank", currency: "USD", balance: 5000000 },
+    ]) {
+      await prisma.wallet.create({ data: w }).catch(() => {});
+    }
     // Categoría de sistema + una normal
-    await prisma.category.upsert({
-      where: { name: "fee" },
-      update: {},
-      create: { name: "fee", type: "expense" },
-    });
-    await prisma.category.upsert({
-      where: { name: "food" },
-      update: {},
-      create: { name: "food", type: "expense" },
-    });
+    await prisma.category
+      .create({ data: { name: "fee", type: "expense" } })
+      .catch(() => {});
+    await prisma.category
+      .create({ data: { name: "food", type: "expense" } })
+      .catch(() => {});
+    // Categorías de sistema para exchanges
+    await prisma.category
+      .create({ data: { name: "exchange_out", type: "expense" } })
+      .catch(() => {});
+    await prisma.category
+      .create({ data: { name: "exchange_in", type: "income" } })
+      .catch(() => {});
     await prisma.$disconnect();
   });
 
