@@ -115,3 +115,5 @@ describe('Conversión VES -> USD', () => {
     expect(rawVesAmountToUsd(10000, 0)).toBe(0);
   });
 });
+
+export {};
