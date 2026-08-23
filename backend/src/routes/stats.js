@@ -179,10 +179,45 @@ module.exports = function registerStatsRoutes(app) {
         totalFee: parseFloat(totalFeeUSD.toFixed(2)),
       };
 
+      // --- Patrimonio real (USD + VES / tasa seleccionada) ---
+      // El Balance Total del dashboard ya NO se calcula como ingresos - egresos
+      // (flujo), sino como la suma de saldos actuales de billeteras convertidos a
+      // USD con la tasa elegida (BCV o paralelo): USD directo + VES/tasa.
+      // Respeta excludeFromTotal (misma lógica que la query de arriba).
+      const total_balance = await (async () => {
+        const wParams = [];
+        let wFilter = '';
+        if (excludeIds.length) {
+          wFilter = ` AND id NOT IN (${excludeIds.map(() => '?').join(',')})`;
+          wParams.push(...excludeIds);
+        }
+        const walletRows = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT currency, balance FROM wallets WHERE isActive = 1 AND hideInDashboard = 0${wFilter}`,
+            wParams,
+            (err, r) => err ? reject(err) : resolve(r || []),
+          );
+        });
+        let usdRaw = 0;
+        let vesRaw = 0;
+        for (const w of walletRows) {
+          if (w.currency === 'USD') usdRaw += Number(w.balance) || 0;
+          else if (w.currency === 'VES') vesRaw += Number(w.balance) || 0;
+        }
+        const usd = toNum(usdRaw) || 0; // saldo USD en unidades
+        if (vesRaw === 0) return parseFloat(usd.toFixed(2));
+        const today = new Date().toISOString().slice(0, 10);
+        const rate = await getOrFetchRateForDate(today, rateType);
+        if (!rate) return parseFloat(usd.toFixed(2));
+        const vesUsd = rawVesAmountToUsd(vesRaw, rate); // balance ×100 / rate ×10000 → USD
+        return parseFloat((usd + vesUsd).toFixed(2));
+      })();
+
       res.json({
         total_income: parseFloat(total_income.toFixed(2)),
         total_expense: parseFloat(total_expense.toFixed(2)),
         net_balance: parseFloat((total_income - total_expense).toFixed(2)),
+        total_balance,
         transaction_count,
         rateType,
         summary: {

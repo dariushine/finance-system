@@ -244,3 +244,4 @@ function createMockTransaction(category: string, type: string, amount: number, w
     date: new Date().toISOString().split('T')[0]
   };
 }
+export {};

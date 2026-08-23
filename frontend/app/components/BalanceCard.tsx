@@ -124,7 +124,7 @@ export default function BalanceCard() {
     );
   }
 
-  const totalBalance = stats?.net_balance || 0;
+  const totalBalance = stats?.total_balance ?? stats?.net_balance ?? 0;
 
   return (
     <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>

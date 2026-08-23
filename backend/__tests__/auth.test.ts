@@ -127,3 +127,5 @@ describe('Autenticación', () => {
     expect(refreshAfter.status).toBe(401);
   });
 });
+
+export {};

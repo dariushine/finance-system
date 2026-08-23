@@ -37,6 +37,7 @@ export interface Stats {
   total_income: number;
   total_expense: number;
   net_balance: number;
+  total_balance: number;
   transaction_count: number;
 }
 

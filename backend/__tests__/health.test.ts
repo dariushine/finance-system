@@ -71,3 +71,4 @@ describe('Health Check Endpoint', () => {
 // 1. Asegurarse que no hay servidor corriendo en el puerto 3003
 // 2. Ejecutar: npm test -- __tests__/health.test.ts
 // 3. Verificar que todas las pruebas pasan
+export {};

@@ -174,3 +174,4 @@ function validateCategoryType(category: any, transactionType: string) {
     );
   }
 }
+export {};
