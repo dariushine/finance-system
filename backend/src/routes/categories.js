@@ -53,13 +53,16 @@ module.exports = function registerCategoriesRoutes(app) {
           let usdValue;
           if (row.currency === 'VES') {
             const date = row.date;
-            const rateKey = date || 'today';
-            if (!rateCache.has(rateKey)) {
-              const rr = await getOrFetchRateForDate(date, rateType);
-              rateCache.set(rateKey, rr);
+            if (date) {
+              if (!rateCache.has(date)) {
+                const rr = await getOrFetchRateForDate(date, rateType);
+                rateCache.set(date, rr);
+              }
+              const rate = rateCache.get(date);
+              usdValue = rate ? rawVesAmountToUsd(row.amount, rate) : 0;
+            } else {
+              usdValue = 0;
             }
-            const rate = rateCache.get(rateKey);
-            usdValue = rate ? rawVesAmountToUsd(row.amount, rate) : 0;
           } else {
             usdValue = toNum(row.amount) || 0;
           }
