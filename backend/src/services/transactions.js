@@ -27,126 +27,83 @@ function resolveDatetimeUtc(date, time, tz) {
 // IMPORTANTE (dinero): amount y fee entran en ENTEROS de CENTAVOS (×100),
 // porque este service opera en enteros internamente (ver money.js). Las rutas
 // que llamen aquí ya deben haber convertido de unidades con toInt().
+//
+// createTransaction = createTransactionCore envuelto en withTransaction().
+// Con esto la escritura es ATÓMICA (padre + fee en un solo COMMIT) y además
+// queda serializada por la cola de escrituras (writeTxQueue), eliminando el
+// choque de dos BEGIN sobre la única conexión SQLite que causaba
+// "cannot start a transaction within a transaction".
 function createTransaction(walletId, categoryName, type, amount, description, fee = 0, date, time, tz) {
-  return new Promise((resolve, reject) => {
-    const commission = Number(fee) || 0;
-    const datetimeUtc = resolveDatetimeUtc(date, time, tz);
+  return withTransaction(() =>
+    createTransactionCore(walletId, categoryName, type, amount, description, fee, date, time, tz)
+  );
+}
 
-    db.serialize(() => {
-      db.get('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId], (err, wallet) => {
-        if (err) return reject(err);
-        if (!wallet) return reject(new Error('Wallet no encontrada'));
+// Núcleo de creación sin administración de transacción propia: NO abre
+// BEGIN/COMMIT/ROLLBACK (el caller — un withTransaction — ya abrió el BEGIN).
+// Así puede envolverse junto con otras operaciones en UNA sola transacción
+// atómica (p. ej. el débito + crédito + registro de un exchange completo).
+async function createTransactionCore(walletId, categoryName, type, amount, description, fee = 0, date, time, tz) {
+  const commission = Number(fee) || 0;
+  const datetimeUtc = resolveDatetimeUtc(date, time, tz);
 
-        getOrCreateCategory(categoryName, type).then((category) => {
-            const total = amount + commission;
-            if (type === 'expense' && wallet.balance < total) {
-              // amount/commission/balance ya están en enteros de centavos (×100);
-              // el mensaje se muestra en unidades humanas para el usuario.
-              return reject(new Error(`Fondos insuficientes. Balance actual: ${(wallet.balance / 100)} ${wallet.currency}, necesita ${(total / 100)}`));
-            }
+  const wallet = await getDb('SELECT * FROM wallets WHERE id = ? AND isActive = 1', [walletId]);
+  if (!wallet) throw new Error('Wallet no encontrada');
 
-            const newBalance = type === 'expense'
-              ? wallet.balance - total
-              : wallet.balance + amount - commission;
+  const category = await getOrCreateCategory(categoryName, type);
 
-            db.run('BEGIN TRANSACTION');
+  const total = amount + commission;
+  if (type === 'expense' && wallet.balance < total) {
+    // amount/commission/balance ya están en enteros de centavos (×100);
+    // el mensaje se muestra en unidades humanas para el usuario.
+    throw new Error(`Fondos insuficientes. Balance actual: ${(wallet.balance / 100)} ${wallet.currency}, necesita ${(total / 100)}`);
+  }
 
-            db.run(
-              `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-              [walletId, category.id, type, amount, description || '', datetimeUtc, 0, null],
-              function(err) {
-                if (err) {
-                  db.run('ROLLBACK');
-                  return reject(err);
-                }
-                const transactionId = this.lastID;
+  const newBalance = type === 'expense'
+    ? wallet.balance - total
+    : wallet.balance + amount - commission;
 
-                const finish = (feeTransactionId) => {
-                  db.run('UPDATE wallets SET balance = ? WHERE id = ?', [newBalance, walletId], (upErr) => {
-                    if (upErr) {
-                      db.run('ROLLBACK');
-                      return reject(upErr);
-                    }
-                    db.run('COMMIT', () => {
-                      resolve({
-                        id: transactionId,
-                        feeTransactionId,
-                        wallet: wallet.name,
-                        currency: wallet.currency,
-                        amount,
-                        type,
-                        newBalance,
-                        category: category.name,
-                        fee: commission,
-                        datetime_utc: datetimeUtc,
-                      });
-                    });
-                  });
-                };
+  const ins = await runDb(
+    `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [walletId, category.id, type, amount, description || '', datetimeUtc, 0, null]
+  );
+  const transactionId = ins.lastID;
 
-                if (commission > 0) {
-                  db.get('SELECT * FROM categories WHERE name = ? AND type = ? AND isActive = 1',
-                    ['fee', 'expense'], (fErr, feeCategory) => {
-                      const fc = (!fErr && feeCategory) ? feeCategory : category;
-                      // Etiqueta el lado cuando la transacción padre es parte de un exchange
-                      // (categoría exchange_out/exchange_in): "Comisión débito" / "Comisión crédito".
-                      const side = categoryName === 'exchange_out' ? 'débito' :
-                                   categoryName === 'exchange_in' ? 'crédito' : null;
-                      const sideLabel = side ? ` ${side}` : '';
-                      db.run(
-                        `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [walletId, fc.id, 'expense', commission,
-                         `Comisión${sideLabel}: ${description || category.name}`,
-                         datetimeUtc, 0, transactionId],
-                        function(err2) {
-                          if (err2) {
-                            db.run('ROLLBACK');
-                            return reject(err2);
-                          }
-                          const feeTransactionId = this.lastID;
-                          db.run(
-                            `UPDATE transactions SET fee =
-                               (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
-                                JOIN categories c ON c.id = t.category_id
-                                WHERE t.parent_transaction_id = ? AND c.name = 'fee')
-                              WHERE id = ?`,
-                            [transactionId, transactionId],
-                            (feeUpErr) => {
-                              if (feeUpErr) {
-                                db.run('ROLLBACK');
-                                return reject(feeUpErr);
-                              }
-                              db.run(
-                                `UPDATE exchanges SET fee =
-                                   (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
-                                    JOIN categories c ON c.id = t.category_id
-                                    WHERE t.parent_transaction_id = ? AND c.name = 'fee')
-                                  WHERE debit_transaction_id = ?`,
-                                [transactionId, transactionId],
-                                (exUpErr) => {
-                                  if (exUpErr) {
-                                    db.run('ROLLBACK');
-                                    return reject(exUpErr);
-                                  }
-                                  finish(feeTransactionId);
-                                }
-                              );
-                            }
-                          );
-                        }
-                      );
-                    });
-                } else {
-                  finish(null);
-                }
-              }
-            );
-          }).catch((err) => reject(err));
-      });
-    });
-  });
+  let feeTransactionId = null;
+  if (commission > 0) {
+    const feeCategory = await getDb("SELECT * FROM categories WHERE name = 'fee' AND type = 'expense' AND isActive = 1");
+    const fc = feeCategory ? feeCategory : category;
+    // Etiqueta el lado cuando la transacción padre es parte de un exchange
+    // (categoría exchange_out/exchange_in): "Comisión débito" / "Comisión crédito".
+    const side = categoryName === 'exchange_out' ? 'débito' :
+                 categoryName === 'exchange_in' ? 'crédito' : null;
+    const sideLabel = side ? ` ${side}` : '';
+    const feeIns = await runDb(
+      `INSERT INTO transactions (wallet_id, category_id, type, amount, description, datetime_utc, fee, parent_transaction_id)
+       VALUES (?, ?, 'expense', ?, ?, ?, 0, ?)`,
+      [walletId, fc.id, commission,
+       `Comisión${sideLabel}: ${description || category.name}`,
+       datetimeUtc, transactionId]
+    );
+    feeTransactionId = feeIns.lastID;
+    await syncParentFeeSql(transactionId);
+  }
+
+  await runDb('UPDATE wallets SET balance = ? WHERE id = ?', [newBalance, walletId]);
+
+  return {
+    id: transactionId,
+    feeTransactionId,
+    wallet: wallet.name,
+    currency: wallet.currency,
+    amount,
+    type,
+    newBalance,
+    category: category.name,
+    fee: commission,
+    datetime_utc: datetimeUtc,
+  };
 }
 
 // Helpers de cadena de transacciones
@@ -328,6 +285,7 @@ function balanceEffect(type, amount) {
 
 module.exports = {
   createTransaction,
+  createTransactionCore,
   getParentChain,
   resolveExchangeForTransaction,
   runDb,

@@ -3,7 +3,7 @@
 const { db } = require('../db');
 const {
   getDb, allDb, runDb,
-  createTransaction, syncParentFeeSql, withTransaction,
+  createTransactionCore, syncParentFeeSql, withTransaction,
 } = require('../services/transactions');
 const { isValidTime, normalizeTimeMinute } = require('../services/rates');
 const {
@@ -97,47 +97,48 @@ module.exports = function registerExchangeRoutes(app) {
       // Tasa en escala 4 (×10000): (to/from) en unidades → entero. toRateInt.
       const rate = toRateInt(toUnits / fromUnits);
 
-      const debitTransaction = await createTransaction(
-        fromWalletId, 'exchange_out', 'expense', fromAmountInt,
-        `${desc || 'Exchange'} → ${toWallet.name}`, commission, txDate, txTime, tzEff
-      );
-      const creditTransaction = await createTransaction(
-        toWalletId, 'exchange_in', 'income', toAmountInt,
-        `${desc || 'Exchange'} ← ${fromWallet.name}`, creditCommission, txDate, txTime, tzEff
-      );
+      // Débito + crédito (+ sus comisiones) + el registro del exchange se crean
+      // en UNA sola transacción atómica (withTransaction). Si cualquiera de los
+      // pasos falla, se revierte TODO (incluido el débito): no queda un exchange
+      // a medias ni un débito huérfano. Se usa createTransactionCore (que NO abre
+      // BEGIN propio) para no anidar transacciones de SQLite.
+      const { debitTransaction, creditTransaction, exchangeId } = await withTransaction(async () => {
+        const debit = await createTransactionCore(
+          fromWalletId, 'exchange_out', 'expense', fromAmountInt,
+          `${desc || 'Exchange'} → ${toWallet.name}`, commission, txDate, txTime, tzEff
+        );
+        const credit = await createTransactionCore(
+          toWalletId, 'exchange_in', 'income', toAmountInt,
+          `${desc || 'Exchange'} ← ${fromWallet.name}`, creditCommission, txDate, txTime, tzEff
+        );
+        const ins = await runDb(
+          `INSERT INTO exchanges (debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id,
+           from_amount, to_amount, rate, fee, credit_fee, description)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [debit.id, credit.id, fromWalletId, toWalletId, fromAmountInt, toAmountInt, rate, commission, creditCommission, desc || '']
+        );
+        return { debitTransaction: debit, creditTransaction: credit, exchangeId: ins.lastID };
+      });
 
-      db.run(
-        `INSERT INTO exchanges (debit_transaction_id, credit_transaction_id, from_wallet_id, to_wallet_id,
-         from_amount, to_amount, rate, fee, credit_fee, description)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [debitTransaction.id, creditTransaction.id, fromWalletId, toWalletId, fromAmountInt, toAmountInt, rate, commission, creditCommission, desc || ''],
-        function (err) {
-          if (err) {
-            console.error('Error registrando exchange:', err);
-            return res.status(500).json({ error: 'Error interno del servidor' });
-          }
-          const exchangeId = this.lastID;
-          res.json({
-            success: true,
-            message: 'Exchange registrado exitosamente',
-            exchange: {
-              id: exchangeId,
-              rate: toRateNum(rate),
-              fromWallet: fromWallet.name,
-              toWallet: toWallet.name,
-              fromAmount: toNum(fromAmountInt),
-              toAmount: toNum(toAmountInt),
-              fromCurrency: fromWallet.currency,
-              toCurrency: toWallet.currency,
-              description: description || '',
-            },
-            transactions: {
-              debit: decodeTx({ ...debitTransaction }),
-              credit: decodeTx({ ...creditTransaction }),
-            },
-          });
-        }
-      );
+      res.json({
+        success: true,
+        message: 'Exchange registrado exitosamente',
+        exchange: {
+          id: exchangeId,
+          rate: toRateNum(rate),
+          fromWallet: fromWallet.name,
+          toWallet: toWallet.name,
+          fromAmount: toNum(fromAmountInt),
+          toAmount: toNum(toAmountInt),
+          fromCurrency: fromWallet.currency,
+          toCurrency: toWallet.currency,
+          description: description || '',
+        },
+        transactions: {
+          debit: decodeTx({ ...debitTransaction }),
+          credit: decodeTx({ ...creditTransaction }),
+        },
+      });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }

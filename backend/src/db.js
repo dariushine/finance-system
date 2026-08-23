@@ -21,6 +21,10 @@ const seedDemoData = process.env.SEED_DEMO_DATA === 'true';
 const dbPath = path.join(__dirname, '..', 'data/finance.db');
 const db = new sqlite3.Database(dbPath);
 
+// WAL: lecturas no bloquean escrituras (rendimiento y menos contención en la
+// conexión única). Se define una sola vez al abrir la BD.
+db.exec('PRAGMA journal_mode = WAL;');
+
 // ALMACENAMIENTO DE DINERO (decisión Freddy, 19 ago 2026):
 //   - MONTOS (balance, amount, fee, ...): INTEGER ×100 (centavos). $1.50 → 150.
 //   - TASAS (rate, bcv/paralelo): INTEGER ×10000. 634.95 → 6349500.
