@@ -10,12 +10,14 @@ import {
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
+import { Public } from "./public.decorator";
 import { CreateTokenDto, LoginDto } from "./dto/auth.dto";
 
 @Controller("auth")
 export class AuthController {
   constructor(private service: AuthService) {}
 
+  @Public()
   @Get("status")
   status() {
     return { enabled: this.service.authEnabled };
@@ -29,6 +31,7 @@ export class AuthController {
     };
   }
 
+  @Public()
   @Post("login")
   login(
     @Body() dto: LoginDto,
@@ -42,11 +45,13 @@ export class AuthController {
     );
   }
 
+  @Public()
   @Post("logout")
   logout(@Res({ passthrough: true }) res: Response) {
     return this.service.logout(res);
   }
 
+  @Public()
   @Post("refresh")
   refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.service.refresh(req, res);

@@ -1,4 +1,5 @@
 import { Global, Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { AuthService } from "./auth.service";
@@ -19,7 +20,17 @@ import { JwtAuthGuard } from "./jwt-auth.guard";
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
+  providers: [
+    AuthService,
+    JwtAuthGuard,
+    // Guard global registrado como provider APP_GUARD para que Nest inyecte
+    // correctamente la DI (AuthService, JwtService, ConfigService). El patrón
+    // app.get()+useGlobalGuards() dejaba `this.auth` undefined.
+    {
+      provide: APP_GUARD,
+      useExisting: JwtAuthGuard,
+    },
+  ],
   exports: [AuthService, JwtAuthGuard],
 })
 export class AuthModule {}

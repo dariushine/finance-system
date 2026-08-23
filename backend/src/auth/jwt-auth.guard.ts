@@ -4,19 +4,28 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { AuthService } from "./auth.service";
+import { IS_PUBLIC_KEY } from "./public.decorator";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
-    private jwt: JwtService,
-    private config: ConfigService,
-    private auth: AuthService,
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
+    private readonly auth: AuthService,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Rutas marcadas @Public() se saltan la auth.
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) return true;
     // Si la auth está deshabilitada (dev), se deja pasar todo.
     if (!this.auth.authEnabled) return true;
 

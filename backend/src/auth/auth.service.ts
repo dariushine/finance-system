@@ -43,7 +43,12 @@ export class AuthService {
     const jti = randomUUID();
     const refreshSecret = randomUUID();
     const now = Date.now();
-    const expiresMs = this.config.get<number>("REFRESH_EXPIRES_MS", 2592000000);
+    // Number() explícito: ConfigService devuelve string aunque se tipifique
+    // <number>. Sin esto, now + expiresMs concatenaba strings → expiresAt
+    // gigante e inválido para Prisma (Int).
+    const expiresMs = Number(
+      this.config.get("REFRESH_EXPIRES_MS", 2592000000),
+    );
 
     await this.prisma.refreshToken.create({
       data: {
