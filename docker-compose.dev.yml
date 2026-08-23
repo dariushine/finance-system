@@ -7,19 +7,18 @@ services:
     volumes:
       - ./backend:/app/backend
       # Conservar node_modules del contenedor (instalado para Linux) sobre el bind,
-      # para no usar el del host (sqlite3 es nativo y no portable)
+      # para no usar el del host (better-sqlite3 es nativo y no portable)
       - /app/backend/node_modules
-    # node --watch recarga la API al editar (sin necesidad de nodemon)
-    command: ["node", "--watch", "exchange-server.js"]
-    # Variables de autenticación (heredadas del compose base; aquí se pasan al backend)
+    # tsx watch recarga el TypeScript de NestJS al editar (no requiere build a dist)
+    command: ["npx", "tsx", "watch", "src/main.ts"]
+    # Variables de autenticación del stack nuevo (NestJS + Prisma)
     environment:
       - AUTH_USERNAME=${AUTH_USERNAME:-}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
-      - AUTH_TOKEN_SECRET=***
-      - ACCESS_TOKEN_TTL_MS=${ACCESS_TOKEN_TTL_MS:-300000}
-      - REFRESH_TTL_SHORT_MS=${REFRESH_TTL_SHORT_MS:-3600000}
-      - REFRESH_TTL_LONG_MS=${REFRESH_TTL_LONG_MS:-2592000000}
-      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-false}
+      - JWT_SECRET=***
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-15m}
+      - REFRESH_EXPIRES_MS=${REFRESH_EXPIRES_MS:-2592000000}
+      - DATABASE_URL=file:/app/backend/data/finance.db
 
   frontend:
     # Bind del código fuente + next dev (hot reload real)
@@ -33,10 +32,6 @@ services:
       # next dev con rewrite apuntando al backend por nombre de red
       - NODE_ENV=development
       - API_UPSTREAM=http://backend:3002
-      # Variables de autenticación: el middleware de Next necesita el secreto.
-      - AUTH_USERNAME=${AUTH_USERNAME:-}
-      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
-      - AUTH_TOKEN_SECRET=***
     command: ["npm", "run", "dev"]
     # En dev, el frontend no debe esperar al healthcheck del backend
     depends_on:
