@@ -493,6 +493,8 @@ export interface Category {
   color?: string;
   icon?: string | null;
   isActive?: boolean;
+  /** Monto total (USD) de la categoría en el período/tasa consultados (solo cuando GET /categories se llama con rate/period). */
+  total?: number;
 }
 
 export interface CategoryInput {
@@ -502,10 +504,13 @@ export interface CategoryInput {
   icon?: string;
 }
 
-export async function getCategories(category_type?: 'expense' | 'income', opts?: { includingInactive?: boolean }): Promise<Category[]> {
+export async function getCategories(category_type?: 'expense' | 'income', opts?: { includingInactive?: boolean; rate?: 'bcv' | 'paralelo'; period?: string; tz?: string }): Promise<Category[]> {
   const params = new URLSearchParams();
   if (category_type) params.append('type', category_type);
   if (opts?.includingInactive) params.append('includingInactive', '1');
+  if (opts?.rate) params.append('rate', opts.rate);
+  if (opts?.period) params.append('period', opts.period);
+  if (opts?.tz) params.append('tz', opts.tz);
   const response = await apiFetch(`${API_URL}/categories?${params.toString()}`);
   if (!response.ok) throw new Error('Failed to get categories');
   return response.json();
