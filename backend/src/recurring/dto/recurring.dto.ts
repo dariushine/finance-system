@@ -104,4 +104,30 @@ export class ExecuteRecurringDto {
   @Type(() => Number)
   @IsNumber()
   walletId?: number;
+
+  // Overrides opcionales que el front permite al ejecutar un pago recurrente
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  overrideAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  overrideFee?: number;
+
+  @IsOptional()
+  @IsString()
+  overrideCategoryName?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  overrideWalletId?: number;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }

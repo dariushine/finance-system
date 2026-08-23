@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, Typography, Box, Chip, useMediaQuery, useTheme, ToggleButton, ToggleButtonGroup, Skeleton } from '@mui/material';
 import { AttachMoney, TrendingUp, ErrorOutline } from '@mui/icons-material';
-import { financeApi, Stats } from '../services/financeApi';
+import { getStats, Stats } from '../lib/api';
 import BalanceReveal from './BalanceReveal';
 import { useNumberFormat } from '../lib/NumberFormat';
 import { useTimeZone } from '../lib/timeZone';
@@ -38,7 +38,7 @@ export default function BalanceCard() {
     try {
       if (showSpinner) setLoading(true);
       const [statsData] = await Promise.all([
-        financeApi.getStats(true, userTimeZone, rate),
+        getStats(true, userTimeZone, rate),
       ]);
       setStats(statsData);
       setLastUpdated(new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }));

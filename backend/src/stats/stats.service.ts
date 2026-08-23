@@ -25,12 +25,26 @@ export class StatsService {
 
     const inc = income._sum.amount || 0;
     const exp = expense._sum.amount || 0;
+    const totalIncome = toNum(inc);
+    const totalExpense = toNum(exp);
+    const totalBalance = toNum(wallets._sum.balance || 0);
+    const net = parseFloat((totalIncome - totalExpense).toFixed(2));
+
+    // Contrato original del backend (el frontend lo consume así):
+    // campos snake_case + objeto summary (camelCase).
     return {
-      income: toNum(inc),
-      expense: toNum(exp),
-      net: toNum(inc - exp),
-      transactionCount: count,
-      walletBalance: toNum(wallets._sum.balance || 0),
+      total_income: parseFloat(totalIncome.toFixed(2)),
+      total_expense: parseFloat(totalExpense.toFixed(2)),
+      net_balance: net,
+      total_balance: totalBalance,
+      transaction_count: count,
+      summary: {
+        totalTransactions: count,
+        totalIncome: parseFloat(totalIncome.toFixed(2)),
+        totalExpenses: parseFloat(totalExpense.toFixed(2)),
+        net: net,
+        totalBalance,
+      },
     };
   }
 

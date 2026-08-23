@@ -141,28 +141,51 @@ export class RecurringService {
   // que maneja el fee inline y el balance atómicamente. Evita duplicar lógica.
   async execute(
     id: number,
-    dto: { date: string; time: string; tz?: string; walletId?: number },
+    dto: {
+      date: string;
+      time: string;
+      tz?: string;
+      walletId?: number;
+      overrideAmount?: number;
+      overrideFee?: number;
+      overrideCategoryName?: string;
+      overrideWalletId?: number;
+      description?: string;
+    },
   ) {
     const row = await this.prisma.recurringPayment.findUnique({
       where: { id },
     });
     if (!row) throw new NotFoundException("Pago recurrente no encontrado");
-    const walletId = dto.walletId ?? row.walletId;
+    // Overrides opcionales del front
+    const walletId = dto.overrideWalletId ?? dto.walletId ?? row.walletId;
     if (!walletId)
       throw new BadRequestException("El pago recurrente no tiene billetera asignada");
 
-    const category = await this.prisma.category.findUnique({
+    // Categoría efectiva: la del recurrente salvo que haya override por nombre
+    let category = await this.prisma.category.findUnique({
       where: { id: row.categoryId },
     });
+    if (dto.overrideCategoryName) {
+      const cat = await this.categories.getOrCreateCategory(
+        dto.overrideCategoryName,
+        row.type,
+      );
+      category = cat;
+    }
     if (!category) throw new NotFoundException("Categoría no encontrada");
+
+    const amount = dto.overrideAmount != null ? toNum(dto.overrideAmount) : toNum(row.amount);
+    const fee = dto.overrideFee != null ? toNum(dto.overrideFee) : toNum(row.fee);
+    const description = dto.description?.trim() || row.description || row.name;
 
     const created = await this.transactions.create({
       walletId,
       categoryName: category.name,
       type: row.type as "income" | "expense",
-      amount: toNum(row.amount),
-      description: row.description || row.name,
-      fee: toNum(row.fee),
+      amount,
+      description,
+      fee,
       date: dto.date,
       time: dto.time,
       tz: dto.tz || "America/Caracas",

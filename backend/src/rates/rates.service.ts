@@ -31,12 +31,14 @@ export class RatesService {
       orderBy: { date: "desc" },
       take: 60,
     });
-    return rows.map((r) => ({
+    const data = rows.map((r) => ({
+      id: r.id,
       date: r.date,
       bcv: toRateNum(r.bcv),
       paralelo: toRateNum(r.paralelo),
       source: r.source,
     }));
+    return { data, total: data.length }; // front consume json.data
   }
 
   async upsert(dto: { date: string; bcv: number; paralelo: number; source?: string }) {

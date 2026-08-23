@@ -25,8 +25,10 @@ export class RatesController {
   }
 
   @Get("daily-rates/today")
-  today() {
-    return this.service.effective();
+  async today() {
+    const eff = await this.service.effective();
+    // El front hace const { data } = await res.json() y usa data.bcv/paralelo.
+    return { data: { bcv: eff.vps?.bcv ?? 0, paralelo: eff.vps?.paralelo ?? 0, date: eff.date, source: "dolarapi" } };
   }
 
   @Get("daily-rates")

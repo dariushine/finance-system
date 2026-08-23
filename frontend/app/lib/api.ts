@@ -654,3 +654,30 @@ export async function executeRecurringPayment(
   if (!response.ok) throw new Error(body?.error || 'No se pudo realizar el pago frecuente');
   return body;
 }
+
+// Stats — contrato original del backend (/api/stats).
+export interface Stats {
+  total_income: number;
+  total_expense: number;
+  net_balance: number;
+  total_balance: number;
+  transaction_count: number;
+  summary?: {
+    totalTransactions?: number;
+    totalIncome?: number;
+    totalExpenses?: number;
+    net?: number;
+    totalBalance?: number;
+  };
+}
+
+export async function getStats(
+  _excludeFromTotal = false,
+  _tz?: string,
+  _rate: 'bcv' | 'paralelo' = 'bcv',
+): Promise<Stats> {
+  const response = await apiFetch(`${API_URL}/stats`);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || 'No se pudieron cargar las estadísticas');
+  return body;
+}
