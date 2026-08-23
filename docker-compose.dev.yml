@@ -9,8 +9,9 @@ services:
       # Conservar node_modules del contenedor (instalado para Linux) sobre el bind,
       # para no usar el del host (better-sqlite3 es nativo y no portable)
       - /app/backend/node_modules
-    # tsx watch recarga el TypeScript de NestJS al editar (no requiere build a dist)
-    command: ["npx", "tsx", "watch", "src/main.ts"]
+    # tsc --watch compila (respeta emitDecoratorMetadata) + node --watch recarga.
+    # NO usar tsx: no emite el metadata de decoradores → DI de Nest falla.
+    command: ["sh", "-c", "npx tsc -p tsconfig.json --watch & node --watch dist/main.js"]
     # Variables de autenticación del stack nuevo (NestJS + Prisma)
     environment:
       - AUTH_USERNAME=${AUTH_USERNAME:-}
