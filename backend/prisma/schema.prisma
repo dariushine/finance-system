@@ -1,0 +1,154 @@
+// Prisma schema — finance-system backend (NestJS).
+// DB-agnóstico: el provider se puede cambiar entre sqlite / postgres / mysql.
+// Montos: INTEGER ×100 (centavos). Tasas: INTEGER ×10000.
+// Fechas: un solo instante absoluto UTC (ISO 8601 con Z) `datetime_utc`.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7: la URL se pasa vía adapter (prisma.config.ts). El provider se cambia
+// aquí entre sqlite / postgresql / mysql para elegir la base.
+datasource db {
+  provider = "sqlite"
+}
+
+model Wallet {
+  id               Int     @id @default(autoincrement())
+  name             String  @unique
+  alias            String?
+  type             String
+  currency         String
+  balance          Int     @default(0) // centavos (×100)
+  description      String?
+  icon             String?
+  color            String?
+  isActive         Boolean @default(true)
+  excludeFromTotal Boolean @default(false)
+  hideInDashboard  Boolean @default(false)
+  createdAt        DateTime @default(now())
+
+  transactions Transaction[]
+  exchangesFrom Exchange[] @relation("fromWallet")
+  exchangesTo   Exchange[] @relation("toWallet")
+}
+
+model Category {
+  id        Int     @id @default(autoincrement())
+  name      String  @unique
+  type      String  // income | expense
+  color     String?
+  icon      String?
+  isActive  Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  transactions Transaction[]
+  recurring    RecurringPayment[]
+}
+
+model Transaction {
+  id               Int      @id @default(autoincrement())
+  walletId         Int
+  categoryId       Int
+  type             String   // income | expense
+  amount           Int      // centavos (×100)
+  description      String?
+  datetimeUtc      DateTime @map("datetime_utc")
+  fee              Int      @default(0) // centavos (×100)
+  parentId         Int?     @map("parent_transaction_id")
+  deleted          Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  wallet      Wallet      @relation(fields: [walletId], references: [id])
+  category    Category    @relation(fields: [categoryId], references: [id])
+  parent      Transaction? @relation("Children", fields: [parentId], references: [id])
+  children    Transaction[] @relation("Children")
+
+  debitExchanges  Exchange[] @relation("debit")
+  creditExchanges Exchange[] @relation("credit")
+
+  @@map("transactions")
+}
+
+model Exchange {
+  id                  Int     @id @default(autoincrement())
+  debitTransactionId  Int     @map("debit_transaction_id")
+  creditTransactionId Int     @map("credit_transaction_id")
+  fromWalletId        Int     @map("from_wallet_id")
+  toWalletId          Int     @map("to_wallet_id")
+  fromAmount          Int     @map("from_amount") // centavos
+  toAmount            Int     @map("to_amount")   // centavos
+  rate                Int     // ×10000
+  fee                 Int     @default(0) // centavos
+  creditFee           Int     @default(0) @map("credit_fee")
+  description         String?
+  deleted             Boolean @default(false)
+  createdAt           DateTime @default(now())
+
+  debit   Transaction @relation("debit", fields: [debitTransactionId], references: [id])
+  credit  Transaction @relation("credit", fields: [creditTransactionId], references: [id])
+  from    Wallet      @relation("fromWallet", fields: [fromWalletId], references: [id])
+  to      Wallet      @relation("toWallet", fields: [toWalletId], references: [id])
+}
+
+model DailyRate {
+  id        Int     @id @default(autoincrement())
+  date      String  @unique // YYYY-MM-DD
+  bcv       Int     // ×10000
+  paralelo  Int     // ×10000
+  source    String  @default("dolarapi")
+  createdAt DateTime @default(now())
+
+  @@map("daily_rates")
+}
+
+model RecurringPayment {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  amount      Int     // centavos
+  fee         Int     @default(0)
+  currency    String
+  type        String
+  categoryId  Int
+  walletId    Int?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@map("recurring_payments")
+}
+
+model Setting {
+  key       String   @id
+  value     String?
+  updatedAt DateTime @updatedAt @default(now())
+
+  @@map("settings")
+}
+
+model RefreshToken {
+  jti        String   @id
+  tokenHash  String   @map("token_hash")
+  expiresAt  Int      @map("expires_at")
+  createdAt  Int      @map("created_at")
+  userAgent  String?  @map("user_agent")
+  ip         String?
+  deviceName String?  @map("device_name")
+  lastUsedAt Int?     @map("last_used_at")
+
+  @@map("refresh_tokens")
+}
+
+model ApiToken {
+  id        Int     @id @default(autoincrement())
+  name      String
+  tokenHash String  @unique @map("token_hash")
+  expiresAt Int?    @map("expires_at")
+  createdAt Int     @map("created_at")
+  lastUsedAt Int?   @map("last_used_at")
+  isActive  Boolean @default(true)
+
+  @@map("api_tokens")
+}

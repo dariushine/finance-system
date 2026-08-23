@@ -109,3 +109,10 @@ start-all.sh
 *.old-e 
 # TypeScript build info
 *.tsbuildinfo
+
+# Backend legacy (reemplazado por rework NestJS+Prisma)
+.backend_old/
+# Prisma sqlite locales
+backend/prisma/*.db
+backend/prisma/*.db-journal
+backend/prisma/dev.db*
