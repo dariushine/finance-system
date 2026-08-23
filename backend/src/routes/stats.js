@@ -101,8 +101,10 @@ module.exports = function registerStatsRoutes(app) {
         .sort((a, b) => a.month.localeCompare(b.month))
         .map((m) => ({ ...m, income: parseFloat(m.income.toFixed(2)), expense: parseFloat(m.expense.toFixed(2)), net: parseFloat((m.income - m.expense).toFixed(2)) }));
 
+      // Excluir la categoría de sistema `fee` del desglose de gastos por
+      // categoría (es una comisión interna, no un gasto por categoría).
       const byCategory = Array.from(categoryMap.values())
-        .filter((c) => c.expenseOnly)
+        .filter((c) => c.expenseOnly && c.category !== 'fee')
         .map((c) => ({ category: c.category, count: c.count, total: parseFloat(c.total.toFixed(2)) }))
         .sort((a, b) => b.total - a.total);
       const byCategoryTotal = byCategory.reduce((s, c) => s + c.total, 0);

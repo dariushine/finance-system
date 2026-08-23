@@ -19,6 +19,10 @@ import {
   IconButton,
   ToggleButton,
   ToggleButtonGroup,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   Divider,
   Stack,
 } from '@mui/material';
@@ -38,6 +42,10 @@ import {
   type Category,
 } from '../lib/api';
 import { isSystemCategoryName, categoryLabel } from '../lib/hooks';
+import { useNumberFormat } from '../lib/NumberFormat';
+import { useTimeZone } from '../lib/timeZone';
+import { useRatePreference } from '../lib/hooks/useRatePreference';
+import { usePersistedState } from '../lib/hooks/usePersistedState';
 
 const colors = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#1abc9c', '#3498db', '#9b59b6', '#ff6b6b', '#34495e', '#95a5a6', '#27ae60', '#e84393'];
 
@@ -55,6 +63,15 @@ const emptyForm = (type: 'expense' | 'income'): FormState => ({
 
 export default function CategoriesPage() {
   const [filterType, setFilterType] = useState<'expense' | 'income'>('expense');
+  const { formatCurrency } = useNumberFormat();
+  const { userTimeZone } = useTimeZone();
+  const [rateType, setRateType] = useRatePreference();
+  const [timeRange, setTimeRange] = usePersistedState<string>(
+    'finanzas.categorias.rango',
+    '6m',
+    (v) => v,
+    (raw) => raw,
+  );
   const [active, setActive] = useState<Category[]>([]);
   const [inactive, setInactive] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,9 +94,14 @@ export default function CategoriesPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
+      const catOpts = {
+        rate: rateType,
+        period: timeRange,
+        tz: userTimeZone,
+      };
       const [act, inact] = await Promise.all([
-        getCategories(filterType),
-        getCategories(filterType, { includingInactive: true }).then((all) =>
+        getCategories(filterType, catOpts),
+        getCategories(filterType, { ...catOpts, includingInactive: true }).then((all) =>
           all.filter((c) => !c.isActive)
         ),
       ]);
@@ -92,7 +114,7 @@ export default function CategoriesPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterType]);
+  }, [filterType, rateType, timeRange, userTimeZone]);
 
   useEffect(() => {
     load();
@@ -192,6 +214,15 @@ export default function CategoriesPage() {
         <Typography variant="body1" sx={{ flexGrow: 1 }}>
           {categoryLabel(cat.name)}
         </Typography>
+        {cat.total != null && (
+          <Typography
+            variant="body2"
+            fontWeight="medium"
+            color={filterType === 'income' ? 'success.main' : 'error.main'}
+          >
+            {formatCurrency(cat.total)}
+          </Typography>
+        )}
         {!cat.isActive && (
           <Chip label="Inactiva" size="small" variant="outlined" color="default" />
         )}
@@ -235,6 +266,33 @@ export default function CategoriesPage() {
         <ToggleButton value="expense" color="error">Gastos</ToggleButton>
         <ToggleButton value="income" color="success">Ingresos</ToggleButton>
       </ToggleButtonGroup>
+
+      {/* Controles de reporte: tasa (BCV/Paralelo) y período para los montos por categoría */}
+      <Box display="flex" gap={2} alignItems="center" flexWrap="wrap" sx={{ mb: 2 }}>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={rateType}
+          onChange={(_, v) => v && setRateType(v)}
+        >
+          <ToggleButton value="bcv">BCV</ToggleButton>
+          <ToggleButton value="paralelo">Paralelo</ToggleButton>
+        </ToggleButtonGroup>
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+          <InputLabel>Período</InputLabel>
+          <Select
+            value={timeRange}
+            label="Período"
+            onChange={(e) => setTimeRange(e.target.value)}
+          >
+            <MenuItem value="1m">Último mes</MenuItem>
+            <MenuItem value="3m">Últimos 3 meses</MenuItem>
+            <MenuItem value="6m">Últimos 6 meses</MenuItem>
+            <MenuItem value="1y">Último año</MenuItem>
+            <MenuItem value="all">Todo</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
