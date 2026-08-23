@@ -9,6 +9,7 @@ import {
   Put,
 } from "@nestjs/common";
 import { WalletsService } from "./wallets.service";
+import { CreateWalletDto, UpdateWalletDto } from "./dto/wallet.dto";
 
 @Controller("api/wallets")
 export class WalletsController {
@@ -36,35 +37,12 @@ export class WalletsController {
   }
 
   @Post()
-  create(
-    @Body()
-    dto: {
-      name: string;
-      type: string;
-      currency: string;
-      balance?: number;
-      alias?: string;
-      description?: string;
-      icon?: string;
-      color?: string;
-    },
-  ) {
+  create(@Body() dto: CreateWalletDto) {
     return this.wallets.create(dto);
   }
 
   @Put(":id")
-  update(
-    @Param("id", ParseIntPipe) id: number,
-    @Body()
-    dto: {
-      name?: string;
-      balance?: number;
-      alias?: string;
-      description?: string;
-      icon?: string;
-      color?: string;
-    },
-  ) {
+  update(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdateWalletDto) {
     return this.wallets.update(id, dto);
   }
 

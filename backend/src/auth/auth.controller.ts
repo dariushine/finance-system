@@ -10,6 +10,7 @@ import {
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
+import { CreateTokenDto, LoginDto } from "./dto/auth.dto";
 
 @Controller("api/auth")
 export class AuthController {
@@ -30,12 +31,12 @@ export class AuthController {
 
   @Post("login")
   login(
-    @Body() dto: { username?: string; password?: string; remember?: boolean },
+    @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
     return this.service.login(
-      dto.username || "",
-      dto.password || "",
+      dto.username,
+      dto.password,
       Boolean(dto.remember),
       res,
     );
@@ -67,8 +68,8 @@ export class AuthController {
   }
 
   @Post("tokens")
-  createToken(@Body() dto: { name?: string }) {
-    return this.service.createToken(dto.name || "token");
+  createToken(@Body() dto: CreateTokenDto) {
+    return this.service.createToken(dto.name);
   }
 
   @Delete("tokens/:id")

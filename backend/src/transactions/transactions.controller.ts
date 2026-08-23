@@ -10,6 +10,12 @@ import {
   Query,
 } from "@nestjs/common";
 import { TransactionsService } from "./transactions.service";
+import {
+  AddFeeDto,
+  AssociateTransactionDto,
+  CreateTransactionDto,
+  UpdateTransactionDto,
+} from "./dto/transaction.dto";
 
 @Controller("api/transactions")
 export class TransactionsController {
@@ -26,12 +32,12 @@ export class TransactionsController {
   }
 
   @Post()
-  create(@Body() dto: any) {
+  create(@Body() dto: CreateTransactionDto) {
     return this.service.create(dto);
   }
 
   @Put(":id")
-  update(@Param("id", ParseIntPipe) id: number, @Body() dto: any) {
+  update(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdateTransactionDto) {
     return this.service.update(id, dto);
   }
 
@@ -41,12 +47,15 @@ export class TransactionsController {
   }
 
   @Post(":id/fee")
-  addFee(@Param("id", ParseIntPipe) id: number, @Body() dto: any) {
+  addFee(@Param("id", ParseIntPipe) id: number, @Body() dto: AddFeeDto) {
     return this.service.addFee(id, dto);
   }
 
   @Post(":id/associate")
-  associate(@Param("id", ParseIntPipe) id: number, @Body() dto: any) {
+  associate(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: AssociateTransactionDto,
+  ) {
     return this.service.associate(id, dto);
   }
 }

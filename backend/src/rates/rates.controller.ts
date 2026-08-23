@@ -1,5 +1,19 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+} from "@nestjs/common";
 import { RatesService } from "./rates.service";
+import {
+  CreateDailyRateDto,
+  UpdateDailyRateDto,
+} from "../common/dto/common.dto";
 
 @Controller("api")
 export class RatesController {
@@ -21,7 +35,7 @@ export class RatesController {
   }
 
   @Post("daily-rates")
-  upsert(@Body() dto: any) {
+  upsert(@Body() dto: CreateDailyRateDto) {
     return this.service.upsert(dto);
   }
 
@@ -31,7 +45,7 @@ export class RatesController {
   }
 
   @Put("daily-rates/:id")
-  updateById(@Param("id", ParseIntPipe) id: number, @Body() dto: any) {
+  updateById(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdateDailyRateDto) {
     return this.service.updateById(id, dto);
   }
 

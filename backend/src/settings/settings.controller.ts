@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Put } from "@nestjs/common";
 import { SettingsService } from "./settings.service";
+import { SetTimezoneDto } from "../common/dto/common.dto";
 
 @Controller("api/settings")
 export class SettingsController {
@@ -12,8 +13,7 @@ export class SettingsController {
 
   // El frontend usa PUT /api/settings/user_timezone
   @Put("user_timezone")
-  setTimeZone(@Body() dto: { timezone?: string }) {
-    if (!dto.timezone) throw new Error("timezone requerida");
+  setTimeZone(@Body() dto: SetTimezoneDto) {
     return this.service.setTimeZone(dto.timezone);
   }
 

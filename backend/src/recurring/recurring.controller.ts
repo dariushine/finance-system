@@ -9,6 +9,11 @@ import {
   Put,
 } from "@nestjs/common";
 import { RecurringService } from "./recurring.service";
+import {
+  CreateRecurringDto,
+  ExecuteRecurringDto,
+  UpdateRecurringDto,
+} from "./dto/recurring.dto";
 
 @Controller("api/recurring-payments")
 export class RecurringController {
@@ -25,17 +30,17 @@ export class RecurringController {
   }
 
   @Post()
-  create(@Body() dto: any) {
+  create(@Body() dto: CreateRecurringDto) {
     return this.service.create(dto);
   }
 
   @Post(":id/execute")
-  execute(@Param("id", ParseIntPipe) id: number, @Body() dto: any) {
+  execute(@Param("id", ParseIntPipe) id: number, @Body() dto: ExecuteRecurringDto) {
     return this.service.execute(id, dto);
   }
 
   @Put(":id")
-  update(@Param("id", ParseIntPipe) id: number, @Body() dto: any) {
+  update(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdateRecurringDto) {
     return this.service.update(id, dto);
   }
 
