@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
 } from "@nestjs/common";
 import { ExchangesService } from "./exchanges.service";
@@ -27,6 +28,11 @@ export class ExchangesController {
   @Post()
   create(@Body() dto: any) {
     return this.service.create(dto);
+  }
+
+  @Put(":id")
+  update(@Param("id", ParseIntPipe) id: number, @Body() dto: any) {
+    return this.service.update(id, dto);
   }
 
   @Delete(":id")

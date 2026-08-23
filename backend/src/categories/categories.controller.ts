@@ -32,6 +32,11 @@ export class CategoriesController {
     return this.categories.update(id, dto);
   }
 
+  @Put(":id/reactivate")
+  reactivate(@Param("id", ParseIntPipe) id: number) {
+    return this.categories.reactivate(id);
+  }
+
   @Delete(":id")
   remove(@Param("id", ParseIntPipe) id: number) {
     return this.categories.remove(id);

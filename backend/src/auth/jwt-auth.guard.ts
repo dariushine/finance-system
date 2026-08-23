@@ -22,11 +22,19 @@ export class JwtAuthGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest();
     const authHeader: string | undefined = req.headers?.authorization;
+    let token: string | undefined;
     if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.slice(7);
+      token = authHeader.slice(7);
+    } else if (req.cookies?.access_token) {
+      token = req.cookies.access_token; // sesión por cookie httpOnly
+    }
+    if (token) {
       try {
         this.jwt.verify(token, {
-          secret: this.config.get<string>("JWT_SECRET", "change-me-in-production"),
+          secret: this.config.get<string>(
+            "JWT_SECRET",
+            "change-me-in-production",
+          ),
         });
         return true;
       } catch {

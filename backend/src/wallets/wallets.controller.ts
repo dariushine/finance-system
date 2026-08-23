@@ -19,6 +19,22 @@ export class WalletsController {
     return this.wallets.list();
   }
 
+  // /deleted debe declararse ANTES de /:id para no ser capturado por el param
+  @Get("deleted")
+  listDeleted() {
+    return this.wallets.listDeleted();
+  }
+
+  @Get(":id")
+  detail(@Param("id", ParseIntPipe) id: number) {
+    return this.wallets.findById(id);
+  }
+
+  @Get(":id/report")
+  report(@Param("id", ParseIntPipe) id: number) {
+    return this.wallets.report(id);
+  }
+
   @Post()
   create(
     @Body()
@@ -50,6 +66,11 @@ export class WalletsController {
     },
   ) {
     return this.wallets.update(id, dto);
+  }
+
+  @Put(":id/reactivate")
+  reactivate(@Param("id", ParseIntPipe) id: number) {
+    return this.wallets.reactivate(id);
   }
 
   @Delete(":id")

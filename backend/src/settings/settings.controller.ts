@@ -10,9 +10,18 @@ export class SettingsController {
     return this.service.get();
   }
 
-  @Put("timezone")
+  // El frontend usa PUT /api/settings/user_timezone
+  @Put("user_timezone")
   setTimeZone(@Body() dto: { timezone?: string }) {
     if (!dto.timezone) throw new Error("timezone requerida");
     return this.service.setTimeZone(dto.timezone);
+  }
+
+  // Forma alternativa: PUT /api/settings
+  @Put()
+  update(@Body() dto: { timezone?: string; user_timezone?: string }) {
+    const tz = dto.timezone || dto.user_timezone;
+    if (!tz) throw new Error("timezone requerida");
+    return this.service.setTimeZone(tz);
   }
 }

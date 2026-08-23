@@ -322,4 +322,99 @@ export class ExchangesService {
       data: { deleted: true },
     });
   }
+
+  // Edita montos, fees y descripción de un exchange (ajusta balances por delta).
+  async update(
+    id: number,
+    dto: {
+      fromAmount?: number;
+      toAmount?: number;
+      fee?: number;
+      creditFee?: number;
+      description?: string;
+      date?: string;
+      time?: string;
+      tz?: string;
+    },
+  ) {
+    const ex = await this.prisma.exchange.findUnique({
+      where: { id },
+      include: { debit: true, credit: true, from: true, to: true },
+    });
+    if (!ex || ex.deleted) throw new NotFoundException("Exchange no encontrado");
+
+    const newFrom = toInt(dto.fromAmount ?? 0) || ex.fromAmount;
+    const newTo = toInt(dto.toAmount ?? 0) || ex.toAmount;
+    const newFee = dto.fee !== undefined ? toInt(dto.fee) : ex.fee;
+    const newCreditFee =
+      dto.creditFee !== undefined ? toInt(dto.creditFee) : ex.creditFee;
+    const newDesc =
+      dto.description !== undefined ? dto.description : ex.description;
+    const newRate = toRateInt(newTo / newFrom);
+
+    // Deltas de balance
+    const fromDelta = -(newFrom + newFee) - -(ex.fromAmount + ex.fee);
+    const toDelta =
+      (newTo - newCreditFee) - (ex.toAmount - ex.creditFee);
+
+    const newFromBalance = ex.from.balance + fromDelta;
+    if (newFromBalance < 0) {
+      throw new BadRequestException(
+        "Fondos insuficientes en la billetera origen tras el cambio",
+      );
+    }
+    const newToBalance = ex.to.balance + toDelta;
+    if (newToBalance < 0) {
+      throw new BadRequestException(
+        "Fondos insuficientes en la billetera destino tras el cambio",
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Actualizar transacciones débito/crédito
+      await tx.transaction.update({
+        where: { id: ex.debitTransactionId },
+        data: { amount: newFrom },
+      });
+      await tx.transaction.update({
+        where: { id: ex.creditTransactionId },
+        data: { amount: newTo },
+      });
+      // Actualizar fees de hijos
+      if (dto.fee !== undefined) {
+        const feeTx = await tx.transaction.findFirst({
+          where: { parentId: ex.debitTransactionId, category: { name: "fee" } },
+        });
+        if (feeTx) await tx.transaction.update({ where: { id: feeTx.id }, data: { amount: newFee } });
+      }
+      if (dto.creditFee !== undefined) {
+        const cfTx = await tx.transaction.findFirst({
+          where: { parentId: ex.creditTransactionId, category: { name: "fee" } },
+        });
+        if (cfTx) await tx.transaction.update({ where: { id: cfTx.id }, data: { amount: newCreditFee } });
+      }
+      // Actualizar exchange
+      await tx.exchange.update({
+        where: { id },
+        data: {
+          fromAmount: newFrom,
+          toAmount: newTo,
+          rate: newRate,
+          fee: newFee,
+          creditFee: newCreditFee,
+          description: newDesc || "",
+        },
+      });
+      // Ajustar balances
+      await tx.wallet.update({
+        where: { id: ex.fromWalletId },
+        data: { balance: newFromBalance },
+      });
+      await tx.wallet.update({
+        where: { id: ex.toWalletId },
+        data: { balance: newToBalance },
+      });
+      return { success: true, message: "Exchange actualizado" };
+    });
+  }
 }

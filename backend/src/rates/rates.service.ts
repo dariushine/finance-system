@@ -56,6 +56,40 @@ export class RatesService {
     });
   }
 
+  // detalle por id (GET /api/daily-rates/:id)
+  async getById(id: number) {
+    const row = await this.prisma.dailyRate.findUnique({ where: { id } });
+    if (!row) throw new Error("Tasa no encontrada");
+    return {
+      id: row.id,
+      date: row.date,
+      bcv: toRateNum(row.bcv),
+      paralelo: toRateNum(row.paralelo),
+      source: row.source,
+    };
+  }
+
+  // actualizar por id
+  async updateById(
+    id: number,
+    dto: { bcv?: number; paralelo?: number; source?: string },
+  ) {
+    const existing = await this.prisma.dailyRate.findUnique({ where: { id } });
+    if (!existing) throw new Error("Tasa no encontrada");
+    const data: any = {};
+    if (dto.bcv !== undefined) data.bcv = toRateInt(dto.bcv);
+    if (dto.paralelo !== undefined) data.paralelo = toRateInt(dto.paralelo);
+    if (dto.source !== undefined) data.source = dto.source;
+    return this.prisma.dailyRate.update({ where: { id }, data });
+  }
+
+  async deleteById(id: number) {
+    const existing = await this.prisma.dailyRate.findUnique({ where: { id } });
+    if (!existing) throw new Error("Tasa no encontrada");
+    await this.prisma.dailyRate.delete({ where: { id } });
+    return { success: true };
+  }
+
   private today(): string {
     return new Date().toISOString().slice(0, 10);
   }

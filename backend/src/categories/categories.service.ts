@@ -92,4 +92,14 @@ export class CategoriesService {
     }
     return this.prisma.category.update({ where: { id }, data: { isActive: false } });
   }
+
+  // Reactiva una categoría eliminada (soft-deleted)
+  async reactivate(id: number) {
+    const existing = await this.prisma.category.findFirst({
+      where: { id, isActive: false },
+    });
+    if (!existing)
+      throw new BadRequestException("Categoría no encontrada o ya activa");
+    return this.prisma.category.update({ where: { id }, data: { isActive: true } });
+  }
 }
