@@ -12,11 +12,11 @@
     "test:ci": "jest --ci --coverage"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "sqlite3": "^5.0.11"
+    "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

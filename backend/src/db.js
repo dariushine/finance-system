@@ -9,7 +9,14 @@
 //   - La zona horaria del usuario (user_timezone) vive en una tabla propia
 //     `settings`. El servidor SIEMPRE corre en UTC (estándar): la BD guarda
 //     instantes UTC y el front proyecta a la zona del usuario.
-const sqlite3 = require('sqlite3').verbose();
+// Migración 2026-08-23: sqlite3 → better-sqlite3.
+// Se reemplaza la librería asíncrona (callbacks) por better-sqlite3 (síncrona,
+// prepare() + db.transaction() nativa). Para no reescribir los ~118 call-sites
+// del backend, `db` expone un wrapper SÍNCRONO con la misma API de sqlite3
+// (get/run/all/exec/serialize, con callback opcional) delegando todo el SQL a
+// better-sqlite3. Al ser síncrono se elimina la clase de bugs de transacciones
+// anidadas/pisadas sobre la conexión única.
+const Database = require('better-sqlite3');
 const path = require('path');
 
 const seedDemoData = process.env.SEED_DEMO_DATA === 'true';
@@ -19,11 +26,90 @@ const seedDemoData = process.env.SEED_DEMO_DATA === 'true';
 // CREATE TABLE IF NOT EXISTS de abajo la genera limpia desde 0 con el esquema
 // definido aquí.
 const dbPath = path.join(__dirname, '..', 'data/finance.db');
-const db = new sqlite3.Database(dbPath);
+const conn = new Database(dbPath);
+conn.pragma('journal_mode = WAL;');
 
-// WAL: lecturas no bloquean escrituras (rendimiento y menos contención en la
-// conexión única). Se define una sola vez al abrir la BD.
-db.exec('PRAGMA journal_mode = WAL;');
+// Wrapper SÍNCRONO de compatibilidad sobre better-sqlite3.
+// Soporta la firma de sqlite3 con callback opcional: db.get/run/all(sql, params, cb).
+// Si no se pasa cb, devuelve el resultado directamente (uso tipo better-sqlite3).
+// Es síncrono, alineado con better-sqlite3, y elimina la clase de bugs de
+// transacciones (el SQL corre de forma atómica y sin carreras de conexión).
+function runSync(sql, params) {
+  // better-sqlite3 NO acepta `undefined` como parámetro (solo null). Lo
+  // normalizamos a null para compat con el código que venía de sqlite3.
+  const args = (params || []).map((v) => (v === undefined ? null : v));
+  const stmt = conn.prepare(sql);
+  const info = stmt.run(...args);
+  return { lastID: Number(info.lastInsertRowid), changes: Number(info.changes) };
+}
+
+// El objeto `db` expuesto al resto del backend: mismas firmas de sqlite3
+// (get/run/all/exec/serialize) + prepare/transaction de better-sqlite3.
+// NOTA: para maximizar compat con el código existente (que usaba callbacks)
+// y con el esquema (que llama en serie dentro de serialize), todo es síncrono:
+// el callback se invoca en el acto si se pasa, y si no se devuelve el valor.
+const db = {
+  get(sql, params, cb) {
+    // Soporta get(sql), get(sql, params), get(sql, params, cb), get(sql, cb).
+    if (typeof params === 'function') { cb = params; params = undefined; }
+    let row;
+    const args = (Array.isArray(params) ? params : (params ? [params] : [])).map((v) => (v === undefined ? null : v));
+    try { row = conn.prepare(sql).get(...args); }
+    catch (e) { if (cb) { cb(e); return undefined; } throw e; }
+    if (cb) { cb(null, row); return undefined; }
+    return row;
+  },
+  run(sql, params, cb) {
+    // Soporta las firmas: run(sql), run(sql, params), run(sql, params, cb), run(sql, cb).
+    if (typeof params === 'function') { cb = params; params = undefined; }
+    const args = Array.isArray(params) ? params : (params ? [params] : []);
+    let info;
+    try { info = runSync(sql, args); }
+    catch (e) { if (cb) { cb(e); return undefined; } throw e; }
+    if (cb) {
+      // El código existente usa `this.lastID`/`this.changes` dentro del callback
+      // (comportamiento de sqlite3). Le inyectamos un contexto con esos campos.
+      const self = { lastID: info.lastID, changes: info.changes };
+      cb.call(self, null, info);
+      return undefined;
+    }
+    return info;
+  },
+  all(sql, params, cb) {
+    // Soporta all(sql), all(sql, params), all(sql, params, cb), all(sql, cb).
+    if (typeof params === 'function') { cb = params; params = undefined; }
+    let rows;
+    const args = (Array.isArray(params) ? params : (params ? [params] : [])).map((v) => (v === undefined ? null : v));
+    try { rows = conn.prepare(sql).all(...args); }
+    catch (e) {
+      // Compat con sqlite3: PRAGMA table_info sobre tabla inexistente devolvía []
+      // (en better-sqlite3 lanza 'no such table'). El esquema lo usa para saber
+      // qué columnas migrar; devolvemos [] para no romper el arranque en BD nueva.
+      if (/no such table/.test(String(e.message)) && /PRAGMA table_info/i.test(sql)) {
+        rows = [];
+      } else {
+        if (cb) { cb(e); return undefined; }
+        throw e;
+      }
+    }
+    if (cb) { cb(null, rows); return undefined; }
+    return rows;
+  },
+  exec(sql, cb) {
+    try { conn.exec(sql); }
+    catch (e) { if (cb) { cb(e); return undefined; } throw e; }
+    if (cb) { cb(null); return undefined; }
+    return undefined;
+  },
+  // serialize(fn): ejecuta fn() de inmediato (ya somos síncronos y en orden).
+  serialize(fn) { fn(); },
+  // prepare() directo de better-sqlite3 para quien lo necesite.
+  prepare(sql) { return conn.prepare(sql); },
+  // transaction(fn): nativa de better-sqlite3 (atómica; lanza y hace rollback).
+  transaction(fn) { return conn.transaction(fn); },
+  _connection: conn,
+  close(cb) { conn.close(); cb && cb(); return undefined; },
+};
 
 // ALMACENAMIENTO DE DINERO (decisión Freddy, 19 ago 2026):
 //   - MONTOS (balance, amount, fee, ...): INTEGER ×100 (centavos). $1.50 → 150.
@@ -227,8 +313,19 @@ db.serialize(() => {
   db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('user_timezone', 'America/Caracas')`);
 
   // ============ REFRESH TOKENS (sesiones) ============
-  // La tabla la crea createTokenStore en auth.js; aquí solo aseguramos las
-  // columnas de identificación de sesión para DBs creadas antes de este feature.
+  // La tabla la crea createTokenStore en auth.js; aquí la aseguramos (IF NOT
+  // EXISTS) para que el arranque sea robusto también en BD nueva, y luego
+  // añadimos las columnas de identificación de sesión para DBs previas.
+  db.run(`CREATE TABLE IF NOT EXISTS refresh_tokens (
+    jti TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    user_agent TEXT,
+    ip TEXT,
+    device_name TEXT,
+    last_used_at INTEGER
+  )`);
   db.all(`PRAGMA table_info(refresh_tokens)`, (err, cols) => {
     if (err) return;
     const names = (cols || []).map((c) => c.name);
