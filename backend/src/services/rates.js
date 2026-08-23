@@ -130,25 +130,11 @@ function normalizeTimeMinute(value) {
   return value.slice(0, 5); // HH:MM[:SS] → HH:MM
 }
 
-function getRateForDate(date, type) {
-  return new Promise((resolve) => {
-    const col = type === 'paralelo' ? 'paralelo' : 'bcv';
-    db.get('SELECT ' + col + ' AS rate FROM daily_rates WHERE date = ?', [date], (err, row) => {
-      if (err) return resolve(null);
-      if (row && row.rate != null) return resolve(row.rate);
-      db.get('SELECT ' + col + ' AS rate FROM daily_rates ORDER BY date DESC LIMIT 1', [], (err2, last) => {
-        if (err2) return resolve(null);
-        resolve(last && last.rate != null ? last.rate : null);
-      });
-    });
-  });
-}
-
-// Como getRateForDate, pero si no existe la tasa para la fecha en BD, la
-// consulta al histórico de Dolarapi y la GUARDA en daily_rates (backfill).
-// Así una transacción antigua de un día sin tasa cacheada se convierte con la
-// tasa real de ESE día y además queda persistida para futuras consultas.
-// Devuelve la tasa (enteros de escala ×10000) o null si no se pudo obtener.
+// Devuelve la tasa del día (enteros ×10000) con backfill: si la fecha no está
+// en BD consulta el histórico de DolarApi, lo GUARDA en daily_rates, y si la
+// columna pedida no viene (ej. fin de semana) cae recursivamente al día hábil
+// anterior. Compartida por stats.js, categories.js y la ruta /rates/effective.
+// Devuelve null si no se pudo obtener tasa (error de red o sin datos).
 function getOrFetchRateForDate(date, type) {
   return new Promise((resolve) => {
     const col = type === 'paralelo' ? 'paralelo' : 'bcv';
@@ -260,4 +246,4 @@ function prevDay(iso) {
 // Evita crear categorías del sistema (fee, exchange_out, exchange_in): si se pide
 // una de estas y no existe, se rechaza el error para no corromper los flujos.
 
-module.exports = { fetchRatesFromApi, fetchHistoricRate, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getRateForDate, getOrFetchRateForDate, prevDay };
+module.exports = { fetchRatesFromApi, fetchHistoricRate, upsertRate, getTodayRate, isValidTime, normalizeTimeMinute, getOrFetchRateForDate, prevDay };

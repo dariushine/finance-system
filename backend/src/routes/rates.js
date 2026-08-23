@@ -1,17 +1,33 @@
 // src/routes/rates.js — Balance global + tasas + CRUD de daily_rates.
 const { db } = require('../db');
 const {
-  getRateForDate, getTodayRate, upsertRate,
+  getOrFetchRateForDate, getTodayRate, upsertRate,
 } = require('../services/rates');
 const { toRateInt, toRateNum } = require('../services/money');
 
 module.exports = function registerRateRoutes(app) {
   // Tasa vigente (bcv por defecto) para una fecha; usada para convertir VES a USD.
+  // Usa getOrFetchRateForDate (el mismo backfill que stats/categorías): si la
+  // fecha no está en BD la consulta al histórico de DolarApi, la guarda, y si la
+  // columna no viene (ej. fin de semana) cae recursivamente al día hábil anterior.
+  // La lógica de búsqueda vive en un solo sitio (services/rates.js), compartida
+  // por stats.js, categories.js y esta ruta.
   app.get('/api/rates/effective', async (req, res) => {
-    const type = req.query.type === 'paralelo' ? 'paralelo' : 'bcv';
-    const date = req.query.date;
-    const rate = await getRateForDate(date || new Date().toISOString().split('T')[0], type);
-    res.json({ date: date || new Date().toISOString().split('T')[0], rate: rate != null ? toRateNum(rate) : null, type });
+    try {
+      const type = req.query.type === 'paralelo' ? 'paralelo' : 'bcv';
+      const date = req.query.date || new Date().toISOString().split('T')[0];
+      const rate = await getOrFetchRateForDate(date, type);
+      if (rate == null) {
+        return res.status(404).json({
+          error: `No se pudo obtener tasa ${type} para ${date}`,
+          date,
+          type,
+        });
+      }
+      res.json({ date, rate: toRateNum(rate), type });
+    } catch (err) {
+      res.status(503).json({ error: `Error al consultar la tasa: ${err.message}` });
+    }
   });
 
   // === CRUD de tasas diarias (daily_rates) ===
