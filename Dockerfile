@@ -1,5 +1,5 @@
 # Backend Dockerfile
-FROM node:18-alpine AS backend
+FROM node:24-alpine AS backend
 
 WORKDIR /app/backend
 
@@ -25,7 +25,7 @@ EXPOSE 3002
 CMD ["node", "exchange-server.js"]
 
 # Frontend Dockerfile (separate stage)
-FROM node:18-alpine AS frontend
+FROM node:24-alpine AS frontend
 
 WORKDIR /app/frontend
 
