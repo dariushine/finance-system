@@ -23,12 +23,12 @@ import { JwtAuthGuard } from "./jwt-auth.guard";
   providers: [
     AuthService,
     JwtAuthGuard,
-    // Guard global registrado como provider APP_GUARD para que Nest inyecte
-    // correctamente la DI (AuthService, JwtService, ConfigService). El patrón
-    // app.get()+useGlobalGuards() dejaba `this.auth` undefined.
+    // Guard global con useClass: Nest instancia UNA copia completa del guard
+    // mediante DI (inyecta reflector, jwt, config, auth). Con app.get()+useGlobal
+    // Guards o useExisting, el Reflector/Services pueden quedar undefined.
     {
       provide: APP_GUARD,
-      useExisting: JwtAuthGuard,
+      useClass: JwtAuthGuard,
     },
   ],
   exports: [AuthService, JwtAuthGuard],
