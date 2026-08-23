@@ -41,11 +41,13 @@ backend/data/*.db
 backend/data/*.db-journal
 backend/data/*.db.backup.*
 backend/data/*.db.BAK-*
+backend/data/*.db.*
 backend/data/backup/
 *.db
 *.db-journal
 *.db.backup.*
 *.db.BAK-*
+*.db.*
 
 # --------------------------
 # OS generated files
