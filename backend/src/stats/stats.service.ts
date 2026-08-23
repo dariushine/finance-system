@@ -7,39 +7,48 @@ export class StatsService {
   constructor(private prisma: PrismaService) {}
 
   async overview() {
-    const tx = await this.prisma.transaction.findMany({
-      where: { deleted: false },
-    });
-    let income = 0;
-    let expense = 0;
-    for (const t of tx) {
-      if (t.type === "income") income += t.amount;
-      else expense += t.amount;
-    }
+    const [income, expense, count, wallets] = await Promise.all([
+      this.prisma.transaction.aggregate({
+        where: { deleted: false, type: "income" },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: { deleted: false, type: "expense" },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.count({ where: { deleted: false } }),
+      this.prisma.wallet.aggregate({
+        where: { isActive: true },
+        _sum: { balance: true },
+      }),
+    ]);
+
+    const inc = income._sum.amount || 0;
+    const exp = expense._sum.amount || 0;
     return {
-      income: toNum(income),
-      expense: toNum(expense),
-      net: toNum(income - expense),
-      transactionCount: tx.length,
+      income: toNum(inc),
+      expense: toNum(exp),
+      net: toNum(inc - exp),
+      transactionCount: count,
+      walletBalance: toNum(wallets._sum.balance || 0),
     };
   }
 
   async byCategory() {
-    const tx = await this.prisma.transaction.findMany({
+    // Agrupa por categoría sumando montos (income suma, expense resta del total).
+    const grouped = await this.prisma.transaction.groupBy({
+      by: ["categoryId", "type"],
       where: { deleted: false },
-      include: { category: true },
+      _sum: { amount: true },
     });
-    const map = new Map<string, { name: string; type: string; total: number }>();
-    for (const t of tx) {
-      const name = t.category?.name || "sin categoría";
-      const cur = map.get(name) || { name, type: t.type, total: 0 };
-      cur.total += t.amount;
-      map.set(name, cur);
-    }
-    return Array.from(map.values()).map((c) => ({
-      name: c.name,
-      type: c.type,
-      total: toNum(c.total),
+    // Necesitamos los nombres de categorías.
+    const cats = await this.prisma.category.findMany();
+    const nameById = new Map(cats.map((c) => [c.id, c.name]));
+
+    return grouped.map((g) => ({
+      name: nameById.get(g.categoryId) || "sin categoría",
+      type: g.type,
+      total: toNum(g._sum.amount || 0),
     }));
   }
 }

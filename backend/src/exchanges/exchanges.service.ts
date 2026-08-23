@@ -238,9 +238,9 @@ export class ExchangesService {
     });
   }
 
-  async list(query: { page?: string; limit?: string }) {
-    const page = Math.max(Number(query.page) || 1, 1);
-    const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
+  async list(query: { page?: number; limit?: number; period?: string }) {
+    const page = Math.max(query.page || 1, 1);
+    const limit = Math.min(Math.max(query.limit || 20, 1), 100);
     const offset = (page - 1) * limit;
 
     const where: any = { deleted: false };

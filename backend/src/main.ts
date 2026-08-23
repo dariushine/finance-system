@@ -7,6 +7,8 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
+  // Prefijo global /api: los @Controller NO llevan el path repetido.
+  app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.enableCors({ origin: true, credentials: true });
 

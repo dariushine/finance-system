@@ -152,19 +152,19 @@ export class TransactionsService {
 
   // Lista transacciones con filtros de rango y paginación (proyecta a tz).
   async list(query: {
-    page?: string;
-    limit?: string;
+    page?: number;
+    limit?: number;
     from?: string;
     to?: string;
-    walletId?: string;
+    walletId?: number;
   }) {
-    const page = Math.max(Number(query.page) || 1, 1);
-    const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
+    const page = Math.max(query.page || 1, 1);
+    const limit = Math.min(Math.max(query.limit || 20, 1), 100);
     const offset = (page - 1) * limit;
     const tz = this.timezone();
 
     const where: any = { deleted: false };
-    if (query.walletId) where.walletId = Number(query.walletId);
+    if (query.walletId) where.walletId = query.walletId;
     if (query.from || query.to) {
       where.datetimeUtc = {};
       if (query.from)

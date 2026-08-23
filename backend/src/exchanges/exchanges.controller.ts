@@ -10,14 +10,15 @@ import {
   Query,
 } from "@nestjs/common";
 import { ExchangesService } from "./exchanges.service";
+import { ListExchangesQueryDto } from "../common/dto/query.dto";
 import { CreateExchangeDto, UpdateExchangeDto } from "./dto/exchange.dto";
 
-@Controller("api/exchanges")
+@Controller("exchanges")
 export class ExchangesController {
   constructor(private service: ExchangesService) {}
 
   @Get()
-  list(@Query() query: any) {
+  list(@Query() query: ListExchangesQueryDto) {
     return this.service.list(query);
   }
 

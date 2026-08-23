@@ -10,6 +10,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { TransactionsService } from "./transactions.service";
+import { ListTransactionsQueryDto } from "../common/dto/query.dto";
 import {
   AddFeeDto,
   AssociateTransactionDto,
@@ -17,12 +18,12 @@ import {
   UpdateTransactionDto,
 } from "./dto/transaction.dto";
 
-@Controller("api/transactions")
+@Controller("transactions")
 export class TransactionsController {
   constructor(private service: TransactionsService) {}
 
   @Get()
-  list(@Query() query: any) {
+  list(@Query() query: ListTransactionsQueryDto) {
     return this.service.list(query);
   }
 

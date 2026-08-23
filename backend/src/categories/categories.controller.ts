@@ -11,7 +11,7 @@ import {
 import { CategoriesService } from "./categories.service";
 import { CreateCategoryDto, UpdateCategoryDto } from "./dto/category.dto";
 
-@Controller("api/categories")
+@Controller("categories")
 export class CategoriesController {
   constructor(private categories: CategoriesService) {}
 

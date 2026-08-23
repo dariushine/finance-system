@@ -11,7 +11,7 @@ import {
 import { WalletsService } from "./wallets.service";
 import { CreateWalletDto, UpdateWalletDto } from "./dto/wallet.dto";
 
-@Controller("api/wallets")
+@Controller("wallets")
 export class WalletsController {
   constructor(private wallets: WalletsService) {}
 

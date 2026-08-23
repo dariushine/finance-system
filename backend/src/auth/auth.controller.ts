@@ -12,7 +12,7 @@ import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { CreateTokenDto, LoginDto } from "./dto/auth.dto";
 
-@Controller("api/auth")
+@Controller("auth")
 export class AuthController {
   constructor(private service: AuthService) {}
 

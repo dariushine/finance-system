@@ -15,7 +15,7 @@ import {
   UpdateRecurringDto,
 } from "./dto/recurring.dto";
 
-@Controller("api/recurring-payments")
+@Controller("recurring-payments")
 export class RecurringController {
   constructor(private service: RecurringService) {}
 

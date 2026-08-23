@@ -15,7 +15,7 @@ import {
   UpdateDailyRateDto,
 } from "../common/dto/common.dto";
 
-@Controller("api")
+@Controller()
 export class RatesController {
   constructor(private service: RatesService) {}
 

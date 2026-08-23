@@ -1,6 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CategoriesService } from "../categories/categories.service";
+import { TransactionsService } from "../transactions/transactions.service";
 import { toInt, toNum } from "../common/money";
 
 @Injectable()
@@ -8,6 +9,7 @@ export class RecurringService {
   constructor(
     private prisma: PrismaService,
     private categories: CategoriesService,
+    private transactions: TransactionsService,
   ) {}
 
   async list() {
@@ -43,7 +45,7 @@ export class RecurringService {
     walletId?: number;
   }) {
     if (!dto.name || dto.amount == null) {
-      throw new Error("name y amount son requeridos");
+      throw new BadRequestException("name y amount son requeridos");
     }
     let categoryId = dto.categoryId;
     if (!categoryId && dto.categoryName) {
@@ -53,7 +55,7 @@ export class RecurringService {
       );
       categoryId = cat!.id;
     }
-    if (!categoryId) throw new Error("Categoría requerida");
+    if (!categoryId) throw new BadRequestException("Categoría requerida");
     const row = await this.prisma.recurringPayment.create({
       data: {
         name: dto.name,
@@ -82,7 +84,7 @@ export class RecurringService {
       where: { id },
       include: { category: true },
     });
-    if (!row) throw new Error("Pago recurrente no encontrado");
+    if (!row) throw new NotFoundException("Pago recurrente no encontrado");
     return {
       id: row.id,
       name: row.name,
@@ -115,7 +117,7 @@ export class RecurringService {
     const existing = await this.prisma.recurringPayment.findUnique({
       where: { id },
     });
-    if (!existing) throw new Error("Pago recurrente no encontrado");
+    if (!existing) throw new NotFoundException("Pago recurrente no encontrado");
     const data: any = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined)
@@ -135,7 +137,8 @@ export class RecurringService {
     return this.prisma.recurringPayment.update({ where: { id }, data });
   }
 
-  // Ejecuta un pago recurrente: crea la transacción real con su fee.
+  // Ejecuta un pago recurrente: delega en TransactionsService.create (DI limpia),
+  // que maneja el fee inline y el balance atómicamente. Evita duplicar lógica.
   async execute(
     id: number,
     dto: { date: string; time: string; tz?: string; walletId?: number },
@@ -143,83 +146,32 @@ export class RecurringService {
     const row = await this.prisma.recurringPayment.findUnique({
       where: { id },
     });
-    if (!row) throw new Error("Pago recurrente no encontrado");
+    if (!row) throw new NotFoundException("Pago recurrente no encontrado");
     const walletId = dto.walletId ?? row.walletId;
     if (!walletId)
-      throw new Error("El pago recurrente no tiene billetera asignada");
+      throw new BadRequestException("El pago recurrente no tiene billetera asignada");
 
-    // Reusamos la creación de transacción con fee inline (misma lógica).
-    const { TransactionsService } = await import(
-      "../transactions/transactions.service"
-    );
-    // Llamada por inyección no disponible acá; creamos directo via prisma.
     const category = await this.prisma.category.findUnique({
       where: { id: row.categoryId },
     });
-    const wallet = await this.prisma.wallet.findUnique({
-      where: { id: walletId },
-    });
-    if (!wallet || !category)
-      throw new Error("Billetera o categoría no encontrada");
+    if (!category) throw new NotFoundException("Categoría no encontrada");
 
-    const amountInt = row.amount;
-    const feeInt = row.fee;
-    const total = amountInt + feeInt;
-    if (row.type === "expense" && wallet.balance < total) {
-      throw new Error(
-        `Fondos insuficientes. Balance: ${toNum(wallet.balance)}`,
-      );
-    }
-    const newBalance =
-      row.type === "expense" ? wallet.balance - total : wallet.balance + amountInt - feeInt;
-    const { toUtcInstant } = await import("../common/timezone");
-    const datetimeUtc = toUtcInstant(
-      dto.date,
-      dto.time,
-      dto.tz || "America/Caracas",
-    );
-
-    return this.prisma.$transaction(async (tx) => {
-      const created = await tx.transaction.create({
-        data: {
-          walletId,
-          categoryId: row.categoryId,
-          type: row.type as any,
-          amount: amountInt,
-          description: row.description || row.name,
-          datetimeUtc,
-          fee: 0,
-          parentId: null,
-        },
-      });
-      let feeTxId: number | null = null;
-      if (feeInt > 0) {
-        const feeCat = await tx.category.findFirst({
-          where: { name: "fee", type: "expense" },
-        });
-        const feeTx = await tx.transaction.create({
-          data: {
-            walletId,
-            categoryId: feeCat?.id || row.categoryId,
-            type: "expense",
-            amount: feeInt,
-            description: `Comisión: ${row.name}`,
-            datetimeUtc,
-            fee: 0,
-            parentId: created.id,
-          },
-        });
-        feeTxId = feeTx.id;
-      }
-      await tx.wallet.update({
-        where: { id: walletId },
-        data: { balance: newBalance },
-      });
-      return {
-        success: true,
-        transactionId: created.id,
-        feeTransactionId: feeTxId,
-      };
+    const created = await this.transactions.create({
+      walletId,
+      categoryName: category.name,
+      type: row.type as "income" | "expense",
+      amount: toNum(row.amount),
+      description: row.description || row.name,
+      fee: toNum(row.fee),
+      date: dto.date,
+      time: dto.time,
+      tz: dto.tz || "America/Caracas",
     });
+
+    return {
+      success: true,
+      transactionId: created.id,
+      feeTransactionId: created.feeTransactionId,
+    };
   }
 }
